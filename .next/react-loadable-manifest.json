@@ -1,1 +1,9 @@
-{}
+{
+  "app\\components\\ApexBarChart.tsx -> react-apexcharts": {
+    "id": 1369,
+    "files": [
+      "static/chunks/3975359d.e527c4f7c7ecd3f9.js",
+      "static/chunks/369.7f6cac2643723a71.js"
+    ]
+  }
+}

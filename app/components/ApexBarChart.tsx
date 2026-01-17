@@ -19,9 +19,9 @@ export function ApexBarChart({ title, labels, values, height = 260 }: ApexBarCha
     }
   ]
 
-  const options = {
+  const options: ApexCharts.ApexOptions = {
     chart: {
-      type: 'bar',
+      type: 'bar' as const,
       toolbar: { show: false },
       animations: {
         enabled: true,

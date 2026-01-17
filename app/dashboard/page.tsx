@@ -195,9 +195,8 @@ export default function DashboardPage() {
             >
               <p className="text-xs font-semibold uppercase text-muted">{card.label}</p>
               <h2 className="mt-3 font-display text-3xl text-primaryDark">
-                {card.prefix ?? ''}
+                {'prefix' in card ? card.prefix : ''}
                 {formatNumber(animatedSummary[index])}
-                {card.suffix ?? ''}
               </h2>
               <p className="mt-2 text-xs text-muted">{card.note}</p>
             </div>

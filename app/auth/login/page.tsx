@@ -1,6 +1,32 @@
+'use client'
+
+import { useState } from 'react'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../../../lib/firebase'
+import { useRouter } from 'next/navigation'
 import bg4 from '../../../assets/bg4.png'
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      router.push('/dashboard')
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in')
+    } finally {
+      setLoading(false)
+    }
+  }
   return (
     <div className="relative min-h-screen text-ink">
       <div
@@ -37,13 +63,21 @@ export default function AdminLoginPage() {
           </section>
 
           <section className="rounded-2xl border border-primary/10 bg-cream p-6">
-            <form className="grid gap-4 text-sm">
+            <form className="grid gap-4 text-sm" onSubmit={handleLogin}>
+              {error && (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-600">
+                  {error}
+                </div>
+              )}
               <label className="grid gap-1 font-semibold">
                 Email
                 <input
                   className="rounded-xl border border-black/10 bg-white px-4 py-3"
                   type="email"
                   placeholder="admin@eduvatekids.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
                 />
               </label>
               <label className="grid gap-1 font-semibold">
@@ -52,13 +86,17 @@ export default function AdminLoginPage() {
                   className="rounded-xl border border-black/10 bg-white px-4 py-3"
                   type="password"
                   placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
               </label>
               <button
-                className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 font-semibold text-white"
-                type="button"
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 font-semibold text-white disabled:opacity-50"
+                type="submit"
+                disabled={loading}
               >
-                Sign In
+                {loading ? 'Signing In...' : 'Sign In'}
               </button>
               <a
                 className="rounded-full border border-primary px-6 py-3 text-center font-semibold text-primaryDark"
@@ -68,7 +106,7 @@ export default function AdminLoginPage() {
               </a>
             </form>
             <div className="mt-6 rounded-xl bg-white p-4 text-xs text-muted">
-              Demo credentials: admin@eduvatekids.com / admin123
+              Demo credentials: Create an account in Firebase Authentication
             </div>
           </section>
         </div>

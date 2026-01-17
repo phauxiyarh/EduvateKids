@@ -2,6 +2,9 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
+import { auth } from '../../lib/firebase'
 import { ApexBarChart } from '../components/ApexBarChart'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
@@ -60,6 +63,9 @@ const dashboardData = {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
   const activeData = dashboardData[range]
   const [animatedCounts, setAnimatedCounts] = useState(
@@ -68,6 +74,36 @@ export default function DashboardPage() {
   const [animatedSummary, setAnimatedSummary] = useState(
     activeData.summary.map(() => 0)
   )
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser)
+        setLoading(false)
+      } else {
+        router.push('/auth/login')
+      }
+    })
+
+    return () => unsubscribe()
+  }, [router])
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth)
+      router.push('/auth/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     let frame: number
@@ -148,13 +184,17 @@ export default function DashboardPage() {
             <Image src={logo} alt="Eduvate Kids logo" width={46} height={46} />
             <span className="font-display text-lg font-bold">Eduvate Kids</span>
           </a>
-          <div className="text-sm text-muted">Admin Dashboard</div>
-          <a
-            className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primaryDark"
-            href="/auth/login"
-          >
-            Sign out
-          </a>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted">
+              {user?.email ? `Welcome, ${user.email}` : 'Admin Dashboard'}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primaryDark hover:bg-primary/5"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 

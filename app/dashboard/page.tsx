@@ -14,8 +14,6 @@ import {
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { auth, db } from '../../lib/firebase'
-import { ApexBarChart } from '../components/ApexBarChart'
-import { ApexDonutChart } from '../components/ApexDonutChart'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
@@ -945,28 +943,52 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        {!dataLoading && salesTrend.labels.length > 0 && salesTrend.values.length > 0 && salesTrend.values.every(v => Number.isFinite(v)) && (
-          <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
-            <ApexBarChart
-              title="Weekly Sales Trend"
-              labels={salesTrend.labels}
-              values={salesTrend.values}
-              height={300}
-            />
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-xl gradient-text">Weekly Sales Trend</h3>
+            <span className="text-xs font-semibold text-muted bg-primary/10 px-3 py-1 rounded-full">Last 7 days</span>
           </div>
-        )}
+          {salesTrend.labels.length ? (
+            <div className="mt-4 space-y-3 text-sm text-muted">
+              {salesTrend.labels.map((label, index) => (
+                <div key={label} className="flex items-center justify-between rounded-xl bg-white/80 px-4 py-3 shadow-soft border border-primary/5">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-base font-semibold text-primaryDark">
+                    ${formatNumber(salesTrend.values[index] ?? 0)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted text-center py-8">
+              No sales data yet. Record a sale to see trends.
+            </p>
+          )}
+        </div>
 
         <div className="grid gap-6">
-          {!dataLoading && categoryMix.labels.length > 0 && categoryMix.values.length > 0 && categoryMix.values.every(v => Number.isFinite(v)) && (
-            <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '150ms' }}>
-              <ApexDonutChart
-                title="Category Mix"
-                labels={categoryMix.labels}
-                values={categoryMix.values}
-                height={240}
-              />
+          <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-secondary/5 p-6 shadow-xl border border-secondary/10" style={{ animationDelay: '150ms' }}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl gradient-text">Category Mix</h3>
+              <span className="text-xs font-semibold text-muted bg-secondary/10 px-3 py-1 rounded-full">Current inventory</span>
             </div>
-          )}
+            {categoryMix.labels.length ? (
+              <div className="mt-4 space-y-3 text-sm text-muted">
+                {categoryMix.labels.map((label, index) => (
+                  <div key={label} className="flex items-center justify-between rounded-xl bg-white/80 px-4 py-3 shadow-soft border border-secondary/5">
+                    <span className="font-medium">{label}</span>
+                    <span className="text-base font-semibold text-primaryDark">
+                      {formatNumber(categoryMix.values[index] ?? 0)} items
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-muted text-center py-8">
+                No inventory data yet.
+              </p>
+            )}
+          </div>
 
           <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center justify-between">

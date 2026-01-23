@@ -945,7 +945,7 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        {!dataLoading && salesTrend.labels.length > 0 && (
+        {!dataLoading && salesTrend.labels.length > 0 && salesTrend.values.length > 0 && salesTrend.values.every(v => Number.isFinite(v)) && (
           <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
             <ApexBarChart
               title="Weekly Sales Trend"
@@ -957,7 +957,7 @@ export default function DashboardPage() {
         )}
 
         <div className="grid gap-6">
-          {!dataLoading && categoryMix.labels.length > 0 && (
+          {!dataLoading && categoryMix.labels.length > 0 && categoryMix.values.length > 0 && categoryMix.values.every(v => Number.isFinite(v)) && (
             <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '150ms' }}>
               <ApexDonutChart
                 title="Category Mix"

@@ -12,10 +12,38 @@ type ApexBarChartProps = {
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
 export function ApexBarChart({ title, labels, values, height = 260 }: ApexBarChartProps) {
+  const safeTitle = String(title ?? '')
+  const rawLabels = Array.isArray(labels) ? labels : []
+  const rawValues = Array.isArray(values) ? values : []
+  const paired = rawLabels.map((label, index) => ({
+    label: String(label ?? ''),
+    value: Number(rawValues[index])
+  }))
+  const cleaned = paired
+    .filter((item) => item.label.trim().length > 0)
+    .map((item) => ({
+      label: item.label,
+      value: Number.isFinite(item.value) ? item.value : 0
+    }))
+  const safeLabels = cleaned.map((item) => item.label)
+  const safeValues = cleaned.map((item) => item.value)
+
+  // Guard against mismatched/empty data that can break ApexCharts
+  if (!safeLabels.length || !safeValues.length) {
+    return (
+      <div className="panel-card rounded-2xl bg-white p-4 shadow-soft">
+        <div className="mb-3 text-center text-sm font-semibold text-ink">{safeTitle}</div>
+        <div className="flex items-center justify-center" style={{ height }}>
+          <p className="text-sm text-muted">No data available</p>
+        </div>
+      </div>
+    )
+  }
+
   const series = [
     {
-      name: title,
-      data: values
+      name: safeTitle,
+      data: safeValues
     }
   ]
 
@@ -45,7 +73,7 @@ export function ApexBarChart({ title, labels, values, height = 260 }: ApexBarCha
       show: false
     },
     xaxis: {
-      categories: labels,
+      categories: safeLabels,
       labels: {
         style: { colors: '#6b7280', fontFamily: 'Mulish, sans-serif' }
       }
@@ -74,7 +102,7 @@ export function ApexBarChart({ title, labels, values, height = 260 }: ApexBarCha
   }
 
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-soft">
+    <div className="panel-card rounded-2xl bg-white p-4 shadow-soft">
       <div className="mb-3 text-center text-sm font-semibold text-ink">{title}</div>
       <ReactApexChart options={options} series={series} type="bar" height={height} />
     </div>

@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../../lib/firebase'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import bg4 from '../../../assets/bg4.png'
+import logo from '../../../assets/logo.png'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -27,6 +29,12 @@ export default function AdminLoginPage() {
       setLoading(false)
     }
   }
+
+  const loadAdminCredentials = () => {
+    setEmail('admin@eduvatekids.com')
+    setPassword('EduvateAdmin2024!')
+    setError('')
+  }
   return (
     <div className="relative min-h-screen text-ink">
       <div
@@ -39,6 +47,13 @@ export default function AdminLoginPage() {
       />
       <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-16">
         <div className="grid w-full gap-10 rounded-3xl bg-white p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
+          <a className="flex items-center gap-3 md:col-span-2" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={52} height={52} />
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted">Back to home</p>
+              <p className="font-display text-lg text-primaryDark">Eduvate Kids</p>
+            </div>
+          </a>
           <section>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Admin Portal
@@ -105,9 +120,13 @@ export default function AdminLoginPage() {
                 Continue to Dashboard Demo
               </a>
             </form>
-            <div className="mt-6 rounded-xl bg-white p-4 text-xs text-muted">
-              Demo credentials: Create an account in Firebase Authentication
-            </div>
+            <button
+              type="button"
+              onClick={loadAdminCredentials}
+              className="mt-6 w-full rounded-xl bg-gradient-to-r from-accentThree to-primary p-4 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              Load Admin Credentials
+            </button>
           </section>
         </div>
       </main>

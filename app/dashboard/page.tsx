@@ -945,24 +945,28 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
-          <ApexBarChart
-            title="Weekly Sales Trend"
-            labels={salesTrend.labels}
-            values={salesTrend.values}
-            height={300}
-          />
-        </div>
-
-        <div className="grid gap-6">
-          <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '150ms' }}>
-            <ApexDonutChart
-              title="Category Mix"
-              labels={categoryMix.labels}
-              values={categoryMix.values}
-              height={240}
+        {!dataLoading && salesTrend.labels.length > 0 && (
+          <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
+            <ApexBarChart
+              title="Weekly Sales Trend"
+              labels={salesTrend.labels}
+              values={salesTrend.values}
+              height={300}
             />
           </div>
+        )}
+
+        <div className="grid gap-6">
+          {!dataLoading && categoryMix.labels.length > 0 && (
+            <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '150ms' }}>
+              <ApexDonutChart
+                title="Category Mix"
+                labels={categoryMix.labels}
+                values={categoryMix.values}
+                height={240}
+              />
+            </div>
+          )}
 
           <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center justify-between">

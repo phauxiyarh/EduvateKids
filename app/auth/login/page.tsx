@@ -48,7 +48,13 @@ export default function AdminLoginPage() {
       <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-16">
         <div className="grid w-full gap-10 rounded-3xl bg-white p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
           <a className="flex items-center gap-3 md:col-span-2" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={52} height={52} />
+            <Image
+              src={logo}
+              alt="Eduvate Kids logo"
+              width={52}
+              height={52}
+              style={{ width: 'auto', height: 'auto' }}
+            />
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted">Back to home</p>
               <p className="font-display text-lg text-primaryDark">Eduvate Kids</p>

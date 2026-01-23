@@ -29,7 +29,8 @@ export function ApexBarChart({ title, labels, values, height = 260 }: ApexBarCha
   const safeValues = cleaned.map((item) => item.value)
 
   // Guard against mismatched/empty data that can break ApexCharts
-  if (!safeLabels.length || !safeValues.length) {
+  const hasInvalidData = safeValues.some(v => !Number.isFinite(v) || v === null || v === undefined)
+  if (!safeLabels.length || !safeValues.length || hasInvalidData) {
     return (
       <div className="panel-card rounded-2xl bg-white p-4 shadow-soft">
         <div className="mb-3 text-center text-sm font-semibold text-ink">{safeTitle}</div>

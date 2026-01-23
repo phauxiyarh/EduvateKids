@@ -84,7 +84,13 @@ export default function HomePage() {
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-4">
           <a className="flex items-center gap-3" href="#top">
-            <Image src={logo} alt="Eduvate Kids logo" width={52} height={52} />
+            <Image
+              src={logo}
+              alt="Eduvate Kids logo"
+              width={52}
+              height={52}
+              style={{ width: 'auto', height: 'auto' }}
+            />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
               <span className="text-sm text-muted">Islamic Bookstore</span>
@@ -248,6 +254,7 @@ export default function HomePage() {
               alt=""
               width={160}
               height={160}
+              priority={index === 0}
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
             />
           ))}
@@ -727,7 +734,14 @@ export default function HomePage() {
           <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <div className="flex items-center gap-3">
-                <Image src={logo} alt="Eduvate Kids logo" width={56} height={56} className="drop-shadow-lg" />
+                <Image
+                  src={logo}
+                  alt="Eduvate Kids logo"
+                  width={56}
+                  height={56}
+                  style={{ width: 'auto', height: 'auto' }}
+                  className="drop-shadow-lg"
+                />
                 <div>
                   <h3 className="font-display text-xl font-bold">Eduvate Kids</h3>
                   <p className="text-sm text-white/60">Islamic Bookstore</p>

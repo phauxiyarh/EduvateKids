@@ -1796,6 +1796,7 @@ export default function DashboardPage() {
           alt=""
           width={160}
           height={160}
+          priority={index === 0}
           className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${item.classes}`}
         />
       ))}
@@ -1806,7 +1807,14 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between py-4">
             {/* Logo */}
             <a className="flex items-center gap-3 group" href="/">
-              <Image src={logo} alt="Eduvate Kids logo" width={48} height={48} className="group-hover:scale-110 transition-transform duration-300" />
+              <Image
+                src={logo}
+                alt="Eduvate Kids logo"
+                width={48}
+                height={48}
+                style={{ width: 'auto', height: 'auto' }}
+                className="group-hover:scale-110 transition-transform duration-300"
+              />
               <div className="hidden sm:block">
                 <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
                 <p className="text-xs text-muted">Admin Dashboard</p>

@@ -238,7 +238,7 @@ export default function DashboardPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addQuantity, setAddQuantity] = useState(1)
   const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
 
@@ -1799,155 +1799,143 @@ export default function DashboardPage() {
           className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${item.classes}`}
         />
       ))}
-      <header className="relative z-10 border-b border-black/5 bg-white/80 backdrop-blur-xl shadow-sm">
-        <div className="mx-auto flex w-11/12 max-w-7xl items-center justify-between py-5 px-4">
-          <a className="flex items-center gap-3 group" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={48} height={48} className="group-hover:scale-110 transition-transform" />
-            <div>
-              <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
-              <p className="text-xs text-muted">Admin Dashboard</p>
-            </div>
-          </a>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:block text-sm">
-              <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
-              <p className="text-xs text-muted">Signed in</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="rounded-full border-2 border-primary/30 bg-white px-5 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all shadow-sm"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <main className="relative z-10 w-full px-6 py-10">
-        <aside
-          className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-primary/10 bg-white/95 backdrop-blur-xl shadow-2xl transition-all ${
-            sidebarCollapsed ? 'w-20' : 'w-80'
-          }`}
-        >
-          <div className="flex items-center justify-between p-6 border-b border-primary/10">
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark shadow-soft">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6">
-                    <path
-                      d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 4 5 2.5v5L12 17l-5-2.5v-5L12 7Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </span>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Admin</p>
-                  <p className="font-display text-lg gradient-text">Control Hub</p>
-                </div>
+      {/* Sticky Header with Horizontal Navigation */}
+      <header className="sticky top-0 z-50 border-b border-black/5 bg-white/95 backdrop-blur-xl shadow-sm animate-fadeIn">
+        <div className="mx-auto w-full max-w-7xl px-4">
+          <div className="flex items-center justify-between py-4">
+            {/* Logo */}
+            <a className="flex items-center gap-3 group" href="/">
+              <Image src={logo} alt="Eduvate Kids logo" width={48} height={48} className="group-hover:scale-110 transition-transform duration-300" />
+              <div className="hidden sm:block">
+                <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
+                <p className="text-xs text-muted">Admin Dashboard</p>
               </div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="rounded-xl border-2 border-primary/20 p-2.5 text-primaryDark hover:bg-primary/5 transition-colors"
-              type="button"
-              aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {sidebarCollapsed ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                )}
-              </svg>
-            </button>
+            </a>
+
+            {/* Desktop Horizontal Tabs */}
+            <nav className="hidden md:flex items-center gap-2">
+              {[
+                { id: 'home', label: 'Home', emoji: '🏠' },
+                { id: 'inventory', label: 'Inventory', emoji: '📦' },
+                { id: 'events', label: 'Events', emoji: '🎪' }
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveView(item.id as typeof activeView)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                    activeView === item.id
+                      ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg scale-105'
+                      : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:scale-102'
+                  }`}
+                  type="button"
+                >
+                  <span className="text-lg">{item.emoji}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            {/* Right Side - User Info & Actions */}
+            <div className="flex items-center gap-3">
+              {/* Sync Status Indicator */}
+              <div className="hidden lg:flex items-center gap-2 text-xs font-bold">
+                <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                <span className={dataLoading ? 'text-amber-600' : 'text-green-600'}>
+                  {dataLoading ? 'Syncing...' : 'Synced'}
+                </span>
+              </div>
+
+              {/* User Email - Desktop Only */}
+              <div className="hidden md:block text-sm text-right">
+                <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
+              </div>
+
+              {/* Sign Out Button - Desktop */}
+              <button
+                onClick={handleLogout}
+                className="hidden md:block rounded-full border-2 border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
+              >
+                Sign out
+              </button>
+
+              {/* Mobile Hamburger Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden rounded-xl border-2 border-primary/30 p-2.5 text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+                aria-label="Toggle menu"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {mobileMenuOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-3">
-            {[
-              {
-                id: 'home',
-                label: 'Home',
-                icon: (
-                  <svg viewBox="0 0 24 24" className="h-5 w-5">
-                    <path
-                      d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                ),
-                emoji: '🏠'
-              },
-              {
-                id: 'inventory',
-                label: 'Inventory',
-                icon: (
-                  <svg viewBox="0 0 24 24" className="h-5 w-5">
-                    <path
-                      d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5H4V6Zm0 7h16v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Zm4 2h5v2H8v-2Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                ),
-                emoji: '📦'
-              },
-              {
-                id: 'events',
-                label: 'Event Management',
-                icon: (
-                  <svg viewBox="0 0 24 24" className="h-5 w-5">
-                    <path
-                      d="M6 4v2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-1V4h-2v2H8V4H6Zm-1 6h14v8H5v-8Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                ),
-                emoji: '🎪'
-              }
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveView(item.id as typeof activeView)}
-                className={`group flex items-center gap-4 rounded-2xl px-4 py-4 text-sm font-bold transition-all w-full ${
-                  activeView === item.id
-                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-xl scale-105'
-                    : 'bg-gradient-to-r from-primary/5 to-secondary/5 text-primaryDark hover:from-primary/10 hover:to-secondary/10 hover:scale-102'
-                }`}
-                type="button"
-              >
-                <span
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl transition-all ${
-                    activeView === item.id
-                      ? 'bg-white/20 shadow-lg scale-110'
-                      : 'bg-white shadow-sm group-hover:scale-110'
-                  }`}
-                >
-                  {!sidebarCollapsed && activeView === item.id ? (
-                    <span className="text-2xl">{item.emoji}</span>
-                  ) : (
-                    item.icon
-                  )}
-                </span>
-                {!sidebarCollapsed && <span className="flex-1 text-left">{item.label}</span>}
-              </button>
-            ))}
-          </nav>
+          {/* Mobile Dropdown Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden border-t border-primary/10 py-4 animate-slideDown">
+              <nav className="flex flex-col gap-2">
+                {[
+                  { id: 'home', label: 'Home', emoji: '🏠' },
+                  { id: 'inventory', label: 'Inventory', emoji: '📦' },
+                  { id: 'events', label: 'Events', emoji: '🎪' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveView(item.id as typeof activeView)
+                      setMobileMenuOpen(false)
+                    }}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                      activeView === item.id
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                        : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
+                    }`}
+                    type="button"
+                  >
+                    <span className="text-xl">{item.emoji}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
 
-          {!sidebarCollapsed && (
-            <div className="p-4">
-              <div className="rounded-2xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 text-center border border-primary/20">
-                <div className={`inline-flex items-center gap-2 text-xs font-bold ${dataLoading ? 'text-amber-600' : 'text-green-600'}`}>
-                  <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-                  {dataLoading ? 'Syncing data...' : 'All synced ✓'}
+              <div className="mt-4 pt-4 border-t border-primary/10 space-y-3">
+                <div className="px-4 text-sm">
+                  <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
+                  <p className="text-xs text-muted">Signed in</p>
                 </div>
+
+                <div className="px-4">
+                  <div className={`inline-flex items-center gap-2 text-xs font-bold ${dataLoading ? 'text-amber-600' : 'text-green-600'}`}>
+                    <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                    {dataLoading ? 'Syncing data...' : 'All synced'}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full mx-4 rounded-full border-2 border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-all duration-300 shadow-sm"
+                  style={{ width: 'calc(100% - 2rem)' }}
+                >
+                  Sign out
+                </button>
               </div>
             </div>
           )}
-        </aside>
+        </div>
+      </header>
 
-        <div className={`mx-auto max-w-7xl transition-all ${sidebarCollapsed ? 'lg:pl-24' : 'lg:pl-84'}`}>
+      <main className="relative z-10 w-full px-4 py-8 md:px-6 md:py-10">
+        <div className="mx-auto max-w-7xl">
           <section className="flex-1 space-y-8">
             <div className="fade-up">
-              <h1 className="font-display text-4xl gradient-text">
+              <h1 className="font-display text-3xl md:text-4xl gradient-text">
                 {activeView === 'home'
                   ? 'Admin Home'
                   : activeView === 'inventory'

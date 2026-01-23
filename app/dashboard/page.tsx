@@ -430,9 +430,9 @@ export default function DashboardPage() {
   }, [inventory])
 
   const eventTypeBadgeClasses: Record<EventRecord['type'], string> = {
-    Bazaar: 'bg-amber-100 text-amber-700',
-    Bookfair: 'bg-emerald-100 text-emerald-700',
-    'Jummah Boot': 'bg-indigo-100 text-indigo-700'
+    Bazaar: 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200',
+    Bookfair: 'bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700 border border-emerald-200',
+    'Jummah Boot': 'bg-gradient-to-r from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-200'
   }
 
   const filteredEvents = useMemo(() => {
@@ -503,22 +503,26 @@ export default function DashboardPage() {
         label: 'Total Sales',
         value: totalSales,
         note: `${transactionCount} transactions`,
-        prefix: '$'
+        prefix: '$',
+        icon: '💰'
       },
       {
         label: 'Low Stock Items',
         value: restockItems.length,
-        note: `Restock threshold: ${restockThreshold}`
+        note: `Restock threshold: ${restockThreshold}`,
+        icon: '📦'
       },
       {
         label: 'Active Events',
         value: events.filter((event) => event.status === 'active').length,
-        note: `${events.length} total events`
+        note: `${events.length} total events`,
+        icon: '🎪'
       },
       {
         label: 'Catalog Size',
         value: inventory.length,
-        note: 'Books & kits'
+        note: 'Books & kits',
+        icon: '📚'
       }
     ]
   }, [allSales, events, inventory.length, restockItems.length])
@@ -891,139 +895,178 @@ export default function DashboardPage() {
   }
 
   const renderHome = () => (
-    <div className="space-y-10">
-      <section className="fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-white to-accentThree/10 p-6 shadow-soft">
-        <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-accentThree/20 blur-2xl" />
-        <div className="absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-primary/15 blur-2xl" />
+    <div className="space-y-8">
+      <section className="fade-up relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-50 via-blue-50 to-emerald-50 p-8 shadow-xl border border-primary/10">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-gradient-to-br from-primary/30 to-accentThree/20 blur-3xl animate-pulse" />
+        <div className="absolute -left-14 bottom-0 h-56 w-56 rounded-full bg-gradient-to-tr from-secondary/25 to-primary/20 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
           <div>
-            <h2 className="font-display text-2xl text-primaryDark">Daily Pulse</h2>
-            <p className="mt-2 text-sm text-muted">
-              A live snapshot of sales momentum, inventory health, and top performing events.
+            <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary/20 to-secondary/20 px-4 py-2 mb-3 border border-primary/10">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Live Dashboard</span>
+            </div>
+            <h2 className="font-display text-3xl gradient-text">Daily Pulse</h2>
+            <p className="mt-3 text-sm text-muted max-w-xl">
+              Real-time snapshot of sales momentum, inventory health, and top performing events.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-primary/10 px-4 py-2 text-xs font-semibold text-primaryDark">
-              Updated moments ago
-            </span>
+            <div className="rounded-2xl bg-white/90 backdrop-blur px-5 py-3 shadow-soft border border-primary/10">
+              <p className="text-xs font-semibold text-muted">Last updated</p>
+              <p className="text-sm font-bold text-primaryDark">Moments ago</p>
+            </div>
           </div>
         </div>
-        <div className="relative z-10 mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative z-10 mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {summaryCards.map((card, index) => (
             <div
               key={card.label}
-              className="home-card panel-card rounded-2xl bg-white/80 p-5 shadow-soft backdrop-blur"
+              className="home-card group relative overflow-hidden rounded-2xl bg-white/90 backdrop-blur-sm p-6 shadow-xl border border-primary/5 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
               style={{ animationDelay: `${index * 80}ms` }}
             >
-              <p className="text-xs font-semibold uppercase text-muted">{card.label}</p>
-              <h2 className="mt-3 font-display text-3xl text-primaryDark">
-                {'prefix' in card ? card.prefix : ''}
-                {formatNumber(card.value)}
-              </h2>
-              <p className="mt-2 text-xs text-muted">{card.note}</p>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="relative z-10">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">{card.label}</p>
+                  <span className="text-2xl">{card.icon}</span>
+                </div>
+                <h2 className="mt-4 font-display text-4xl gradient-text">
+                  {'prefix' in card ? card.prefix : ''}
+                  {formatNumber(card.value)}
+                </h2>
+                <p className="mt-3 text-xs text-muted flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-primary" />
+                  {card.note}
+                </p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <ApexBarChart
-          title="Weekly Sales Trend"
-          labels={salesTrend.labels}
-          values={salesTrend.values}
-          height={280}
-        />
+        <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
+          <ApexBarChart
+            title="Weekly Sales Trend"
+            labels={salesTrend.labels}
+            values={salesTrend.values}
+            height={300}
+          />
+        </div>
 
         <div className="grid gap-6">
-          <ApexDonutChart
-            title="Category Mix"
-            labels={categoryMix.labels}
-            values={categoryMix.values}
-            height={220}
-          />
+          <div className="fade-up rounded-3xl overflow-hidden shadow-xl border border-primary/10" style={{ animationDelay: '150ms' }}>
+            <ApexDonutChart
+              title="Category Mix"
+              labels={categoryMix.labels}
+              values={categoryMix.values}
+              height={240}
+            />
+          </div>
 
-          <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
+          <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl">Best Sellers</h3>
-              <span className="text-xs text-muted">Across all events</span>
+              <h3 className="font-display text-xl gradient-text">Best Sellers</h3>
+              <span className="text-xs font-semibold text-muted bg-primary/10 px-3 py-1 rounded-full">Across all events</span>
             </div>
             {bestSellers.length ? (
-              <div className="mt-4">
-                <ApexBarChart
-                  title="Top Items"
-                  labels={bestSellers.map((item) => item.title)}
-                  values={bestSellers.map((item) => item.quantity)}
-                  height={220}
-                />
-              </div>
+              <ul className="mt-4 space-y-3 text-sm">
+                {bestSellers.map((item, index) => (
+                  <li key={item.title} className="flex items-center justify-between group hover:bg-primary/5 p-3 rounded-xl transition-colors" style={{ animationDelay: `${index * 50}ms` }}>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 text-xs font-bold text-primaryDark">{index + 1}</span>
+                      <span className="font-medium">{item.title}</span>
+                    </div>
+                    <span className="rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 px-4 py-2 text-sm font-semibold text-primaryDark border border-primary/10">
+                      {item.quantity} sold
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <p className="mt-4 text-sm text-muted">
+              <p className="mt-4 text-sm text-muted text-center py-8">
                 No sales yet. Record a sale to see top items.
               </p>
             )}
-            <ul className="mt-4 space-y-3 text-sm">
-              {bestSellers.map((item) => (
-                <li key={item.title} className="flex items-center justify-between">
-                  <span>{item.title}</span>
-                  <span className="rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primaryDark">
-                    {item.quantity} sold
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-          <h3 className="font-display text-xl">Best Event</h3>
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-accentThree/5 p-6 shadow-xl border border-accentThree/10" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">🏆</span>
+            <h3 className="font-display text-xl gradient-text">Best Event</h3>
+          </div>
           {bestEvent ? (
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">{bestEvent.name}</span>
-                <span className="text-muted">
-                  ${formatNumber(bestEvent.sales.reduce((sum, sale) => sum + sale.total, 0))}
-                </span>
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/5 p-4 border border-primary/10">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-bold text-lg text-primaryDark">{bestEvent.name}</span>
+                  <span className="text-xl font-bold gradient-text">
+                    ${formatNumber(bestEvent.sales.reduce((sum, sale) => sum + sale.total, 0))}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs text-muted">
+                  <div className="flex items-center gap-2">
+                    <span className="text-primary">📅</span>
+                    <span>{bestEvent.startDate || 'TBD'} - {bestEvent.endDate || 'TBD'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-primary">📍</span>
+                    <span>{bestEvent.location || 'Location TBD'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-primary">🎪</span>
+                    <span>{bestEvent.type}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-black/10">
+                    <span className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${bestEvent.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                      {bestEvent.status === 'active' ? 'Active' : 'Closed'}
+                    </span>
+                    <span>Vendor fee: ${formatNumber(bestEvent.cost)}</span>
+                  </div>
+                </div>
               </div>
-              <div className="text-xs text-muted">
-                Dates: {bestEvent.startDate || 'TBD'} - {bestEvent.endDate || 'TBD'}
-              </div>
-              <div className="text-xs text-muted">
-                {bestEvent.type} · {bestEvent.location || 'Location TBD'}
-              </div>
-              <div className="text-xs text-muted">
-                Status: {bestEvent.status === 'active' ? 'Active' : 'Closed'}
-              </div>
-              <div className="text-xs text-muted">Vendor fee: ${formatNumber(bestEvent.cost)}</div>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-muted">No events created yet.</p>
+            <p className="text-sm text-muted text-center py-8">No events created yet.</p>
           )}
         </div>
 
-        <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-xl">Inventory Health</h3>
-            <span className="text-xs text-muted">Restock radar</span>
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-amber-50/50 p-6 shadow-xl border border-amber-200/50" style={{ animationDelay: '300ms' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 text-2xl">📦</span>
+              <h3 className="font-display text-xl gradient-text">Inventory Health</h3>
+            </div>
+            <span className="text-xs font-semibold text-muted bg-amber-100 px-3 py-1 rounded-full border border-amber-200">Restock radar</span>
           </div>
           {restockItems.length ? (
-            <div className="mt-4 space-y-4">
+            <div className="space-y-4">
               {restockItems.slice(0, 6).map((item, index) => (
-                <div key={item.id} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{item.title}</span>
-                    <span className="text-xs text-muted">{item.quantity} left</span>
+                <div key={item.id} className="group hover:bg-amber-50/50 p-3 rounded-xl transition-colors" style={{ animationDelay: `${index * 80}ms` }}>
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="font-medium">{item.title}</span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      item.quantity <= 5 ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'
+                    }`}>
+                      {item.quantity} left
+                    </span>
                   </div>
-                  <div className="h-2 rounded-full bg-primary/10">
+                  <div className="h-2.5 rounded-full bg-gradient-to-r from-gray-200 to-gray-100 overflow-hidden">
                     <div
-                      className="h-2 rounded-full bg-gradient-to-r from-accentOne to-primary"
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        item.quantity <= 5
+                          ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                          : 'bg-gradient-to-r from-amber-400 to-orange-400'
+                      }`}
                       style={{
                         width: `${Math.max(
                           15,
                           Math.min(100, (item.quantity / restockThreshold) * 100)
-                        )}%`,
-                        animationDelay: `${index * 120}ms`
+                        )}%`
                       }}
                     />
                   </div>
@@ -1031,7 +1074,10 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="mt-4 text-sm text-muted">All items are healthy on stock.</p>
+            <div className="text-center py-8">
+              <div className="text-5xl mb-3">✅</div>
+              <p className="text-sm text-muted">All items are healthy on stock.</p>
+            </div>
           )}
         </div>
       </section>
@@ -1054,68 +1100,104 @@ export default function DashboardPage() {
 
   const renderInventory = () => (
     <div className="fade-up space-y-6">
-      <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primaryDark">
-            <svg viewBox="0 0 24 24" className="h-5 w-5">
-              <path
-                d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3H4V7Zm0 5h16v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Zm4 2h4v2H8v-2Z"
-                fill="currentColor"
-              />
-            </svg>
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-8 shadow-xl border border-purple-200/50">
+        <div className="flex items-center gap-4 mb-4">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-3xl shadow-soft">
+            📦
           </span>
-          <h2 className="font-display text-2xl">Inventory Upload</h2>
+          <div>
+            <h2 className="font-display text-2xl gradient-text">Inventory Upload</h2>
+            <p className="text-xs text-muted">Add new arrivals or update existing stock</p>
+          </div>
         </div>
-        <p className="mt-2 text-sm text-muted">
-          Upload an .xlsx file to add new arrivals or update existing stock. Columns should follow the
-          order: Title, Category, Publisher, RRP, Discount %, Quantity, Selling Price.
+        <p className="text-sm text-muted mb-6 p-4 bg-primary/5 rounded-xl border border-primary/10">
+          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, RRP, Discount %, Quantity, Selling Price
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-          <input
-            type="file"
-            accept=".xlsx"
-            onChange={handleInventoryUpload}
-            className="rounded-lg border border-primary/20 bg-white px-4 py-2 text-sm"
-          />
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={handleInventoryUpload}
+              className="hidden"
+            />
+            <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-soft hover:shadow-lg hover:-translate-y-0.5 transition-all">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload File
+            </span>
+          </label>
           <button
             onClick={handleDownloadTemplate}
-            className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primaryDark"
+            className="rounded-full border-2 border-primary/30 bg-white px-6 py-3 text-sm font-semibold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all shadow-sm"
             type="button"
           >
-            Download template
+            Download Template
           </button>
-          {uploadMessage && <span className="text-sm text-muted">{uploadMessage}</span>}
+          {uploadMessage && (
+            <span className="rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-700 border border-green-200">
+              {uploadMessage}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="panel-card overflow-hidden rounded-2xl bg-white shadow-soft">
-        <div className="border-b border-black/10 px-6 py-4">
-          <h3 className="font-display text-xl">Current Stock</h3>
-          <p className="text-xs text-muted">Total items: {inventory.length}</p>
+      <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+        <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-2xl gradient-text">Current Stock</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted">Total items:</span>
+              <span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-primaryDark shadow-sm border border-primary/10">{inventory.length}</span>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-primary/5 text-left text-xs uppercase text-muted">
+            <thead className="bg-gradient-to-r from-primary/10 to-secondary/10 text-left">
               <tr>
-                <th className="px-6 py-3">Title</th>
-                <th className="px-6 py-3">Category</th>
-                <th className="px-6 py-3">Publisher</th>
-                <th className="px-6 py-3">RRP</th>
-                <th className="px-6 py-3">Discount %</th>
-                <th className="px-6 py-3">Quantity</th>
-                <th className="px-6 py-3">Selling Price</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Title</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Category</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Publisher</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">RRP</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Discount %</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Quantity</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Selling Price</th>
               </tr>
             </thead>
-            <tbody>
-              {inventory.map((item) => (
-                <tr key={item.id} className="border-t border-black/5">
-                  <td className="px-6 py-4">{item.title}</td>
-                  <td className="px-6 py-4">{item.category}</td>
-                  <td className="px-6 py-4">{item.publisher}</td>
-                  <td className="px-6 py-4">${formatNumber(item.rrp)}</td>
-                  <td className="px-6 py-4">{item.discount}%</td>
-                  <td className="px-6 py-4">{item.quantity}</td>
-                  <td className="px-6 py-4">${formatNumber(item.sellingPrice)}</td>
+            <tbody className="divide-y divide-black/5">
+              {inventory.map((item, index) => (
+                <tr key={item.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                  <td className="px-6 py-4 font-medium">{item.title}</td>
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark border border-primary/20">
+                      {item.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-muted">{item.publisher}</td>
+                  <td className="px-6 py-4 font-semibold">${formatNumber(item.rrp)}</td>
+                  <td className="px-6 py-4">
+                    {item.discount > 0 ? (
+                      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">
+                        {item.discount}%
+                      </span>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      item.quantity <= 5
+                        ? 'bg-red-100 text-red-700 border border-red-200'
+                        : item.quantity <= restockThreshold
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-green-100 text-green-700 border border-green-200'
+                    }`}>
+                      {item.quantity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1127,55 +1209,47 @@ export default function DashboardPage() {
 
   const renderEvents = () => (
     <div className="fade-up space-y-6">
-      <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-6 shadow-xl border border-blue-200/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primaryDark">
-              <svg viewBox="0 0 24 24" className="h-5 w-5">
-                <path
-                  d="M7 4v2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V4h-2v2H9V4H7Zm-2 6h14v8H5v-8Z"
-                  fill="currentColor"
-                />
-              </svg>
+          <div className="flex items-center gap-4">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-3xl shadow-soft">
+              🎪
             </span>
             <div>
-              <h2 className="font-display text-2xl">Create Event</h2>
-              <p className="text-xs text-muted">Schedule events with dates and vendor fees.</p>
+              <h2 className="font-display text-2xl gradient-text">Event Management</h2>
+              <p className="text-xs text-muted">Schedule events with dates and vendor fees</p>
             </div>
           </div>
           <button
             onClick={() => setShowCreateEvent(true)}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white"
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-soft hover:shadow-lg hover:-translate-y-0.5 transition-all"
             type="button"
           >
-            New Event
+            + New Event
           </button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primaryDark">
-                <svg viewBox="0 0 24 24" className="h-4 w-4">
-                  <path
-                    d="M5 5h14a2 2 0 0 1 2 2v2H3V7a2 2 0 0 1 2-2Zm-2 6h18v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6Z"
-                    fill="currentColor"
-                  />
-                </svg>
+        <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-xl">
+                📅
               </span>
-              <h3 className="font-display text-xl">Events</h3>
+              <div>
+                <h3 className="font-display text-xl gradient-text">All Events</h3>
+                <span className="text-xs font-semibold text-muted">{events.length} total</span>
+              </div>
             </div>
-            <span className="text-xs text-muted">{events.length} total</span>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 mb-4">
             <select
               value={eventTypeFilter}
               onChange={(event) =>
                 setEventTypeFilter(event.target.value as typeof eventTypeFilter)
               }
-              className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm font-medium hover:border-primary/40 transition-colors"
             >
               <option value="All">All types</option>
               <option value="Bazaar">Bazaar</option>
@@ -1187,54 +1261,61 @@ export default function DashboardPage() {
                 type="date"
                 value={eventDateStart}
                 onChange={(event) => setEventDateStart(event.target.value)}
-                className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
               />
               <input
                 type="date"
                 value={eventDateEnd}
                 onChange={(event) => setEventDateEnd(event.target.value)}
-                className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
               />
             </div>
           </div>
-          <div className="mt-4 space-y-4">
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
             {filteredEvents.map((event) => {
               const totalSales = event.sales.reduce((sum, sale) => sum + sale.total, 0)
               return (
-                <div key={event.id} className="rounded-xl border border-black/10 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{event.name}</p>
-                      <p className="text-xs text-muted">
-                        {event.location || 'Location TBD'}
-                      </p>
-                      <p className="text-xs text-muted">Vendor fee: ${formatNumber(event.cost)}</p>
-                      <p className="text-xs text-muted">
-                        Dates: {event.startDate || 'TBD'} - {event.endDate || 'TBD'}
-                      </p>
+                <div key={event.id} className="group rounded-2xl border-2 border-primary/10 p-5 hover:border-primary/30 hover:shadow-lg transition-all bg-gradient-to-br from-white to-primary/5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <p className="font-bold text-lg text-primaryDark mb-1">{event.name}</p>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span
+                          className={`rounded-full px-3 py-1 text-[11px] font-bold ${eventTypeBadgeClasses[event.type]}`}
+                        >
+                          {event.type}
+                        </span>
+                        <button
+                          onClick={() => handleToggleEventStatus(event.id)}
+                          className={`rounded-full px-3 py-1 text-xs font-bold transition-all hover:scale-105 ${
+                            event.status === 'active'
+                              ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200'
+                              : 'bg-gray-100 text-gray-600 border border-gray-200'
+                          }`}
+                          type="button"
+                        >
+                          {event.status === 'active' ? '● Active' : '○ Closed'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${eventTypeBadgeClasses[event.type]}`}
-                      >
-                        {event.type}
-                      </span>
-                    <button
-                      onClick={() => handleToggleEventStatus(event.id)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        event.status === 'active'
-                          ? 'bg-accentThree/20 text-primaryDark'
-                          : 'bg-black/5 text-muted'
-                      }`}
-                      type="button"
-                    >
-                      {event.status === 'active' ? 'Active' : 'Closed'}
-                    </button>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold gradient-text">${formatNumber(totalSales)}</p>
+                      <p className="text-xs text-muted">{event.sales.length} transactions</p>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                    <span>{event.sales.length} transactions</span>
-                    <span>Total sales: ${formatNumber(totalSales)}</span>
+                  <div className="space-y-1 text-xs text-muted bg-white/50 rounded-xl p-3 border border-primary/5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-primary">📍</span>
+                      <span>{event.location || 'Location TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-primary">📅</span>
+                      <span>{event.startDate || 'TBD'} - {event.endDate || 'TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-primary">💵</span>
+                      <span>Vendor fee: ${formatNumber(event.cost)}</span>
+                    </div>
                   </div>
                 </div>
               )
@@ -1242,27 +1323,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primaryDark">
-              <svg viewBox="0 0 24 24" className="h-4 w-4">
-                <path
-                  d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3H4V6Zm0 5h16v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5Zm5 2h6v2H9v-2Z"
-                  fill="currentColor"
-                />
-              </svg>
+        <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-green-100 text-xl">
+              💳
             </span>
-            <h3 className="font-display text-xl">POS Sales</h3>
+            <div>
+              <h3 className="font-display text-xl gradient-text">POS Sales</h3>
+              <p className="text-xs text-muted">Record sales for active events</p>
+            </div>
           </div>
-          <p className="mt-2 text-xs text-muted">
-            Record sales for active events only. Inventory will auto-deduct.
-          </p>
 
-          <div className="mt-4 space-y-3">
+          <div className="space-y-4">
             <select
               value={selectedEventId}
               onChange={(event) => setSelectedEventId(event.target.value)}
-              className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+              className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm font-medium hover:border-emerald-300 transition-colors"
             >
               <option value="">Select active event</option>
               <option value="general">General Sales (no event)</option>
@@ -1279,8 +1355,8 @@ export default function DashboardPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search catalog by title, publisher, or category"
-              className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+              placeholder="🔍 Search catalog by title, publisher, or category"
+              className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
             />
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -1289,39 +1365,40 @@ export default function DashboardPage() {
                 min={1}
                 value={addQuantity}
                 onChange={(event) => setAddQuantity(Number(event.target.value))}
-                className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                placeholder="Quantity"
+                className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
               />
               <select
                 value={paymentType}
                 onChange={(event) => setPaymentType(event.target.value as Sale['paymentType'])}
-                className="w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
               >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Transfer">Transfer</option>
+                <option value="Cash">💵 Cash</option>
+                <option value="Card">💳 Card (+3%)</option>
+                <option value="Transfer">🏦 Transfer</option>
               </select>
             </div>
 
-            <div className="rounded-xl border border-black/10">
-              <div className="border-b border-black/10 px-4 py-2 text-xs font-semibold uppercase text-muted">
-                Catalog
+            <div className="rounded-2xl border-2 border-emerald-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-100 to-green-100 px-4 py-3 border-b border-emerald-200">
+                <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Catalog</p>
               </div>
-              <div className="max-h-48 overflow-y-auto px-4 py-2 text-sm">
+              <div className="max-h-64 overflow-y-auto divide-y divide-emerald-100">
                 {filteredInventory.length ? (
                   filteredInventory.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between border-b border-black/5 py-2 last:border-b-0"
+                      className="flex items-center justify-between p-4 hover:bg-emerald-50/50 transition-colors"
                     >
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-muted">
-                          {item.category} - Stock: {item.quantity} - ${formatNumber(item.sellingPrice)}
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{item.title}</p>
+                        <p className="text-xs text-muted mt-1">
+                          {item.category} · Stock: {item.quantity} · ${formatNumber(item.sellingPrice)}
                         </p>
                       </div>
                       <button
                         onClick={() => handleAddToCart(item.id)}
-                        className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark"
+                        className="ml-3 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         type="button"
                         disabled={item.quantity === 0}
                       >
@@ -1330,189 +1407,194 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="py-4 text-center text-xs text-muted">No matches found.</p>
+                  <p className="py-8 text-center text-xs text-muted">No matches found.</p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl border border-black/10">
-              <div className="border-b border-black/10 px-4 py-2 text-xs font-semibold uppercase text-muted">
-                Cart
-              </div>
-              <div className="space-y-3 px-4 py-3 text-sm">
-                {cartItems.length ? (
-                  cartItems.map((item) => (
-                    <div key={item.itemId} className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={item.quantity}
-                          onChange={(event) =>
-                            handleUpdateCartQuantity(item.itemId, Number(event.target.value))
-                          }
-                          className="w-20 rounded-lg border border-primary/20 px-2 py-1 text-xs"
-                        />
-                        <button
-                          onClick={() => handleRemoveFromCart(item.itemId)}
-                          className="text-xs font-semibold text-accentOne"
-                          type="button"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-muted">Cart is empty. Add items from the catalog.</p>
-                )}
-                <div className="space-y-1 border-t border-black/10 pt-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted">Subtotal</span>
-                    <span>${formatNumber(cartTotal)}</span>
-                  </div>
-                  {paymentType === 'Card' && (
-                    <div className="flex items-center justify-between text-accentOne">
-                      <span>Convenience fee (3%)</span>
-                      <span>${formatNumber(convenienceFee)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between font-semibold">
-                    <span>Total</span>
-                    <span>${formatNumber(totalWithFee)}</span>
-                  </div>
-                  {paymentType === 'Card' && (
-                    <p className="text-[11px] text-muted">
-                      Card payments include a 3% convenience fee.
-                    </p>
-                  )}
-                </div>
+            <div className="rounded-2xl border-2 border-primary/20 overflow-hidden">
+              <div className="bg-gradient-to-r from-primary/10 to-secondary/10 px-4 py-3 border-b border-primary/20 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-primaryDark">Cart</p>
                 {cartItems.length > 0 && (
-                  <button
-                    onClick={handleClearCart}
-                    className="w-full rounded-full border border-primary/20 py-2 text-xs font-semibold text-primaryDark"
-                    type="button"
-                  >
-                    Clear cart
-                  </button>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-primaryDark shadow-sm border border-primary/20">
+                    {cartItems.length} items
+                  </span>
+                )}
+              </div>
+              <div className="p-4">
+                {cartItems.length ? (
+                  <div className="space-y-3">
+                    {cartItems.map((item) => (
+                      <div key={item.itemId} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm">{item.title}</p>
+                          <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={item.quantity}
+                            onChange={(event) =>
+                              handleUpdateCartQuantity(item.itemId, Number(event.target.value))
+                            }
+                            className="w-16 rounded-lg border-2 border-primary/20 px-2 py-1 text-xs text-center font-bold"
+                          />
+                          <button
+                            onClick={() => handleRemoveFromCart(item.itemId)}
+                            className="text-xs font-bold text-red-600 hover:text-red-700 px-2"
+                            type="button"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="space-y-2 pt-3 border-t-2 border-primary/20">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted">Subtotal</span>
+                        <span className="font-semibold">${formatNumber(cartTotal)}</span>
+                      </div>
+                      {paymentType === 'Card' && (
+                        <div className="flex items-center justify-between text-sm text-amber-600">
+                          <span>Convenience fee (3%)</span>
+                          <span className="font-semibold">${formatNumber(convenienceFee)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-lg font-bold pt-2 border-t border-primary/10">
+                        <span className="gradient-text">Total</span>
+                        <span className="gradient-text">${formatNumber(totalWithFee)}</span>
+                      </div>
+                      {paymentType === 'Card' && (
+                        <p className="text-[11px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                          💳 Card payments include a 3% convenience fee.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleClearCart}
+                      className="w-full rounded-xl border-2 border-red-200 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                      type="button"
+                    >
+                      Clear cart
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted text-center py-8">Cart is empty. Add items from the catalog.</p>
                 )}
               </div>
             </div>
 
             <button
               onClick={() => setShowConfirmSale(true)}
-              className="w-full rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white"
+              className="w-full rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-4 text-sm font-bold text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
               disabled={!selectedEventId || cartItems.length === 0}
             >
-              Record Sale
+              💰 Record Sale
             </button>
             {eventMessage && (
-              <p className="text-xs text-muted">{eventMessage}</p>
+              <p className="text-xs text-center px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-medium">{eventMessage}</p>
             )}
           </div>
         </div>
       </div>
 
       {showCreateEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-soft">
-            <div className="flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <h4 className="font-display text-xl">Create New Event</h4>
-                <p className="mt-1 text-xs text-muted">
+                <h4 className="font-display text-2xl gradient-text">Create New Event</h4>
+                <p className="mt-2 text-sm text-muted">
                   Add dates, vendor fee, and keep the event active.
                 </p>
               </div>
               <button
                 onClick={() => setShowCreateEvent(false)}
-                className="rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold text-primaryDark"
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
-                Close
+                ✕ Close
               </button>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-muted">Event name</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Event name *</label>
                 <input
                   type="text"
                   value={newEventName}
                   onChange={(event) => setNewEventName(event.target.value)}
-                  placeholder="Event name"
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  placeholder="e.g., Masjid Book Fair"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-muted">Location</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Location *</label>
                 <input
                   type="text"
                   value={newEventLocation}
                   onChange={(event) => setNewEventLocation(event.target.value)}
-                  placeholder="Event location"
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  placeholder="e.g., Downtown Community Center"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted">Start date</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Start date *</label>
                 <input
                   type="date"
                   value={newEventStart}
                   onChange={(event) => setNewEventStart(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted">End date</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">End date *</label>
                 <input
                   type="date"
                   value={newEventEnd}
                   onChange={(event) => setNewEventEnd(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted">Event type</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Event type *</label>
                 <select
                   value={newEventType}
                   onChange={(event) =>
                     setNewEventType(event.target.value as EventRecord['type'])
                   }
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 >
                   <option value="Bazaar">Bazaar</option>
                   <option value="Bookfair">Bookfair</option>
                   <option value="Jummah Boot">Jummah Boot</option>
                 </select>
               </div>
-              <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-muted">Vendor fee</label>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Vendor fee ($) *</label>
                 <input
                   type="number"
                   value={newEventCost}
                   onChange={(event) => setNewEventCost(event.target.value)}
-                  placeholder="Vendor fee"
-                  className="mt-2 w-full rounded-lg border border-primary/20 px-4 py-2 text-sm"
+                  placeholder="e.g., 120"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3">
+            <div className="mt-8 flex items-center justify-end gap-3">
               <button
                 onClick={() => setShowCreateEvent(false)}
-                className="rounded-full border border-primary/20 px-4 py-2 text-xs font-semibold text-primaryDark"
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateEvent}
-                className="rounded-full bg-primary px-5 py-2 text-xs font-semibold text-white"
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
                 type="button"
               >
                 Create Event
@@ -1523,12 +1605,12 @@ export default function DashboardPage() {
       )}
 
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-soft">
-            <div className="flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <h4 className="font-display text-xl">Confirm Sale</h4>
-                <p className="mt-1 text-xs text-muted">
+                <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
+                <p className="mt-2 text-sm text-muted">
                   {selectedEventId === 'general'
                     ? 'General Sales (no event)'
                     : events.find((event) => event.id === selectedEventId)?.name ??
@@ -1537,55 +1619,55 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold text-primaryDark"
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
-                Close
+                ✕
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-sm">
+            <div className="space-y-3 mb-6">
               {cartItems.map((item) => (
-                <div key={item.itemId} className="flex items-center justify-between">
+                <div key={item.itemId} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
                   <div>
                     <p className="font-semibold">{item.title}</p>
-                    <p className="text-xs text-muted">
+                    <p className="text-xs text-muted mt-1">
                       {item.quantity} x ${formatNumber(item.price)}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold">
+                  <span className="text-lg font-bold gradient-text">
                     ${formatNumber(item.price * item.quantity)}
                   </span>
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
+            <div className="space-y-2 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10">
+              <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Subtotal</span>
-                <span>${formatNumber(cartTotal)}</span>
+                <span className="font-semibold">${formatNumber(cartTotal)}</span>
               </div>
               {paymentType === 'Card' && (
-                <div className="flex items-center justify-between text-accentOne">
+                <div className="flex items-center justify-between text-sm text-amber-600">
                   <span>Convenience fee (3%)</span>
-                  <span>${formatNumber(convenienceFee)}</span>
+                  <span className="font-semibold">${formatNumber(convenienceFee)}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between font-semibold">
-                <span>Total</span>
-                <span>${formatNumber(totalWithFee)}</span>
+              <div className="flex items-center justify-between text-xl font-bold pt-2 border-t border-primary/10">
+                <span className="gradient-text">Total</span>
+                <span className="gradient-text">${formatNumber(totalWithFee)}</span>
               </div>
               {paymentType === 'Card' && (
-                <p className="text-[11px] text-muted">
-                  Card payments include a 3% convenience fee.
+                <p className="text-[11px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                  💳 Card payments include a 3% convenience fee.
                 </p>
               )}
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-3">
+            <div className="mt-8 flex items-center justify-end gap-3">
               <button
                 onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border border-primary/20 px-4 py-2 text-xs font-semibold text-primaryDark"
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
                 Cancel
@@ -1595,30 +1677,25 @@ export default function DashboardPage() {
                   await handleRecordSale()
                   setShowConfirmSale(false)
                 }}
-                className="rounded-full bg-primary px-5 py-2 text-xs font-semibold text-white"
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
                 type="button"
                 disabled={isSubmittingSale}
               >
-                {isSubmittingSale ? 'Processing...' : 'Confirm Sale'}
+                {isSubmittingSale ? '⏳ Processing...' : '✓ Confirm Sale'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="panel-card rounded-2xl bg-white p-6 shadow-soft">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primaryDark">
-            <svg viewBox="0 0 24 24" className="h-4 w-4">
-              <path
-                d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm3 4h8v2H8V8Zm0 4h8v2H8v-2Z"
-                fill="currentColor"
-              />
-            </svg>
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-indigo-50/50 p-6 shadow-xl border border-indigo-200/50">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-2xl shadow-soft">
+            📊
           </span>
-          <h3 className="font-display text-xl">Event Summaries</h3>
+          <h3 className="font-display text-2xl gradient-text">Event Summaries</h3>
         </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {events.map((event) => {
             const totalSales = event.sales.reduce((sum, sale) => sum + sale.total, 0)
             const transactions = event.sales.length
@@ -1633,21 +1710,40 @@ export default function DashboardPage() {
               .map(([name]) => name)[0]
 
             return (
-              <div key={event.id} className="rounded-xl border border-black/10 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold">{event.name}</p>
-                  <span className="text-xs text-muted">
-                    {event.status === 'active' ? 'Active' : 'Closed'}
+              <div key={event.id} className="rounded-2xl border-2 border-indigo-200/50 p-5 bg-gradient-to-br from-white to-indigo-50/30 hover:border-indigo-300 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-bold text-lg text-primaryDark">{event.name}</p>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                    event.status === 'active'
+                      ? 'bg-green-100 text-green-700 border border-green-200'
+                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}>
+                    {event.status === 'active' ? '● Active' : '○ Closed'}
                   </span>
                 </div>
-                <div className="mt-3 text-xs text-muted">
-                  <p>
-                    {event.type} · {event.location || 'Location TBD'}
-                  </p>
-                  <p>Dates: {event.startDate || 'TBD'} - {event.endDate || 'TBD'}</p>
-                  <p>Total sales: ${formatNumber(totalSales)}</p>
-                  <p>Transactions: {transactions}</p>
-                  <p>Best seller: {bestSellerName ?? 'No sales yet'}</p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-muted">
+                    <span className="text-primary">🎪</span>
+                    <span>{event.type} · {event.location || 'Location TBD'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted">
+                    <span className="text-primary">📅</span>
+                    <span>{event.startDate || 'TBD'} - {event.endDate || 'TBD'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-indigo-200/50">
+                    <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Total Sales</p>
+                      <p className="text-lg font-bold gradient-text">${formatNumber(totalSales)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Transactions</p>
+                      <p className="text-lg font-bold text-primaryDark">{transactions}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-indigo-200/50">
+                    <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">Best Seller</p>
+                    <p className="font-semibold text-primaryDark">{bestSellerName ?? 'No sales yet'}</p>
+                  </div>
                 </div>
               </div>
             )
@@ -1659,16 +1755,19 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-emerald-50">
+        <div className="text-center">
+          <div className="h-16 w-16 mx-auto mb-4 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+          <p className="text-lg font-semibold text-primaryDark">Loading dashboard...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-screen text-ink">
+    <div className="relative min-h-screen text-ink bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30">
       <div
-        className="hero-svg-bg absolute inset-0 opacity-22"
+        className="hero-svg-bg absolute inset-0 opacity-10"
         style={{
           backgroundImage: `url(${bg1.src})`,
           backgroundSize: '75% auto',
@@ -1676,16 +1775,16 @@ export default function DashboardPage() {
         }}
       />
       {[
-        { src: design1, classes: 'left-6 top-12 h-16 w-16 opacity-30' },
-        { src: design2, classes: 'right-10 top-10 h-20 w-20 opacity-25' },
-        { src: design1, classes: 'left-1/4 top-64 h-14 w-14 opacity-20' },
-        { src: design2, classes: 'right-1/3 top-56 h-16 w-16 opacity-25' },
-        { src: design1, classes: 'left-16 bottom-20 h-20 w-20 opacity-20' },
-        { src: design2, classes: 'right-20 bottom-16 h-16 w-16 opacity-25' },
-        { src: design1, classes: 'left-1/2 top-24 h-24 w-24 opacity-20' },
-        { src: design2, classes: 'right-1/2 bottom-24 h-14 w-14 opacity-20' },
-        { src: design1, classes: 'left-10 bottom-1/3 h-12 w-12 opacity-30' },
-        { src: design2, classes: 'right-10 bottom-1/2 h-14 w-14 opacity-20' }
+        { src: design1, classes: 'left-6 top-12 h-16 w-16 opacity-20' },
+        { src: design2, classes: 'right-10 top-10 h-20 w-20 opacity-15' },
+        { src: design1, classes: 'left-1/4 top-64 h-14 w-14 opacity-10' },
+        { src: design2, classes: 'right-1/3 top-56 h-16 w-16 opacity-15' },
+        { src: design1, classes: 'left-16 bottom-20 h-20 w-20 opacity-10' },
+        { src: design2, classes: 'right-20 bottom-16 h-16 w-16 opacity-15' },
+        { src: design1, classes: 'left-1/2 top-24 h-24 w-24 opacity-10' },
+        { src: design2, classes: 'right-1/2 bottom-24 h-14 w-14 opacity-10' },
+        { src: design1, classes: 'left-10 bottom-1/3 h-12 w-12 opacity-15' },
+        { src: design2, classes: 'right-10 bottom-1/2 h-14 w-14 opacity-10' }
       ].map((item, index) => (
         <Image
           key={`dash-design-${index}`}
@@ -1696,19 +1795,23 @@ export default function DashboardPage() {
           className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${item.classes}`}
         />
       ))}
-      <header className="relative z-10 border-b border-black/10 bg-white">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between py-4">
-          <a className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={46} height={46} />
-            <span className="font-display text-lg font-bold">Eduvate Kids</span>
+      <header className="relative z-10 border-b border-black/5 bg-white/80 backdrop-blur-xl shadow-sm">
+        <div className="mx-auto flex w-11/12 max-w-7xl items-center justify-between py-5 px-4">
+          <a className="flex items-center gap-3 group" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={48} height={48} className="group-hover:scale-110 transition-transform" />
+            <div>
+              <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
+              <p className="text-xs text-muted">Admin Dashboard</p>
+            </div>
           </a>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-muted">
-              {user?.email ? `Welcome, ${user.email}` : 'Admin Dashboard'}
+            <div className="hidden md:block text-sm">
+              <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
+              <p className="text-xs text-muted">Signed in</p>
             </div>
             <button
               onClick={handleLogout}
-              className="rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-semibold text-primaryDark hover:bg-primary/5"
+              className="rounded-full border-2 border-primary/30 bg-white px-5 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all shadow-sm"
             >
               Sign out
             </button>
@@ -1718,38 +1821,44 @@ export default function DashboardPage() {
 
       <main className="relative z-10 w-full px-6 py-10">
         <aside
-          className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-black/10 bg-white/95 px-4 pb-6 pt-6 shadow-soft backdrop-blur transition-all ${
-            sidebarCollapsed ? 'w-20' : 'w-72'
+          className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-primary/10 bg-white/95 backdrop-blur-xl shadow-2xl transition-all ${
+            sidebarCollapsed ? 'w-20' : 'w-80'
           }`}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/15 text-primaryDark">
-                <svg viewBox="0 0 24 24" className="h-5 w-5">
-                  <path
-                    d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 4 5 2.5v5L12 17l-5-2.5v-5L12 7Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-              {!sidebarCollapsed && (
+          <div className="flex items-center justify-between p-6 border-b border-primary/10">
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark shadow-soft">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6">
+                    <path
+                      d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 4 5 2.5v5L12 17l-5-2.5v-5L12 7Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </span>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted">Admin</p>
-                  <p className="font-display text-lg text-primaryDark">Control Hub</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Admin</p>
+                  <p className="font-display text-lg gradient-text">Control Hub</p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <button
               onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="rounded-full border border-primary/20 p-2 text-primaryDark"
+              className="rounded-xl border-2 border-primary/20 p-2.5 text-primaryDark hover:bg-primary/5 transition-colors"
               type="button"
               aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}
             >
-              {sidebarCollapsed ? '›' : '‹'}
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {sidebarCollapsed ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                )}
+              </svg>
             </button>
           </div>
 
-          <nav className="mt-8 flex flex-1 flex-col gap-3">
+          <nav className="flex-1 px-4 py-6 space-y-3">
             {[
               {
                 id: 'home',
@@ -1761,7 +1870,8 @@ export default function DashboardPage() {
                       fill="currentColor"
                     />
                   </svg>
-                )
+                ),
+                emoji: '🏠'
               },
               {
                 id: 'inventory',
@@ -1773,7 +1883,8 @@ export default function DashboardPage() {
                       fill="currentColor"
                     />
                   </svg>
-                )
+                ),
+                emoji: '📦'
               },
               {
                 id: 'events',
@@ -1785,54 +1896,66 @@ export default function DashboardPage() {
                       fill="currentColor"
                     />
                   </svg>
-                )
+                ),
+                emoji: '🎪'
               }
             ].map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveView(item.id as typeof activeView)}
-                className={`group flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition ${
+                className={`group flex items-center gap-4 rounded-2xl px-4 py-4 text-sm font-bold transition-all w-full ${
                   activeView === item.id
-                    ? 'bg-primary text-white shadow-soft'
-                    : 'bg-primary/10 text-primaryDark'
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-xl scale-105'
+                    : 'bg-gradient-to-r from-primary/5 to-secondary/5 text-primaryDark hover:from-primary/10 hover:to-secondary/10 hover:scale-102'
                 }`}
                 type="button"
               >
                 <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                    activeView === item.id ? 'bg-white/20' : 'bg-white'
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl transition-all ${
+                    activeView === item.id
+                      ? 'bg-white/20 shadow-lg scale-110'
+                      : 'bg-white shadow-sm group-hover:scale-110'
                   }`}
                 >
-                  {item.icon}
+                  {!sidebarCollapsed && activeView === item.id ? (
+                    <span className="text-2xl">{item.emoji}</span>
+                  ) : (
+                    item.icon
+                  )}
                 </span>
-                {!sidebarCollapsed && <span>{item.label}</span>}
+                {!sidebarCollapsed && <span className="flex-1 text-left">{item.label}</span>}
               </button>
             ))}
           </nav>
 
           {!sidebarCollapsed && (
-            <div className="rounded-2xl bg-primary/10 p-3 text-xs text-muted">
-              {dataLoading ? 'Syncing Firestore data...' : 'All systems synced.'}
+            <div className="p-4">
+              <div className="rounded-2xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 text-center border border-primary/20">
+                <div className={`inline-flex items-center gap-2 text-xs font-bold ${dataLoading ? 'text-amber-600' : 'text-green-600'}`}>
+                  <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                  {dataLoading ? 'Syncing data...' : 'All synced ✓'}
+                </div>
+              </div>
             </div>
           )}
         </aside>
 
-        <div className={`mx-auto max-w-6xl ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
-          <section className="flex-1 space-y-6">
-            <div>
-              <h1 className="font-display text-3xl">
+        <div className={`mx-auto max-w-7xl transition-all ${sidebarCollapsed ? 'lg:pl-24' : 'lg:pl-84'}`}>
+          <section className="flex-1 space-y-8">
+            <div className="fade-up">
+              <h1 className="font-display text-4xl gradient-text">
                 {activeView === 'home'
                   ? 'Admin Home'
                   : activeView === 'inventory'
-                  ? 'Inventory'
+                  ? 'Inventory Management'
                   : 'Event Management'}
               </h1>
-              <p className="mt-2 text-sm text-muted">
+              <p className="mt-3 text-sm text-muted max-w-2xl">
                 {activeView === 'home'
-                  ? 'Monitor restock needs, best sellers, and event performance.'
+                  ? 'Monitor restock needs, best sellers, and event performance at a glance.'
                   : activeView === 'inventory'
-                  ? 'Upload, update, and view stock levels.'
-                  : 'Create events, record sales, and review summaries.'}
+                  ? 'Upload, update, and manage your complete inventory with ease.'
+                  : 'Create events, record sales through POS, and review comprehensive summaries.'}
               </p>
             </div>
 
@@ -1849,7 +1972,6 @@ export default function DashboardPage() {
 
         .panel-card:hover {
           transform: translateY(-4px);
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
         }
 
         .fade-up {
@@ -1859,12 +1981,47 @@ export default function DashboardPage() {
         @keyframes fade-up {
           from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(20px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.3s ease both;
+        }
+
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        .animate-scale-in {
+          animation: scale-in 0.3s ease both;
+        }
+
+        @keyframes scale-in {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .gradient-text {
+          background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
       `}</style>
     </div>

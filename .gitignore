@@ -39,6 +39,9 @@ yarn-error.log*
 firebase-debug.log
 firebaserc
 .firebaserc
+serviceAccountKey.json
+create-admin.js
+update-github-secrets.js
 
 # Typescript
 *.tsbuildinfo

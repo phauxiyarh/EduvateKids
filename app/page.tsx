@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import logo from '../assets/logo.png'
 import catalogQR from '../assets/catalog.png'
@@ -87,8 +88,8 @@ export default function HomePage() {
             <Image
               src={logo}
               alt="Eduvate Kids logo"
-              width={52}
-              height={52}
+              width={16}
+              height={16}
               style={{ width: 'auto', height: 'auto' }}
             />
             <span className="flex flex-col">
@@ -107,12 +108,12 @@ export default function HomePage() {
               Partners
             </a>
           </nav>
-          <a
+          <Link
             className="rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
             href="/auth/login"
           >
             Admin Login
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -181,12 +182,12 @@ export default function HomePage() {
                 >
                   Explore Modules
                 </a>
-                <a
+                <Link
                   className="rounded-full border border-primary px-6 py-3 font-semibold text-primaryDark"
                   href="/dashboard"
                 >
                   View Dashboard
-                </a>
+                </Link>
               </div>
               <div className="mt-6 text-sm text-muted">
                 Curated Islamic titles · Books, crafts, and puzzles · Events & school fairs
@@ -737,8 +738,8 @@ export default function HomePage() {
                 <Image
                   src={logo}
                   alt="Eduvate Kids logo"
-                  width={56}
-                  height={56}
+                  width={18}
+                  height={18}
                   style={{ width: 'auto', height: 'auto' }}
                   className="drop-shadow-lg"
                 />
@@ -795,30 +796,30 @@ export default function HomePage() {
                 <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#partners">
                   Publishers
                 </a>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/dashboard">
+                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/dashboard">
                   Dashboard
-                </a>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/contact-us">
+                </Link>
+                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/contact-us">
                   Contact Us
-                </a>
+                </Link>
               </div>
             </div>
 
             <div>
               <h4 className="font-display text-lg font-semibold">Resources</h4>
               <div className="mt-4 space-y-3 text-sm">
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/faqs">
+                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/faqs">
                   FAQs
-                </a>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/policies">
+                </Link>
+                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/policies">
                   Policies & Terms
-                </a>
+                </Link>
                 <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="https://wa.me/c/16674377777" target="_blank" rel="noreferrer">
                   Digital Catalog
                 </a>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/auth/login">
+                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/auth/login">
                   Admin Login
-                </a>
+                </Link>
               </div>
             </div>
 
@@ -829,10 +830,7 @@ export default function HomePage() {
                   <span className="text-primary">📍</span>
                   <span>Maryland, USA</span>
                 </p>
-                <p className="leading-relaxed">
-                  Serving families, schools, and communities with Islamic educational resources.
-                </p>
-                <a
+                <Link
                   href="/book-event"
                   className="group mt-4 block rounded-xl bg-gradient-to-r from-accentThree/20 to-primary/20 backdrop-blur p-5 border border-accentThree/30 transition hover:from-accentThree/30 hover:to-primary/30 hover:border-accentThree/50 hover:-translate-y-0.5"
                 >
@@ -850,7 +848,7 @@ export default function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -859,15 +857,15 @@ export default function HomePage() {
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/50">
               <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
               <div className="flex flex-wrap gap-6">
-                <a href="/policies" className="hover:text-white transition">
+                <Link href="/policies" className="hover:text-white transition">
                   Privacy Policy
-                </a>
-                <a href="/policies" className="hover:text-white transition">
+                </Link>
+                <Link href="/policies" className="hover:text-white transition">
                   Terms of Service
-                </a>
-                <a href="/faqs" className="hover:text-white transition">
+                </Link>
+                <Link href="/faqs" className="hover:text-white transition">
                   Help Center
-                </a>
+                </Link>
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../../lib/firebase'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import bg4 from '../../../assets/bg4.png'
 import logo from '../../../assets/logo.png'
 
@@ -47,19 +48,19 @@ export default function AdminLoginPage() {
       />
       <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-16">
         <div className="grid w-full gap-10 rounded-3xl bg-white p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
-          <a className="flex items-center gap-3 md:col-span-2" href="/">
+          <Link className="flex items-center gap-3 md:col-span-2" href="/">
             <Image
               src={logo}
               alt="Eduvate Kids logo"
-              width={52}
-              height={52}
+              width={40}
+              height={40}
               style={{ width: 'auto', height: 'auto' }}
             />
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted">Back to home</p>
               <p className="font-display text-lg text-primaryDark">Eduvate Kids</p>
             </div>
-          </a>
+          </Link>
           <section>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Admin Portal
@@ -119,12 +120,12 @@ export default function AdminLoginPage() {
               >
                 {loading ? 'Signing In...' : 'Sign In'}
               </button>
-              <a
+              <Link
                 className="rounded-full border border-primary px-6 py-3 text-center font-semibold text-primaryDark"
                 href="/dashboard"
               >
                 Continue to Dashboard Demo
-              </a>
+              </Link>
             </form>
             <button
               type="button"

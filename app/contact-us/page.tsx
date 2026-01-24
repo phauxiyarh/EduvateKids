@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useState } from 'react'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
@@ -34,19 +35,19 @@ export default function ContactUsPage() {
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-4">
-          <a className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={52} height={52} />
+          <Link className="flex items-center gap-3" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={40} height={40} />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
               <span className="text-sm text-muted">Islamic Bookstore</span>
             </span>
-          </a>
-          <a
+          </Link>
+          <Link
             className="rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
             href="/"
           >
             Back to Home
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -254,18 +255,18 @@ export default function ContactUsPage() {
                 Explore our resources or book an event with us.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-4">
-                <a
+                <Link
                   href="/faqs"
                   className="rounded-full border border-primary bg-white px-8 py-3 font-semibold text-primaryDark shadow-sm transition hover:-translate-y-1"
                 >
                   Browse FAQs
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/book-event"
                   className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 font-semibold text-white shadow-soft transition hover:-translate-y-1"
                 >
                   Book an Event
-                </a>
+                </Link>
                 <a
                   href="https://wa.me/c/16674377777"
                   target="_blank"

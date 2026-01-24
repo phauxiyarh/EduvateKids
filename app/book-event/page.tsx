@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useState } from 'react'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
@@ -65,19 +66,19 @@ export default function BookEventPage() {
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-4">
-          <a className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={52} height={52} />
+          <Link className="flex items-center gap-3" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={40} height={40} />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
               <span className="text-sm text-muted">Islamic Bookstore</span>
             </span>
-          </a>
-          <a
+          </Link>
+          <Link
             className="rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
             href="/"
           >
             Back to Home
-          </a>
+          </Link>
         </div>
       </header>
 

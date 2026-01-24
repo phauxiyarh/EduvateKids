@@ -90,7 +90,6 @@ export default function HomePage() {
               alt="Eduvate Kids logo"
               width={16}
               height={16}
-              style={{ width: 'auto', height: 'auto' }}
             />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>

@@ -88,8 +88,8 @@ export default function HomePage() {
             <Image
               src={logo}
               alt="Eduvate Kids logo"
-              width={16}
-              height={16}
+              width={32}
+              height={32}
             />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
@@ -740,9 +740,8 @@ export default function HomePage() {
                 <Image
                   src={logo}
                   alt="Eduvate Kids logo"
-                  width={18}
-                  height={18}
-                  style={{ width: 'auto', height: 'auto' }}
+                  width={32}
+                  height={32}
                   className="drop-shadow-lg"
                 />
                 <div>

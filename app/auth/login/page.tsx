@@ -52,9 +52,8 @@ export default function AdminLoginPage() {
             <Image
               src={logo}
               alt="Eduvate Kids logo"
-              width={16}
-              height={16}
-              style={{ width: 'auto', height: 'auto' }}
+              width={32}
+              height={32}
             />
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted">Back to home</p>

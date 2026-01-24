@@ -132,7 +132,7 @@ export default function FAQsPage() {
   return (
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-4">
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-2">
           <Link className="flex items-center gap-3" href="/">
             <Image src={logo} alt="Eduvate Kids logo" width={16} height={16} />
             <span className="flex flex-col">
@@ -140,11 +140,25 @@ export default function FAQsPage() {
               <span className="text-sm text-muted">Islamic Bookstore</span>
             </span>
           </Link>
+          <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
+            <Link className="hover:text-primaryDark" href="/">
+              Home
+            </Link>
+            <Link className="hover:text-primaryDark" href="/dashboard">
+              Dashboard
+            </Link>
+            <Link className="hover:text-primaryDark" href="/contact-us">
+              Contact
+            </Link>
+          </nav>
           <Link
-            className="rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
-            href="/"
+            className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+            href="/auth/login"
           >
-            Back to Home
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Admin Login
           </Link>
         </div>
       </header>

@@ -100,9 +100,6 @@ export default function HomePage() {
             <a className="hover:text-primaryDark" href="#about">
               About
             </a>
-            <a className="hover:text-primaryDark" href="#dashboard">
-              Dashboard
-            </a>
             <a className="hover:text-primaryDark" href="#partners">
               Partners
             </a>
@@ -184,12 +181,6 @@ export default function HomePage() {
                 >
                   Explore Modules
                 </a>
-                <Link
-                  className="rounded-full border border-primary px-6 py-3 font-semibold text-primaryDark"
-                  href="/dashboard"
-                >
-                  View Dashboard
-                </Link>
               </div>
               <div className="mt-6 text-sm text-muted">
                 Curated Islamic titles · Books, crafts, and puzzles · Events & school fairs
@@ -797,9 +788,6 @@ export default function HomePage() {
                 <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#partners">
                   Publishers
                 </a>
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/dashboard">
-                  Dashboard
-                </Link>
                 <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/contact-us">
                   Contact Us
                 </Link>

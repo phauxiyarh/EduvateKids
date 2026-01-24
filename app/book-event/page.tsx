@@ -77,9 +77,6 @@ export default function BookEventPage() {
             <Link className="hover:text-primaryDark" href="/">
               Home
             </Link>
-            <Link className="hover:text-primaryDark" href="/dashboard">
-              Dashboard
-            </Link>
             <Link className="hover:text-primaryDark" href="/contact-us">
               Contact
             </Link>

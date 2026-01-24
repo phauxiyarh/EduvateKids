@@ -134,7 +134,7 @@ export default function FAQsPage() {
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-4">
           <Link className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={40} height={40} />
+            <Image src={logo} alt="Eduvate Kids logo" width={16} height={16} />
             <span className="flex flex-col">
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
               <span className="text-sm text-muted">Islamic Bookstore</span>

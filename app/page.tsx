@@ -82,7 +82,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-2">
           <a className="flex items-center gap-3" href="#top">
             <Image
@@ -157,7 +157,7 @@ export default function HomePage() {
           />
           <div className="hero-glow pointer-events-none absolute right-[-120px] top-24 z-0 h-72 w-72 rounded-full" />
           <div className="hero-glow pointer-events-none absolute left-[-140px] top-52 z-0 h-80 w-80 rounded-full" />
-          <div className="relative z-20 mx-auto grid w-11/12 max-w-6xl items-center gap-12 md:grid-cols-2">
+          <div className="relative z-10 mx-auto grid w-11/12 max-w-6xl items-center gap-12 md:grid-cols-2">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Maryland, USA

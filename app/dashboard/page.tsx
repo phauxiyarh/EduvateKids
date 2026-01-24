@@ -1832,9 +1832,8 @@ export default function DashboardPage() {
               <Image
                 src={logo}
                 alt="Eduvate Kids logo"
-                width={48}
-                height={48}
-                style={{ width: 'auto', height: 'auto' }}
+                width={32}
+                height={32}
                 className="group-hover:scale-110 transition-transform duration-300"
               />
               <div className="hidden sm:block">

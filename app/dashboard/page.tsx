@@ -10,10 +10,12 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   writeBatch
 } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import * as XLSX from 'xlsx'
-import { auth, db } from '../../lib/firebase'
+import { auth, db, storage } from '../../lib/firebase'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
@@ -61,6 +63,20 @@ type EventRecord = {
   type: 'Bazaar' | 'Bookfair' | 'Jummah Boot'
   status: EventStatus
   sales: Sale[]
+}
+
+type AgeCategory = '0-3' | '4-6' | '7-9' | '10-12' | '13+'
+
+type CatalogItem = {
+  id: string
+  title: string
+  description: string
+  category: InventoryCategory
+  ageCategory: AgeCategory
+  price: number
+  publisher: string
+  images: string[]
+  createdAt: string
 }
 
 const defaultInventory: InventoryItem[] = [
@@ -210,7 +226,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(true)
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'catalog'>(
     'home'
   )
   const [inventory, setInventory] = useState<InventoryItem[]>(defaultInventory)
@@ -246,6 +262,24 @@ export default function DashboardPage() {
   const [editEventEnd, setEditEventEnd] = useState('')
   const [editEventLocation, setEditEventLocation] = useState('')
   const [editEventType, setEditEventType] = useState<EventRecord['type']>('Bazaar')
+
+  // Catalog state
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [showCreateCatalog, setShowCreateCatalog] = useState(false)
+  const [editingCatalogItem, setEditingCatalogItem] = useState<CatalogItem | null>(null)
+  const [catalogTitle, setCatalogTitle] = useState('')
+  const [catalogDescription, setCatalogDescription] = useState('')
+  const [catalogCategory, setCatalogCategory] = useState<InventoryCategory>('Books')
+  const [catalogAge, setCatalogAge] = useState<AgeCategory>('0-3')
+  const [catalogPrice, setCatalogPrice] = useState('')
+  const [catalogPublisher, setCatalogPublisher] = useState('')
+  const [catalogImages, setCatalogImages] = useState<File[]>([])
+  const [catalogImagePreviews, setCatalogImagePreviews] = useState<string[]>([])
+  const [catalogExistingImages, setCatalogExistingImages] = useState<string[]>([])
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [catalogCategoryFilter, setCatalogCategoryFilter] = useState<'All' | InventoryCategory>('All')
+  const [isUploadingCatalog, setIsUploadingCatalog] = useState(false)
+  const [catalogMessage, setCatalogMessage] = useState('')
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -337,6 +371,29 @@ export default function DashboardPage() {
               .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
               .filter((sale): sale is Sale => Boolean(sale))
             setGeneralSales(loadedGeneralSales)
+          }
+        }
+        // Load catalog items
+        const catalogSnap = await getDocs(collection(db, 'catalog'))
+        if (!cancelled) {
+          if (!catalogSnap.empty) {
+            const loadedCatalog = catalogSnap.docs.map((snap) => {
+              const data = snap.data() as Partial<CatalogItem>
+              return {
+                id: snap.id,
+                title: String(data.title ?? ''),
+                description: String(data.description ?? ''),
+                category: (data.category ?? 'Books') as InventoryCategory,
+                ageCategory: (data.ageCategory ?? '0-3') as AgeCategory,
+                price: Number(data.price ?? 0),
+                publisher: String(data.publisher ?? ''),
+                images: Array.isArray(data.images) ? data.images : [],
+                createdAt: String(data.createdAt ?? new Date().toISOString())
+              }
+            })
+            setCatalogItems(loadedCatalog)
+          } else {
+            setCatalogItems([])
           }
         }
       } catch (error) {
@@ -802,6 +859,195 @@ export default function DashboardPage() {
       setEventMessage('Event updated locally, but failed to sync.')
     }
   }
+
+  // Catalog handlers
+  const resetCatalogForm = () => {
+    setCatalogTitle('')
+    setCatalogDescription('')
+    setCatalogCategory('Books')
+    setCatalogAge('0-3')
+    setCatalogPrice('')
+    setCatalogPublisher('')
+    setCatalogImages([])
+    setCatalogImagePreviews([])
+    setCatalogExistingImages([])
+  }
+
+  const handleCatalogImageSelect = (files: FileList | null) => {
+    if (!files) return
+    const currentCount = catalogImages.length + catalogExistingImages.length
+    const remaining = 5 - currentCount
+    if (remaining <= 0) {
+      setCatalogMessage('Maximum 5 images allowed.')
+      return
+    }
+    const newFiles = Array.from(files).slice(0, remaining)
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file))
+    setCatalogImages((prev) => [...prev, ...newFiles])
+    setCatalogImagePreviews((prev) => [...prev, ...newPreviews])
+  }
+
+  const handleRemoveCatalogNewImage = (index: number) => {
+    setCatalogImages((prev) => prev.filter((_, i) => i !== index))
+    setCatalogImagePreviews((prev) => {
+      URL.revokeObjectURL(prev[index])
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
+  const handleRemoveCatalogExistingImage = (index: number) => {
+    setCatalogExistingImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadCatalogImages = async (files: File[], itemId: string): Promise<string[]> => {
+    const urls: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const storageRef = ref(storage, `catalog/${itemId}/${Date.now()}-${files[i].name}`)
+      await uploadBytes(storageRef, files[i])
+      const url = await getDownloadURL(storageRef)
+      urls.push(url)
+    }
+    return urls
+  }
+
+  const handleCreateCatalogItem = async () => {
+    if (!catalogTitle.trim()) { setCatalogMessage('Title is required.'); return }
+    if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
+    if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
+    if (catalogImages.length === 0) { setCatalogMessage('At least 1 image is required.'); return }
+
+    setIsUploadingCatalog(true)
+    setCatalogMessage('')
+    const itemId = `catalog-${Date.now()}`
+
+    try {
+      const imageUrls = await uploadCatalogImages(catalogImages, itemId)
+      const newItem: CatalogItem = {
+        id: itemId,
+        title: catalogTitle.trim(),
+        description: catalogDescription.trim(),
+        category: catalogCategory,
+        ageCategory: catalogAge,
+        price: parseNumber(catalogPrice),
+        publisher: catalogPublisher.trim(),
+        images: imageUrls,
+        createdAt: new Date().toISOString()
+      }
+
+      setCatalogItems((prev) => [newItem, ...prev])
+      resetCatalogForm()
+      setShowCreateCatalog(false)
+
+      await setDoc(doc(db, 'catalog', itemId), newItem)
+    } catch (error) {
+      console.error('Create catalog item error:', error)
+      setCatalogMessage('Failed to create catalog item. Please try again.')
+    } finally {
+      setIsUploadingCatalog(false)
+    }
+  }
+
+  const openEditCatalogItem = (item: CatalogItem) => {
+    setEditingCatalogItem(item)
+    setCatalogTitle(item.title)
+    setCatalogDescription(item.description)
+    setCatalogCategory(item.category)
+    setCatalogAge(item.ageCategory)
+    setCatalogPrice(String(item.price))
+    setCatalogPublisher(item.publisher)
+    setCatalogExistingImages([...item.images])
+    setCatalogImages([])
+    setCatalogImagePreviews([])
+  }
+
+  const handleEditCatalogItem = async () => {
+    if (!editingCatalogItem) return
+    if (!catalogTitle.trim()) { setCatalogMessage('Title is required.'); return }
+    if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
+    if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
+    if (catalogExistingImages.length + catalogImages.length === 0) {
+      setCatalogMessage('At least 1 image is required.')
+      return
+    }
+
+    setIsUploadingCatalog(true)
+    setCatalogMessage('')
+
+    try {
+      let newImageUrls: string[] = []
+      if (catalogImages.length > 0) {
+        newImageUrls = await uploadCatalogImages(catalogImages, editingCatalogItem.id)
+      }
+
+      // Delete removed images from storage
+      const removedImages = editingCatalogItem.images.filter(
+        (url) => !catalogExistingImages.includes(url)
+      )
+      for (const url of removedImages) {
+        try {
+          const path = decodeURIComponent(url.split('/o/')[1]?.split('?')[0] ?? '')
+          if (path) await deleteObject(ref(storage, path))
+        } catch { /* ignore delete errors for individual images */ }
+      }
+
+      const allImages = [...catalogExistingImages, ...newImageUrls]
+      const updatedFields = {
+        title: catalogTitle.trim(),
+        description: catalogDescription.trim(),
+        category: catalogCategory,
+        ageCategory: catalogAge,
+        price: parseNumber(catalogPrice),
+        publisher: catalogPublisher.trim(),
+        images: allImages
+      }
+
+      setCatalogItems((prev) =>
+        prev.map((item) =>
+          item.id === editingCatalogItem.id ? { ...item, ...updatedFields } : item
+        )
+      )
+      setEditingCatalogItem(null)
+      resetCatalogForm()
+
+      await updateDoc(doc(db, 'catalog', editingCatalogItem.id), updatedFields)
+    } catch (error) {
+      console.error('Edit catalog item error:', error)
+      setCatalogMessage('Failed to update catalog item. Please try again.')
+    } finally {
+      setIsUploadingCatalog(false)
+    }
+  }
+
+  const handleDeleteCatalogItem = async (itemId: string) => {
+    const item = catalogItems.find((i) => i.id === itemId)
+    if (!item) return
+
+    setCatalogItems((prev) => prev.filter((i) => i.id !== itemId))
+
+    try {
+      // Delete images from storage
+      for (const url of item.images) {
+        try {
+          const path = decodeURIComponent(url.split('/o/')[1]?.split('?')[0] ?? '')
+          if (path) await deleteObject(ref(storage, path))
+        } catch { /* ignore individual delete errors */ }
+      }
+      await deleteDoc(doc(db, 'catalog', itemId))
+    } catch (error) {
+      console.error('Delete catalog item error:', error)
+      setCatalogMessage('Item removed locally, but failed to sync deletion.')
+    }
+  }
+
+  const filteredCatalogItems = useMemo(() => {
+    return catalogItems.filter((item) => {
+      const matchesSearch = !catalogSearch ||
+        item.title.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        item.publisher.toLowerCase().includes(catalogSearch.toLowerCase())
+      const matchesCategory = catalogCategoryFilter === 'All' || item.category === catalogCategoryFilter
+      return matchesSearch && matchesCategory
+    })
+  }, [catalogItems, catalogSearch, catalogCategoryFilter])
 
   const handleAddToCart = (itemId: string) => {
     const item = inventory.find((stock) => stock.id === itemId)
@@ -1793,6 +2039,9 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {showCreateCatalog && renderCatalogFormModal(false)}
+      {editingCatalogItem && renderCatalogFormModal(true)}
+
       {showConfirmSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
           <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
@@ -1942,6 +2191,329 @@ export default function DashboardPage() {
     </div>
   )
 
+  const catalogAgeBadgeClasses: Record<AgeCategory, string> = {
+    '0-3': 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border border-pink-200',
+    '4-6': 'bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 border border-orange-200',
+    '7-9': 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200',
+    '10-12': 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border border-purple-200',
+    '13+': 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200'
+  }
+
+  const catalogCategoryBadgeClasses: Record<InventoryCategory, string> = {
+    Books: 'bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700 border border-emerald-200',
+    Crafts: 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200',
+    Puzzles: 'bg-gradient-to-r from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-200',
+    Gifts: 'bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700 border border-rose-200'
+  }
+
+  const renderCatalogFormModal = (isEdit: boolean) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h4 className="font-display text-2xl gradient-text">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
+            <p className="mt-2 text-sm text-muted">
+              {isEdit ? 'Update item details and images.' : 'Add a new item to your catalog.'}
+            </p>
+          </div>
+          <button
+            onClick={() => { isEdit ? setEditingCatalogItem(null) : setShowCreateCatalog(false); resetCatalogForm() }}
+            className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+            type="button"
+          >
+            ✕ Close
+          </button>
+        </div>
+
+        {catalogMessage && (
+          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-600">
+            {catalogMessage}
+          </div>
+        )}
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
+            <input
+              type="text"
+              value={catalogTitle}
+              onChange={(e) => setCatalogTitle(e.target.value)}
+              placeholder="e.g., My First Quran Stories"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Description *</label>
+            <textarea
+              value={catalogDescription}
+              onChange={(e) => setCatalogDescription(e.target.value)}
+              placeholder="Describe the item..."
+              rows={3}
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Category *</label>
+            <select
+              value={catalogCategory}
+              onChange={(e) => setCatalogCategory(e.target.value as InventoryCategory)}
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            >
+              <option value="Books">Books</option>
+              <option value="Crafts">Crafts</option>
+              <option value="Puzzles">Puzzles</option>
+              <option value="Gifts">Gifts</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Age Category *</label>
+            <select
+              value={catalogAge}
+              onChange={(e) => setCatalogAge(e.target.value as AgeCategory)}
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            >
+              <option value="0-3">0-3 years</option>
+              <option value="4-6">4-6 years</option>
+              <option value="7-9">7-9 years</option>
+              <option value="10-12">10-12 years</option>
+              <option value="13+">13+ years</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Price ($) *</label>
+            <input
+              type="number"
+              value={catalogPrice}
+              onChange={(e) => setCatalogPrice(e.target.value)}
+              placeholder="e.g., 12.99"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Publisher *</label>
+            <input
+              type="text"
+              value={catalogPublisher}
+              onChange={(e) => setCatalogPublisher(e.target.value)}
+              placeholder="e.g., Learning Roots"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+              Images * (min 1, max 5) — {catalogExistingImages.length + catalogImages.length}/5 selected
+            </label>
+
+            {/* Existing images (edit mode) */}
+            {catalogExistingImages.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-3">
+                {catalogExistingImages.map((url, index) => (
+                  <div key={`existing-${index}`} className="relative group">
+                    <img
+                      src={url}
+                      alt={`Image ${index + 1}`}
+                      className="h-24 w-24 rounded-xl object-cover border-2 border-primary/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCatalogExistingImage(index)}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* New image previews */}
+            {catalogImagePreviews.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-3">
+                {catalogImagePreviews.map((url, index) => (
+                  <div key={`new-${index}`} className="relative group">
+                    <img
+                      src={url}
+                      alt={`New image ${index + 1}`}
+                      className="h-24 w-24 rounded-xl object-cover border-2 border-green-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCatalogNewImage(index)}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Upload button */}
+            {(catalogExistingImages.length + catalogImages.length) < 5 && (
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 px-4 py-6 text-sm text-muted hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Click to upload images
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleCatalogImageSelect(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-8 flex items-center justify-end gap-3">
+          <button
+            onClick={() => { isEdit ? setEditingCatalogItem(null) : setShowCreateCatalog(false); resetCatalogForm() }}
+            className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+            type="button"
+            disabled={isUploadingCatalog}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={isEdit ? handleEditCatalogItem : handleCreateCatalogItem}
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
+            type="button"
+            disabled={isUploadingCatalog}
+          >
+            {isUploadingCatalog ? 'Uploading...' : isEdit ? 'Save Changes' : 'Create Item'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderCatalog = () => (
+    <div className="fade-up space-y-6">
+      {/* Header */}
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="font-display text-2xl gradient-text">Product Catalog</h2>
+            <p className="mt-1 text-sm text-muted">{catalogItems.length} items in catalog</p>
+          </div>
+          <button
+            onClick={() => { resetCatalogForm(); setShowCreateCatalog(true) }}
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+            type="button"
+          >
+            + New Item
+          </button>
+        </div>
+      </div>
+
+      {catalogMessage && (
+        <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-600">
+          {catalogMessage}
+        </div>
+      )}
+
+      {/* Search & Filters */}
+      <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Search by title or publisher..."
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+          </div>
+          <select
+            value={catalogCategoryFilter}
+            onChange={(e) => setCatalogCategoryFilter(e.target.value as 'All' | InventoryCategory)}
+            className="rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+          >
+            <option value="All">All Categories</option>
+            <option value="Books">Books</option>
+            <option value="Crafts">Crafts</option>
+            <option value="Puzzles">Puzzles</option>
+            <option value="Gifts">Gifts</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Catalog Grid */}
+      {filteredCatalogItems.length === 0 ? (
+        <div className="panel-card rounded-3xl bg-white p-12 shadow-xl border border-primary/10 text-center">
+          <p className="text-lg font-semibold text-muted">No catalog items found</p>
+          <p className="mt-2 text-sm text-muted">Click &quot;+ New Item&quot; to add your first product.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredCatalogItems.map((item) => (
+            <div
+              key={item.id}
+              className="group panel-card rounded-3xl bg-white shadow-xl border border-primary/10 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+            >
+              {/* Thumbnail */}
+              <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden">
+                {item.images.length > 0 ? (
+                  <img
+                    src={item.images[0]}
+                    alt={item.title}
+                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-4xl text-muted">📷</div>
+                )}
+                {item.images.length > 1 && (
+                  <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-bold text-white">
+                    +{item.images.length - 1} more
+                  </span>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-5">
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[item.category]}`}>
+                    {item.category}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogAgeBadgeClasses[item.ageCategory]}`}>
+                    Ages {item.ageCategory}
+                  </span>
+                </div>
+                <h3 className="font-bold text-primaryDark text-lg leading-tight">{item.title}</h3>
+                <p className="mt-1 text-xs text-muted line-clamp-2">{item.description}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xl font-bold gradient-text">${formatNumber(item.price)}</p>
+                  <p className="text-xs text-muted">{item.publisher}</p>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => openEditCatalogItem(item)}
+                    className="flex-1 rounded-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
+                    type="button"
+                  >
+                    ✎ Edit
+                  </button>
+                  <button
+                    onClick={() => { if (confirm('Delete this item? This cannot be undone.')) handleDeleteCatalogItem(item.id) }}
+                    className="flex-1 rounded-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border border-red-200 transition-all hover:scale-105"
+                    type="button"
+                  >
+                    ✕ Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-emerald-50">
@@ -2010,7 +2582,8 @@ export default function DashboardPage() {
               {[
                 { id: 'home', label: 'Home', emoji: '🏠' },
                 { id: 'inventory', label: 'Inventory', emoji: '📦' },
-                { id: 'events', label: 'Events', emoji: '🎪' }
+                { id: 'events', label: 'Events', emoji: '🎪' },
+                { id: 'catalog', label: 'Catalog', emoji: '📕' }
               ].map((item) => (
                 <button
                   key={item.id}
@@ -2076,7 +2649,8 @@ export default function DashboardPage() {
                 {[
                   { id: 'home', label: 'Home', emoji: '🏠' },
                   { id: 'inventory', label: 'Inventory', emoji: '📦' },
-                  { id: 'events', label: 'Events', emoji: '🎪' }
+                  { id: 'events', label: 'Events', emoji: '🎪' },
+                { id: 'catalog', label: 'Catalog', emoji: '📕' }
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -2132,6 +2706,8 @@ export default function DashboardPage() {
                   ? 'Admin Home'
                   : activeView === 'inventory'
                   ? 'Inventory Management'
+                  : activeView === 'catalog'
+                  ? 'Catalog Management'
                   : 'Event Management'}
               </h1>
               <p className="mt-3 text-sm text-muted max-w-2xl">
@@ -2139,6 +2715,8 @@ export default function DashboardPage() {
                   ? 'Monitor restock needs, best sellers, and event performance at a glance.'
                   : activeView === 'inventory'
                   ? 'Upload, update, and manage your complete inventory with ease.'
+                  : activeView === 'catalog'
+                  ? 'Create, manage, and showcase your product catalog with images and details.'
                   : 'Create events, record sales through POS, and review comprehensive summaries.'}
               </p>
             </div>
@@ -2146,6 +2724,7 @@ export default function DashboardPage() {
             {activeView === 'home' && renderHome()}
             {activeView === 'inventory' && renderInventory()}
             {activeView === 'events' && renderEvents()}
+            {activeView === 'catalog' && renderCatalog()}
           </section>
         </div>
       </main>

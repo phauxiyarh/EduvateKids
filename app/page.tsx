@@ -8,6 +8,8 @@ import catalogQR from '../assets/catalog.png'
 import learningRootsLogo from '../assets/partners/learning-roots.webp'
 import kubeLogo from '../assets/partners/kube.webp'
 import oakLogo from '../assets/partners/oak.png'
+import aligatorLogo from '../assets/partners/AliGator.png'
+import muslimchildrenbooksLogo from '../assets/partners/muslimchildrenbooks.avif'
 import design1 from '../assets/design1.png'
 import design2 from '../assets/design2.png'
 import bg2 from '../assets/bg2.png'
@@ -28,6 +30,16 @@ const partners = [
     name: 'Oak Books',
     url: 'https://oakcreativedesigns.com/',
     logo: oakLogo
+  },
+  {
+    name: 'AliGator',
+    url: 'https://aligatorbooks.co.uk/',
+    logo: aligatorLogo
+  },
+  {
+    name: 'Muslim Children Books',
+    url: 'https://muslimchildrenbooks.co.uk/',
+    logo: muslimchildrenbooksLogo
   }
 ]
 
@@ -101,7 +113,7 @@ export default function HomePage() {
               About
             </a>
             <a className="hover:text-primaryDark" href="#partners">
-              Partners
+              Publishers
             </a>
           </nav>
           <Link

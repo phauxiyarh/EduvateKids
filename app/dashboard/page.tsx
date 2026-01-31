@@ -13,9 +13,8 @@ import {
   deleteDoc,
   writeBatch
 } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import * as XLSX from 'xlsx'
-import { auth, db, storage } from '../../lib/firebase'
+import { auth, db } from '../../lib/firebase'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
@@ -899,15 +898,40 @@ export default function DashboardPage() {
     setCatalogExistingImages((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const uploadCatalogImages = async (files: File[], itemId: string): Promise<string[]> => {
-    const urls: string[] = []
-    for (let i = 0; i < files.length; i++) {
-      const storageRef = ref(storage, `catalog/${itemId}/${Date.now()}-${files[i].name}`)
-      await uploadBytes(storageRef, files[i])
-      const url = await getDownloadURL(storageRef)
-      urls.push(url)
+  const fileToBase64 = (file: File, maxWidth = 800, quality = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = document.createElement('img')
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let { width, height } = img
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) { reject(new Error('Canvas not supported')); return }
+          ctx.drawImage(img, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/webp', quality))
+        }
+        img.onerror = reject
+        img.src = e.target?.result as string
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const convertFilesToBase64 = async (files: File[]): Promise<string[]> => {
+    const results: string[] = []
+    for (const file of files) {
+      const base64 = await fileToBase64(file)
+      results.push(base64)
     }
-    return urls
+    return results
   }
 
   const handleCreateCatalogItem = async () => {
@@ -921,7 +945,7 @@ export default function DashboardPage() {
     const itemId = `catalog-${Date.now()}`
 
     try {
-      const imageUrls = await uploadCatalogImages(catalogImages, itemId)
+      const imageUrls = await convertFilesToBase64(catalogImages)
       const newItem: CatalogItem = {
         id: itemId,
         title: catalogTitle.trim(),
@@ -974,23 +998,12 @@ export default function DashboardPage() {
     setCatalogMessage('')
 
     try {
-      let newImageUrls: string[] = []
+      let newImageBase64: string[] = []
       if (catalogImages.length > 0) {
-        newImageUrls = await uploadCatalogImages(catalogImages, editingCatalogItem.id)
+        newImageBase64 = await convertFilesToBase64(catalogImages)
       }
 
-      // Delete removed images from storage
-      const removedImages = editingCatalogItem.images.filter(
-        (url) => !catalogExistingImages.includes(url)
-      )
-      for (const url of removedImages) {
-        try {
-          const path = decodeURIComponent(url.split('/o/')[1]?.split('?')[0] ?? '')
-          if (path) await deleteObject(ref(storage, path))
-        } catch { /* ignore delete errors for individual images */ }
-      }
-
-      const allImages = [...catalogExistingImages, ...newImageUrls]
+      const allImages = [...catalogExistingImages, ...newImageBase64]
       const updatedFields = {
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
@@ -1025,13 +1038,6 @@ export default function DashboardPage() {
     setCatalogItems((prev) => prev.filter((i) => i.id !== itemId))
 
     try {
-      // Delete images from storage
-      for (const url of item.images) {
-        try {
-          const path = decodeURIComponent(url.split('/o/')[1]?.split('?')[0] ?? '')
-          if (path) await deleteObject(ref(storage, path))
-        } catch { /* ignore individual delete errors */ }
-      }
       await deleteDoc(doc(db, 'catalog', itemId))
     } catch (error) {
       console.error('Delete catalog item error:', error)

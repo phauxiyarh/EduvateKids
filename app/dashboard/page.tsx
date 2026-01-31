@@ -239,6 +239,13 @@ export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<EventRecord | null>(null)
+  const [editEventName, setEditEventName] = useState('')
+  const [editEventCost, setEditEventCost] = useState('')
+  const [editEventStart, setEditEventStart] = useState('')
+  const [editEventEnd, setEditEventEnd] = useState('')
+  const [editEventLocation, setEditEventLocation] = useState('')
+  const [editEventType, setEditEventType] = useState<EventRecord['type']>('Bazaar')
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -746,6 +753,53 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Update event status error:', error)
       setEventMessage('Status updated locally, but failed to sync.')
+    }
+  }
+
+  const openEditEvent = (event: EventRecord) => {
+    setEditingEvent(event)
+    setEditEventName(event.name)
+    setEditEventCost(String(event.cost))
+    setEditEventStart(event.startDate)
+    setEditEventEnd(event.endDate)
+    setEditEventLocation(event.location)
+    setEditEventType(event.type)
+  }
+
+  const handleEditEvent = async () => {
+    if (!editingEvent) return
+    if (!editEventName.trim()) return
+    const costValue = parseNumber(editEventCost)
+    if (!editEventStart || !editEventEnd) {
+      setEventMessage('Please add start and end dates for the event.')
+      return
+    }
+    if (!editEventLocation.trim()) {
+      setEventMessage('Please add an event location.')
+      return
+    }
+
+    const updatedFields = {
+      name: editEventName.trim(),
+      cost: costValue,
+      startDate: editEventStart,
+      endDate: editEventEnd,
+      location: editEventLocation.trim(),
+      type: editEventType
+    }
+
+    setEvents((current) =>
+      current.map((ev) =>
+        ev.id === editingEvent.id ? { ...ev, ...updatedFields } : ev
+      )
+    )
+    setEditingEvent(null)
+
+    try {
+      await updateDoc(doc(db, 'events', editingEvent.id), updatedFields)
+    } catch (error) {
+      console.error('Edit event error:', error)
+      setEventMessage('Event updated locally, but failed to sync.')
     }
   }
 
@@ -1322,6 +1376,13 @@ export default function DashboardPage() {
                         >
                           {event.status === 'active' ? '● Active' : '○ Closed'}
                         </button>
+                        <button
+                          onClick={() => openEditEvent(event)}
+                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
+                          type="button"
+                        >
+                          ✎ Edit
+                        </button>
                       </div>
                     </div>
                     <div className="text-right">
@@ -1624,6 +1685,108 @@ export default function DashboardPage() {
                 type="button"
               >
                 Create Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">Edit Event</h4>
+                <p className="mt-2 text-sm text-muted">
+                  Update event details. Changes sync to Firebase.
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingEvent(null)}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Event name *</label>
+                <input
+                  type="text"
+                  value={editEventName}
+                  onChange={(e) => setEditEventName(e.target.value)}
+                  placeholder="e.g., Masjid Book Fair"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Location *</label>
+                <input
+                  type="text"
+                  value={editEventLocation}
+                  onChange={(e) => setEditEventLocation(e.target.value)}
+                  placeholder="e.g., Downtown Community Center"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Start date *</label>
+                <input
+                  type="date"
+                  value={editEventStart}
+                  onChange={(e) => setEditEventStart(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">End date *</label>
+                <input
+                  type="date"
+                  value={editEventEnd}
+                  onChange={(e) => setEditEventEnd(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Event type *</label>
+                <select
+                  value={editEventType}
+                  onChange={(e) => setEditEventType(e.target.value as EventRecord['type'])}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                >
+                  <option value="Bazaar">Bazaar</option>
+                  <option value="Bookfair">Bookfair</option>
+                  <option value="Jummah Boot">Jummah Boot</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Vendor fee ($) *</label>
+                <input
+                  type="number"
+                  value={editEventCost}
+                  onChange={(e) => setEditEventCost(e.target.value)}
+                  placeholder="e.g., 120"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setEditingEvent(null)}
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditEvent}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                type="button"
+              >
+                Save Changes
               </button>
             </div>
           </div>

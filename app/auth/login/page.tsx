@@ -14,6 +14,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -31,11 +32,6 @@ export default function AdminLoginPage() {
     }
   }
 
-  const loadAdminCredentials = () => {
-    setEmail('admin@eduvatekids.com')
-    setPassword('EduvateAdmin2024!')
-    setError('')
-  }
   return (
     <div className="relative min-h-screen text-ink">
       <div
@@ -103,14 +99,35 @@ export default function AdminLoginPage() {
               </label>
               <label className="grid gap-1 font-semibold">
                 Password
-                <input
-                  className="rounded-xl border border-black/10 bg-white px-4 py-3"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 pr-12"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primaryDark transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </label>
               <button
                 className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 font-semibold text-white disabled:opacity-50"
@@ -119,20 +136,8 @@ export default function AdminLoginPage() {
               >
                 {loading ? 'Signing In...' : 'Sign In'}
               </button>
-              <Link
-                className="rounded-full border border-primary px-6 py-3 text-center font-semibold text-primaryDark"
-                href="/dashboard"
-              >
-                Continue to Dashboard Demo
-              </Link>
+              
             </form>
-            <button
-              type="button"
-              onClick={loadAdminCredentials}
-              className="mt-6 w-full rounded-xl bg-gradient-to-r from-accentThree to-primary p-4 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Load Admin Credentials
-            </button>
           </section>
         </div>
       </main>

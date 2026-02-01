@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import logo from '../assets/logo.png'
 import catalogQR from '../assets/catalog.png'
 import learningRootsLogo from '../assets/partners/learning-roots.webp'
@@ -82,14 +84,49 @@ const testimonials = [
   }
 ]
 
+type CatalogItem = {
+  id: string
+  title: string
+  description: string
+  category: string
+  ageCategory: string
+  price: number
+  publisher: string
+  images: string[]
+}
+
 export default function HomePage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0)
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
+  const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
+  const [catalogFilter, setCatalogFilter] = useState<string>('All')
 
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
     }, 4500)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    getDocs(collection(db, 'catalog')).then((snap) => {
+      if (!snap.empty) {
+        const items = snap.docs.map((d) => {
+          const data = d.data()
+          return {
+            id: d.id,
+            title: String(data.title ?? ''),
+            description: String(data.description ?? ''),
+            category: String(data.category ?? ''),
+            ageCategory: String(data.ageCategory ?? ''),
+            price: Number(data.price ?? 0),
+            publisher: String(data.publisher ?? ''),
+            images: Array.isArray(data.images) ? data.images : []
+          } as CatalogItem
+        })
+        setCatalogItems(items)
+      }
+    }).catch(() => {})
   }, [])
 
   return (
@@ -111,6 +148,9 @@ export default function HomePage() {
           <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
             <a className="hover:text-primaryDark" href="#about">
               About
+            </a>
+            <a className="hover:text-primaryDark" href="#catalog">
+              Catalog
             </a>
             <a className="hover:text-primaryDark" href="#partners">
               Publishers
@@ -692,6 +732,133 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Product Catalog Section */}
+        {catalogItems.length > 0 && (
+          <section id="catalog" className="relative py-20 bg-white">
+            <div className="mx-auto w-11/12 max-w-6xl">
+              <div className="text-center mb-12">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+                  Our Products
+                </p>
+                <h2 className="mt-4 font-display text-4xl">Shop Our Collection</h2>
+                <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
+                  Discover our handpicked selection of Islamic books, crafts, puzzles, and gifts for all ages.
+                </p>
+              </div>
+
+              {/* Category filter */}
+              <div className="flex flex-wrap justify-center gap-2 mb-10">
+                {['All', ...new Set(catalogItems.map((i) => i.category))].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCatalogFilter(cat)}
+                    className={`rounded-full px-5 py-2 text-sm font-semibold transition-all duration-300 ${
+                      catalogFilter === cat
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                        : 'bg-gray-100 text-muted hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                {catalogItems
+                  .filter((item) => catalogFilter === 'All' || item.category === catalogFilter)
+                  .map((item) => (
+                  <div
+                    key={item.id}
+                    className="group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_8px_40px_rgba(124,58,237,0.12)] hover:-translate-y-1 transition-all duration-500"
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
+                      {item.images.length > 0 ? (
+                        <>
+                          <div className="relative h-full w-full">
+                            {item.images.map((img, imgIdx) => (
+                              <img
+                                key={imgIdx}
+                                src={img}
+                                alt={`${item.title} ${imgIdx + 1}`}
+                                className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out ${
+                                  imgIdx === (catalogSlider[item.id] ?? 0)
+                                    ? 'opacity-100 scale-100'
+                                    : 'opacity-0 scale-110'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          {item.images.length > 1 && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cur = catalogSlider[item.id] ?? 0
+                                  setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
+                                }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cur = catalogSlider[item.id] ?? 0
+                                  setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                              </button>
+                              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                {item.images.map((_, dotIdx) => (
+                                  <button
+                                    key={dotIdx}
+                                    type="button"
+                                    onClick={() => setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx }))}
+                                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                                      dotIdx === (catalogSlider[item.id] ?? 0)
+                                        ? 'w-5 bg-white shadow-sm'
+                                        : 'w-1.5 bg-white/50 hover:bg-white/80'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-4xl opacity-30">📷</div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-1 flex-col p-5">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                        <span className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          {item.category}
+                        </span>
+                        <span className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
+                          Ages {item.ageCategory}
+                        </span>
+                      </div>
+                      <h3 className="font-display text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
+                      <p className="mt-1.5 text-[13px] text-muted leading-relaxed line-clamp-2">{item.description}</p>
+                      <div className="mt-auto pt-4 flex items-center justify-between">
+                        <span className="text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
+                        <span className="text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-2.5 py-0.5 border border-purple-200/60 max-w-[120px] truncate">
+                          {item.publisher}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         <section id="partners" className="relative bg-white py-16">
           <div
             className="hero-svg-bg absolute inset-0 opacity-5"
@@ -796,6 +963,9 @@ export default function HomePage() {
               <div className="mt-4 space-y-3 text-sm">
                 <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#about">
                   About Us
+                </a>
+                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#catalog">
+                  Catalog
                 </a>
                 <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#partners">
                   Publishers

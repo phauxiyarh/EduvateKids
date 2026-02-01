@@ -146,8 +146,6 @@ const defaultEvents: EventRecord[] = [
   }
 ]
 
-const demoInventoryIds = new Set(defaultInventory.map((i) => i.id))
-const demoEventIds = new Set(defaultEvents.map((e) => e.id))
 
 const restockThreshold = 10
 
@@ -289,6 +287,11 @@ export default function DashboardPage() {
   const [catalogCategoryFilter, setCatalogCategoryFilter] = useState<'All' | InventoryCategory>('All')
   const [isUploadingCatalog, setIsUploadingCatalog] = useState(false)
   const [catalogMessage, setCatalogMessage] = useState('')
+  const [catalogSliderIndex, setCatalogSliderIndex] = useState<Record<string, number>>({})
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false)
+  const [purgePassword, setPurgePassword] = useState('')
+  const [purgeError, setPurgeError] = useState('')
+  const [purging, setPurging] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -307,6 +310,36 @@ export default function DashboardPage() {
     const newMode = !demoMode
     setDemoMode(newMode)
     localStorage.setItem('eduvate-demo-mode', String(newMode))
+  }
+
+  const handlePurgeLiveData = async () => {
+    if (purgePassword !== '1502') {
+      setPurgeError('Incorrect password.')
+      return
+    }
+    setPurging(true)
+    setPurgeError('')
+    try {
+      const collections = ['inventory', 'events', 'generalSales']
+      for (const col of collections) {
+        const snap = await getDocs(collection(db, col))
+        if (!snap.empty) {
+          const batch = writeBatch(db)
+          snap.docs.forEach((d) => batch.delete(d.ref))
+          await batch.commit()
+        }
+      }
+      setInventory([])
+      setEvents([])
+      setGeneralSales([])
+      setShowPurgeConfirm(false)
+      setPurgePassword('')
+    } catch (error) {
+      console.error('Purge error:', error)
+      setPurgeError('Failed to delete data. Check console.')
+    } finally {
+      setPurging(false)
+    }
   }
 
   useEffect(() => {
@@ -328,41 +361,23 @@ export default function DashboardPage() {
           const inventoryRef = collection(db, 'inventory')
           const eventsRef = collection(db, 'events')
           const generalSalesRef = collection(db, 'generalSales')
-          const [inventorySnap, eventsSnap] = await Promise.all([
+          const [inventorySnap, eventsSnap, generalSalesSnap] = await Promise.all([
             getDocs(inventoryRef),
-            getDocs(eventsRef)
+            getDocs(eventsRef),
+            getDocs(generalSalesRef)
           ])
-          const generalSalesSnap = await getDocs(generalSalesRef)
 
-          // Clean up any demo-seeded documents from Firestore
-          const demoCleanupBatch = writeBatch(db)
-          let needsCleanup = false
-          inventorySnap.docs.forEach((snap) => {
-            if (demoInventoryIds.has(snap.id)) {
-              demoCleanupBatch.delete(snap.ref)
-              needsCleanup = true
-            }
-          })
-          eventsSnap.docs.forEach((snap) => {
-            if (demoEventIds.has(snap.id)) {
-              demoCleanupBatch.delete(snap.ref)
-              needsCleanup = true
-            }
-          })
-          if (needsCleanup) {
-            try { await demoCleanupBatch.commit() } catch { /* ignore cleanup errors */ }
-          }
-
+          // Check for a flag that indicates the user has real data
+          // Items created/uploaded in live mode are tagged with _live: true
           if (!cancelled) {
-            // Filter out demo items - only show real uploaded/created data
             const loadedInventory = inventorySnap.docs
-              .filter((snap) => !demoInventoryIds.has(snap.id))
+              .filter((snap) => snap.data()._live === true)
               .map((snap) => normalizeInventoryItem(snap.data() as Partial<InventoryItem>, snap.id))
               .filter((item) => item.title)
             setInventory(loadedInventory)
 
             const loadedEvents = eventsSnap.docs
-              .filter((snap) => !demoEventIds.has(snap.id))
+              .filter((snap) => snap.data()._live === true)
               .map((snap) => {
                 const data = snap.data() as Partial<EventRecord>
                 const sales = Array.isArray(data.sales)
@@ -385,14 +400,11 @@ export default function DashboardPage() {
               })
             setEvents(loadedEvents)
 
-            if (generalSalesSnap.empty) {
-              setGeneralSales([])
-            } else {
-              const loadedGeneralSales = generalSalesSnap.docs
-                .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
-                .filter((sale): sale is Sale => Boolean(sale))
-              setGeneralSales(loadedGeneralSales)
-            }
+            const loadedGeneralSales = generalSalesSnap.docs
+              .filter((snap) => snap.data()._live === true)
+              .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
+              .filter((sale): sale is Sale => Boolean(sale))
+            setGeneralSales(loadedGeneralSales)
           }
         }
 
@@ -628,7 +640,7 @@ export default function DashboardPage() {
       const inventoryRef = collection(db, 'inventory')
       const batch = writeBatch(db)
       items.forEach((item) => {
-        batch.set(doc(inventoryRef, item.id), item)
+        batch.set(doc(inventoryRef, item.id), { ...item, _live: true })
       })
       await batch.commit()
     } catch (error) {
@@ -655,6 +667,31 @@ export default function DashboardPage() {
     const link = document.createElement('a')
     link.href = url
     link.download = 'eduvate-inventory-template.xlsx'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportStock = () => {
+    if (inventory.length === 0) {
+      setUploadMessage('No inventory data to export.')
+      return
+    }
+    const header = ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price']
+    const rows = inventory.map((item) => [
+      item.title, item.category, item.publisher, item.rrp, item.discount, item.quantity, item.sellingPrice
+    ])
+    const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock')
+    const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([output], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const date = new Date().toISOString().slice(0, 10)
+    link.download = `eduvate-stock-export-${date}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -739,36 +776,32 @@ export default function DashboardPage() {
 
       let added = 0
       let updated = 0
-      let nextInventory: InventoryItem[] = []
+      const currentInventory = [...inventory]
 
-      setInventory((current) => {
-        const next = [...current]
-        parsedItems.forEach((item) => {
-          const matchIndex = next.findIndex(
-            (existing) =>
-              existing.title.toLowerCase() === item.title.toLowerCase() &&
-              existing.publisher.toLowerCase() === item.publisher.toLowerCase()
-          )
+      parsedItems.forEach((item) => {
+        const matchIndex = currentInventory.findIndex(
+          (existing) =>
+            existing.title.toLowerCase() === item.title.toLowerCase() &&
+            existing.publisher.toLowerCase() === item.publisher.toLowerCase()
+        )
 
-          if (matchIndex >= 0) {
-            const existing = next[matchIndex]
-            next[matchIndex] = {
-              ...existing,
-              ...item,
-              quantity: existing.quantity + item.quantity
-            }
-            updated += 1
-          } else {
-            next.push(item)
-            added += 1
+        if (matchIndex >= 0) {
+          const existing = currentInventory[matchIndex]
+          currentInventory[matchIndex] = {
+            ...existing,
+            ...item,
+            quantity: existing.quantity + item.quantity
           }
-        })
-        nextInventory = next
-        return next
+          updated += 1
+        } else {
+          currentInventory.push(item)
+          added += 1
+        }
       })
 
+      setInventory(currentInventory)
       setUploadMessage(`Upload complete. Added ${added} items, updated ${updated}.`)
-      await persistInventory(nextInventory)
+      await persistInventory(currentInventory)
     } catch (error) {
       console.error('Upload error:', error)
       setUploadMessage('Upload failed. Please check the .xlsx file and try again.')
@@ -810,7 +843,7 @@ export default function DashboardPage() {
     setShowCreateEvent(false)
 
     try {
-      await setDoc(doc(db, 'events', newEvent.id), newEvent)
+      await setDoc(doc(db, 'events', newEvent.id), { ...newEvent, _live: true })
     } catch (error) {
       console.error('Create event error:', error)
       setEventMessage('Event saved locally, but failed to sync.')
@@ -829,7 +862,7 @@ export default function DashboardPage() {
     )
 
     try {
-      await updateDoc(doc(db, 'events', eventId), { status: nextStatus })
+      await updateDoc(doc(db, 'events', eventId), { status: nextStatus, _live: true })
     } catch (error) {
       console.error('Update event status error:', error)
       setEventMessage('Status updated locally, but failed to sync.')
@@ -876,7 +909,7 @@ export default function DashboardPage() {
     setEditingEvent(null)
 
     try {
-      await updateDoc(doc(db, 'events', editingEvent.id), updatedFields)
+      await updateDoc(doc(db, 'events', editingEvent.id), { ...updatedFields, _live: true })
     } catch (error) {
       console.error('Edit event error:', error)
       setEventMessage('Event updated locally, but failed to sync.')
@@ -1079,6 +1112,19 @@ export default function DashboardPage() {
     })
   }, [catalogItems, catalogSearch, catalogCategoryFilter])
 
+  const inventoryTitles = useMemo(() =>
+    [...new Set(inventory.map((i) => i.title).filter(Boolean))].sort(),
+    [inventory]
+  )
+  const inventoryPublishers = useMemo(() =>
+    [...new Set(inventory.map((i) => i.publisher).filter(Boolean))].sort(),
+    [inventory]
+  )
+  const inventoryCategories = useMemo(() =>
+    [...new Set(inventory.map((i) => i.category).filter(Boolean))].sort(),
+    [inventory]
+  )
+
   const handleAddToCart = (itemId: string) => {
     const item = inventory.find((stock) => stock.id === itemId)
     if (!item) return
@@ -1204,14 +1250,14 @@ export default function DashboardPage() {
     try {
       const batch = writeBatch(db)
       if (eventRecord) {
-        batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales })
+        batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, _live: true })
       } else {
         salesToAdd.forEach((sale) => {
-          batch.set(doc(db, 'generalSales', sale.id), sale)
+          batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
         })
       }
       nextInventory.forEach((item) => {
-        batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity })
+        batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
       })
       await batch.commit()
     } catch (error) {
@@ -1490,6 +1536,18 @@ export default function DashboardPage() {
             type="button"
           >
             Download Template
+          </button>
+          <button
+            onClick={handleExportStock}
+            className="rounded-full border-2 border-green-300 bg-white px-6 py-3 text-sm font-semibold text-green-700 hover:bg-green-50 hover:-translate-y-0.5 transition-all shadow-sm"
+            type="button"
+          >
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export Stock
+            </span>
           </button>
           {uploadMessage && (
             <span className="rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-700 border border-green-200">
@@ -2069,9 +2127,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showCreateCatalog && renderCatalogFormModal(false)}
-      {editingCatalogItem && renderCatalogFormModal(true)}
-
       {showConfirmSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
           <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
@@ -2266,11 +2321,15 @@ export default function DashboardPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
             <input
               type="text"
+              list="catalog-titles-list"
               value={catalogTitle}
               onChange={(e) => setCatalogTitle(e.target.value)}
               placeholder="e.g., My First Quran Stories"
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
             />
+            <datalist id="catalog-titles-list">
+              {inventoryTitles.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </div>
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Description *</label>
@@ -2284,16 +2343,19 @@ export default function DashboardPage() {
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Category *</label>
-            <select
+            <input
+              type="text"
+              list="catalog-categories-list"
               value={catalogCategory}
               onChange={(e) => setCatalogCategory(e.target.value as InventoryCategory)}
+              placeholder="e.g., Books"
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-            >
-              <option value="Books">Books</option>
-              <option value="Crafts">Crafts</option>
-              <option value="Puzzles">Puzzles</option>
-              <option value="Gifts">Gifts</option>
-            </select>
+            />
+            <datalist id="catalog-categories-list">
+              {['Books', 'Crafts', 'Puzzles', 'Gifts', ...inventoryCategories]
+                .filter((v, i, a) => a.indexOf(v) === i)
+                .map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Age Category *</label>
@@ -2323,11 +2385,15 @@ export default function DashboardPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Publisher *</label>
             <input
               type="text"
+              list="catalog-publishers-list"
               value={catalogPublisher}
               onChange={(e) => setCatalogPublisher(e.target.value)}
               placeholder="e.g., Learning Roots"
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
             />
+            <datalist id="catalog-publishers-list">
+              {inventoryPublishers.map((p) => <option key={p} value={p} />)}
+            </datalist>
           </div>
 
           <div className="md:col-span-2">
@@ -2478,33 +2544,86 @@ export default function DashboardPage() {
           <p className="mt-2 text-sm text-muted">Click &quot;+ New Item&quot; to add your first product.</p>
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {filteredCatalogItems.map((item) => (
             <div
               key={item.id}
-              className="group panel-card rounded-3xl bg-white shadow-xl border border-primary/10 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+              className="group relative flex flex-col rounded-[2rem] bg-white shadow-[0_4px_32px_rgba(124,58,237,0.08)] border border-primary/5 overflow-hidden hover:shadow-[0_8px_48px_rgba(124,58,237,0.16)] hover:-translate-y-1.5 transition-all duration-500"
             >
-              {/* Thumbnail */}
-              <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden">
+              {/* Image Slider — clean, no overlays */}
+              <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
                 {item.images.length > 0 ? (
-                  <img
-                    src={item.images[0]}
-                    alt={item.title}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <>
+                    <div className="relative h-full w-full">
+                      {item.images.map((img, imgIdx) => (
+                        <img
+                          key={imgIdx}
+                          src={img}
+                          alt={`${item.title} ${imgIdx + 1}`}
+                          className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out ${
+                            imgIdx === (catalogSliderIndex[item.id] ?? 0)
+                              ? 'opacity-100 scale-100'
+                              : 'opacity-0 scale-110'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {item.images.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const cur = catalogSliderIndex[item.id] ?? 0
+                            setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
+                          }}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const cur = catalogSliderIndex[item.id] ?? 0
+                            setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {item.images.map((_, dotIdx) => (
+                            <button
+                              key={dotIdx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: dotIdx }))
+                              }}
+                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                                dotIdx === (catalogSliderIndex[item.id] ?? 0)
+                                  ? 'w-5 bg-white shadow-sm'
+                                  : 'w-1.5 bg-white/50 hover:bg-white/80'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-4xl text-muted">📷</div>
-                )}
-                {item.images.length > 1 && (
-                  <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-bold text-white">
-                    +{item.images.length - 1} more
-                  </span>
+                  <div className="flex h-full flex-col items-center justify-center gap-2">
+                    <span className="text-5xl opacity-30">📷</span>
+                    <span className="text-xs text-muted/60 font-medium">No images</span>
+                  </div>
                 )}
               </div>
 
               {/* Content */}
-              <div className="p-5">
-                <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-1 flex-col p-5">
+                {/* Badges row */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
                   <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[item.category]}`}>
                     {item.category}
                   </span>
@@ -2512,29 +2631,38 @@ export default function DashboardPage() {
                     Ages {item.ageCategory}
                   </span>
                 </div>
-                <h3 className="font-bold text-primaryDark text-lg leading-tight">{item.title}</h3>
-                <p className="mt-1 text-xs text-muted line-clamp-2">{item.description}</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <p className="text-xl font-bold gradient-text">${formatNumber(item.price)}</p>
-                  <p className="text-xs text-muted">{item.publisher}</p>
-                </div>
 
-                {/* Actions */}
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => openEditCatalogItem(item)}
-                    className="flex-1 rounded-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
-                    type="button"
-                  >
-                    ✎ Edit
-                  </button>
-                  <button
-                    onClick={() => { if (confirm('Delete this item? This cannot be undone.')) handleDeleteCatalogItem(item.id) }}
-                    className="flex-1 rounded-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border border-red-200 transition-all hover:scale-105"
-                    type="button"
-                  >
-                    ✕ Delete
-                  </button>
+                <h3 className="font-display text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
+                <p className="mt-1.5 text-[13px] text-muted leading-relaxed line-clamp-2">{item.description}</p>
+
+                <div className="mt-auto pt-4 space-y-3">
+                  {/* Price and publisher row */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl font-extrabold gradient-text">${formatNumber(item.price)}</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200/60 px-2.5 py-0.5">
+                      <svg className="h-3 w-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
+                      <span className="text-[11px] font-semibold text-purple-700 max-w-[100px] truncate">{item.publisher}</span>
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEditCatalogItem(item)}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+                      type="button"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => { if (confirm('Delete this item? This cannot be undone.')) handleDeleteCatalogItem(item.id) }}
+                      className="flex items-center justify-center rounded-xl px-3 py-2 text-xs font-bold text-red-500 border border-red-200 transition-all duration-300 hover:bg-red-50 hover:-translate-y-0.5 active:scale-95"
+                      type="button"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2617,7 +2745,7 @@ export default function DashboardPage() {
               ].map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveView(item.id as typeof activeView)}
+                  onClick={() => { setActiveView(item.id as typeof activeView); setShowPurgeConfirm(false) }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
                     activeView === item.id
                       ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg scale-105'
@@ -2648,6 +2776,17 @@ export default function DashboardPage() {
                 </button>
                 <span className={`text-[11px] font-bold transition-colors ${!demoMode ? 'text-green-600' : 'text-muted'}`}>Live</span>
               </div>
+
+              {/* Purge Live Data Button - only in live mode */}
+              {!demoMode && (
+                <button
+                  onClick={() => { setShowPurgeConfirm(true); setPurgePassword(''); setPurgeError('') }}
+                  className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
+                  type="button"
+                >
+                  Reset Data
+                </button>
+              )}
 
               {/* Sync Status Indicator */}
               <div className="hidden lg:flex items-center gap-2 text-xs font-bold">
@@ -2703,6 +2842,7 @@ export default function DashboardPage() {
                     onClick={() => {
                       setActiveView(item.id as typeof activeView)
                       setMobileMenuOpen(false)
+                      setShowPurgeConfirm(false)
                     }}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
                       activeView === item.id
@@ -2774,6 +2914,54 @@ export default function DashboardPage() {
           </section>
         </div>
       </main>
+
+      {/* Global Modals - rendered outside page views */}
+      {showCreateCatalog && renderCatalogFormModal(false)}
+      {editingCatalogItem && renderCatalogFormModal(true)}
+
+      {showPurgeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in" onClick={() => setShowPurgeConfirm(false)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl border-2 border-red-200 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 text-lg">⚠</span>
+              <h4 className="font-display text-xl text-red-700">Reset All Live Data</h4>
+            </div>
+            <p className="text-sm text-muted mb-4">
+              This will permanently delete <strong>all inventory, events, and sales</strong> from Firestore. This action cannot be undone.
+            </p>
+            <label className="block text-sm font-semibold mb-1">Enter password to confirm</label>
+            <input
+              type="password"
+              value={purgePassword}
+              onChange={(e) => { setPurgePassword(e.target.value); setPurgeError('') }}
+              className="w-full rounded-xl border border-black/10 bg-cream px-4 py-3 text-sm mb-2"
+              placeholder="••••"
+              autoFocus
+            />
+            {purgeError && (
+              <p className="text-xs text-red-600 mb-2">{purgeError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowPurgeConfirm(false)}
+                className="flex-1 rounded-full border-2 border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-cream transition-all"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePurgeLiveData}
+                disabled={purging}
+                className="flex-1 rounded-full bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-all disabled:opacity-50"
+                type="button"
+              >
+                {purging ? 'Deleting...' : 'Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         .panel-card {
           transition: transform 0.35s ease, box-shadow 0.35s ease;

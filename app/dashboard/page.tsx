@@ -235,8 +235,8 @@ export default function DashboardPage() {
   const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'catalog'>(
     'home'
   )
-  const [inventory, setInventory] = useState<InventoryItem[]>(defaultInventory)
-  const [events, setEvents] = useState<EventRecord[]>(defaultEvents)
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
+  const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
   const [uploadMessage, setUploadMessage] = useState<string>('')
   const [eventMessage, setEventMessage] = useState('')

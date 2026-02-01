@@ -2616,18 +2616,20 @@ export default function DashboardPage() {
             {/* Right Side - User Info & Actions */}
             <div className="flex items-center gap-3">
               {/* Demo/Live Mode Toggle */}
-              <button
-                onClick={handleToggleDemoMode}
-                className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 border ${
-                  demoMode
-                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200'
-                    : 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200'
-                }`}
-                type="button"
-              >
-                <span className={`h-2 w-2 rounded-full transition-colors ${demoMode ? 'bg-amber-500' : 'bg-green-500'}`} />
-                {demoMode ? 'Demo' : 'Live'}
-              </button>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-bold transition-colors ${demoMode ? 'text-amber-600' : 'text-muted'}`}>Demo</span>
+                <button
+                  onClick={handleToggleDemoMode}
+                  className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${demoMode ? 'bg-amber-400' : 'bg-green-500'}`}
+                  type="button"
+                  aria-label={demoMode ? 'Switch to live mode' : 'Switch to demo mode'}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${demoMode ? 'translate-x-0' : 'translate-x-5'}`}
+                  />
+                </button>
+                <span className={`text-[11px] font-bold transition-colors ${!demoMode ? 'text-green-600' : 'text-muted'}`}>Live</span>
+              </div>
 
               {/* Sync Status Indicator */}
               <div className="hidden lg:flex items-center gap-2 text-xs font-bold">

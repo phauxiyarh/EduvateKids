@@ -225,6 +225,13 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(true)
+  const [demoMode, setDemoMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('eduvate-demo-mode')
+      return saved !== null ? saved === 'true' : true
+    }
+    return true
+  })
   const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'catalog'>(
     'home'
   )
@@ -293,6 +300,12 @@ export default function DashboardPage() {
     return () => unsubscribe()
   }, [router])
 
+  const handleToggleDemoMode = () => {
+    const newMode = !demoMode
+    setDemoMode(newMode)
+    localStorage.setItem('eduvate-demo-mode', String(newMode))
+  }
+
   useEffect(() => {
     if (!user) return
 
@@ -300,30 +313,24 @@ export default function DashboardPage() {
 
     const loadData = async () => {
       try {
-        const inventoryRef = collection(db, 'inventory')
-        const eventsRef = collection(db, 'events')
-        const generalSalesRef = collection(db, 'generalSales')
-        const [inventorySnap, eventsSnap] = await Promise.all([
-          getDocs(inventoryRef),
-          getDocs(eventsRef)
-        ])
-        const generalSalesSnap = await getDocs(generalSalesRef)
-
-        if (inventorySnap.empty && eventsSnap.empty) {
-          const batch = writeBatch(db)
-          defaultInventory.forEach((item) => {
-            batch.set(doc(inventoryRef, item.id), item)
-          })
-          defaultEvents.forEach((event) => {
-            batch.set(doc(eventsRef, event.id), event)
-          })
-          await batch.commit()
-
+        if (demoMode) {
+          // Demo mode: use hardcoded sample data
           if (!cancelled) {
             setInventory(defaultInventory)
             setEvents(defaultEvents)
+            setGeneralSales([])
           }
         } else {
+          // Live mode: load real data from Firestore
+          const inventoryRef = collection(db, 'inventory')
+          const eventsRef = collection(db, 'events')
+          const generalSalesRef = collection(db, 'generalSales')
+          const [inventorySnap, eventsSnap] = await Promise.all([
+            getDocs(inventoryRef),
+            getDocs(eventsRef)
+          ])
+          const generalSalesSnap = await getDocs(generalSalesRef)
+
           if (!cancelled) {
             if (inventorySnap.empty) {
               setInventory([])
@@ -359,20 +366,19 @@ export default function DashboardPage() {
               })
               setEvents(loadedEvents)
             }
+
+            if (generalSalesSnap.empty) {
+              setGeneralSales([])
+            } else {
+              const loadedGeneralSales = generalSalesSnap.docs
+                .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
+                .filter((sale): sale is Sale => Boolean(sale))
+              setGeneralSales(loadedGeneralSales)
+            }
           }
         }
 
-        if (!cancelled) {
-          if (generalSalesSnap.empty) {
-            setGeneralSales([])
-          } else {
-            const loadedGeneralSales = generalSalesSnap.docs
-              .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
-              .filter((sale): sale is Sale => Boolean(sale))
-            setGeneralSales(loadedGeneralSales)
-          }
-        }
-        // Load catalog items
+        // Always load catalog items from Firestore (not affected by demo mode)
         const catalogSnap = await getDocs(collection(db, 'catalog'))
         if (!cancelled) {
           if (!catalogSnap.empty) {
@@ -407,7 +413,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [user, demoMode])
 
   useEffect(() => {
     const activeEvent = events.find((event) => event.status === 'active')
@@ -2609,6 +2615,20 @@ export default function DashboardPage() {
 
             {/* Right Side - User Info & Actions */}
             <div className="flex items-center gap-3">
+              {/* Demo/Live Mode Toggle */}
+              <button
+                onClick={handleToggleDemoMode}
+                className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition-all duration-300 border ${
+                  demoMode
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200'
+                    : 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-green-200'
+                }`}
+                type="button"
+              >
+                <span className={`h-2 w-2 rounded-full transition-colors ${demoMode ? 'bg-amber-500' : 'bg-green-500'}`} />
+                {demoMode ? 'Demo' : 'Live'}
+              </button>
+
               {/* Sync Status Indicator */}
               <div className="hidden lg:flex items-center gap-2 text-xs font-bold">
                 <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />

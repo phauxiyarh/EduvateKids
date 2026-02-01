@@ -146,6 +146,9 @@ const defaultEvents: EventRecord[] = [
   }
 ]
 
+const demoInventoryIds = new Set(defaultInventory.map((i) => i.id))
+const demoEventIds = new Set(defaultEvents.map((e) => e.id))
+
 const restockThreshold = 10
 
 const parseNumber = (value: unknown) => {
@@ -331,20 +334,36 @@ export default function DashboardPage() {
           ])
           const generalSalesSnap = await getDocs(generalSalesRef)
 
-          if (!cancelled) {
-            if (inventorySnap.empty) {
-              setInventory([])
-            } else {
-              const loadedInventory = inventorySnap.docs
-                .map((snap) => normalizeInventoryItem(snap.data() as Partial<InventoryItem>, snap.id))
-                .filter((item) => item.title)
-              setInventory(loadedInventory)
+          // Clean up any demo-seeded documents from Firestore
+          const demoCleanupBatch = writeBatch(db)
+          let needsCleanup = false
+          inventorySnap.docs.forEach((snap) => {
+            if (demoInventoryIds.has(snap.id)) {
+              demoCleanupBatch.delete(snap.ref)
+              needsCleanup = true
             }
+          })
+          eventsSnap.docs.forEach((snap) => {
+            if (demoEventIds.has(snap.id)) {
+              demoCleanupBatch.delete(snap.ref)
+              needsCleanup = true
+            }
+          })
+          if (needsCleanup) {
+            try { await demoCleanupBatch.commit() } catch { /* ignore cleanup errors */ }
+          }
 
-            if (eventsSnap.empty) {
-              setEvents([])
-            } else {
-              const loadedEvents = eventsSnap.docs.map((snap) => {
+          if (!cancelled) {
+            // Filter out demo items - only show real uploaded/created data
+            const loadedInventory = inventorySnap.docs
+              .filter((snap) => !demoInventoryIds.has(snap.id))
+              .map((snap) => normalizeInventoryItem(snap.data() as Partial<InventoryItem>, snap.id))
+              .filter((item) => item.title)
+            setInventory(loadedInventory)
+
+            const loadedEvents = eventsSnap.docs
+              .filter((snap) => !demoEventIds.has(snap.id))
+              .map((snap) => {
                 const data = snap.data() as Partial<EventRecord>
                 const sales = Array.isArray(data.sales)
                   ? (data.sales as Partial<Sale>[])
@@ -364,8 +383,7 @@ export default function DashboardPage() {
                   sales
                 }
               })
-              setEvents(loadedEvents)
-            }
+            setEvents(loadedEvents)
 
             if (generalSalesSnap.empty) {
               setGeneralSales([])

@@ -2343,19 +2343,15 @@ export default function DashboardPage() {
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Category *</label>
-            <input
-              type="text"
-              list="catalog-categories-list"
+            <select
               value={catalogCategory}
               onChange={(e) => setCatalogCategory(e.target.value as InventoryCategory)}
-              placeholder="e.g., Books"
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-            />
-            <datalist id="catalog-categories-list">
+            >
               {['Books', 'Crafts', 'Puzzles', 'Gifts', ...inventoryCategories]
                 .filter((v, i, a) => a.indexOf(v) === i)
-                .map((c) => <option key={c} value={c} />)}
-            </datalist>
+                .map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Age Category *</label>

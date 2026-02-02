@@ -100,6 +100,8 @@ export default function HomePage() {
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [catalogFilter, setCatalogFilter] = useState<string>('All')
+  const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
+  const [expandedSlider, setExpandedSlider] = useState(0)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -769,7 +771,8 @@ export default function HomePage() {
                   .map((item) => (
                   <div
                     key={item.id}
-                    className="group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_8px_40px_rgba(124,58,237,0.12)] hover:-translate-y-1 transition-all duration-500"
+                    onClick={() => { setExpandedItem(item); setExpandedSlider(0) }}
+                    className="group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_8px_40px_rgba(124,58,237,0.12)] hover:-translate-y-1 transition-all duration-500 cursor-pointer"
                   >
                     {/* Image */}
                     <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
@@ -793,7 +796,8 @@ export default function HomePage() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   const cur = catalogSlider[item.id] ?? 0
                                   setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
                                 }}
@@ -803,7 +807,8 @@ export default function HomePage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   const cur = catalogSlider[item.id] ?? 0
                                   setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
                                 }}
@@ -816,7 +821,7 @@ export default function HomePage() {
                                   <button
                                     key={dotIdx}
                                     type="button"
-                                    onClick={() => setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx }))}
+                                    onClick={(e) => { e.stopPropagation(); setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx })) }}
                                     className={`h-1.5 rounded-full transition-all duration-300 ${
                                       dotIdx === (catalogSlider[item.id] ?? 0)
                                         ? 'w-5 bg-white shadow-sm'
@@ -1042,6 +1047,105 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Expanded catalog item modal */}
+      {expandedItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setExpandedItem(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setExpandedItem(null)}
+              className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md hover:bg-white transition-colors"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            {/* Image area */}
+            <div className="relative aspect-[4/3] sm:aspect-[16/9] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden rounded-t-3xl">
+              {expandedItem.images.length > 0 ? (
+                <>
+                  <div className="relative h-full w-full">
+                    {expandedItem.images.map((img, imgIdx) => (
+                      <img
+                        key={imgIdx}
+                        src={img}
+                        alt={`${expandedItem.title} ${imgIdx + 1}`}
+                        className={`absolute inset-0 h-full w-full object-contain transition-all duration-700 ease-out ${
+                          imgIdx === expandedSlider
+                            ? 'opacity-100 scale-100'
+                            : 'opacity-0 scale-105'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  {expandedItem.images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSlider(expandedSlider === 0 ? expandedItem.images.length - 1 : expandedSlider - 1)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg hover:scale-110 transition-all"
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSlider(expandedSlider === expandedItem.images.length - 1 ? 0 : expandedSlider + 1)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg hover:scale-110 transition-all"
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                        {expandedItem.images.map((_, dotIdx) => (
+                          <button
+                            key={dotIdx}
+                            type="button"
+                            onClick={() => setExpandedSlider(dotIdx)}
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              dotIdx === expandedSlider
+                                ? 'w-6 bg-white shadow-sm'
+                                : 'w-2 bg-white/50 hover:bg-white/80'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-full items-center justify-center text-6xl opacity-30">📷</div>
+              )}
+            </div>
+
+            {/* Details */}
+            <div className="p-6 sm:p-8">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {expandedItem.category}
+                </span>
+                <span className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-3 py-1 text-xs font-bold text-blue-700">
+                  Ages {expandedItem.ageCategory}
+                </span>
+                <span className="rounded-full bg-purple-50 border border-purple-200 px-3 py-1 text-xs font-bold text-purple-700">
+                  {expandedItem.publisher}
+                </span>
+              </div>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-primaryDark">{expandedItem.title}</h2>
+              <p className="mt-3 text-muted leading-relaxed">{expandedItem.description}</p>
+              <div className="mt-6 flex items-center gap-4">
+                <span className="text-3xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  ${expandedItem.price.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

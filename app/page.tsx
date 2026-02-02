@@ -253,14 +253,6 @@ export default function HomePage() {
                 educators, and community events with thoughtful recommendations,
                 reliable inventory, and warm service.
               </p>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <a
-                  className="rounded-full hero-gradient px-6 py-3 font-semibold text-white shadow-soft transition hover:-translate-y-0.5"
-                  href="#modules"
-                >
-                  Explore Modules
-                </a>
-              </div>
               <div className="mt-6 text-sm text-muted">
                 Curated Islamic titles · Books, crafts, and puzzles · Events & school fairs
               </div>

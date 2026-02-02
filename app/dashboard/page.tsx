@@ -240,6 +240,8 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
   const [uploadMessage, setUploadMessage] = useState<string>('')
+  const [inventorySortKey, setInventorySortKey] = useState<keyof InventoryItem | ''>('')
+  const [inventorySortDir, setInventorySortDir] = useState<'asc' | 'desc'>('asc')
   const [eventMessage, setEventMessage] = useState('')
   const [newEventName, setNewEventName] = useState('')
   const [newEventCost, setNewEventCost] = useState('')
@@ -1500,6 +1502,38 @@ export default function DashboardPage() {
     </div>
   )
 
+  const sortedInventory = useMemo(() => {
+    if (!inventorySortKey) return inventory
+    return [...inventory].sort((a, b) => {
+      const aVal = a[inventorySortKey]
+      const bVal = b[inventorySortKey]
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return inventorySortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+      }
+      return inventorySortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
+    })
+  }, [inventory, inventorySortKey, inventorySortDir])
+
+  const handleInventorySort = (key: keyof InventoryItem) => {
+    if (inventorySortKey === key) {
+      if (inventorySortDir === 'asc') setInventorySortDir('desc')
+      else { setInventorySortKey(''); setInventorySortDir('asc') }
+    } else {
+      setInventorySortKey(key)
+      setInventorySortDir('asc')
+    }
+  }
+
+  const SortIcon = ({ col }: { col: keyof InventoryItem }) => (
+    <span className="inline-block ml-1 align-middle">
+      {inventorySortKey === col ? (
+        inventorySortDir === 'asc' ? '▲' : '▼'
+      ) : (
+        <span className="opacity-30">⇅</span>
+      )}
+    </span>
+  )
+
   const renderInventory = () => (
     <div className="fade-up space-y-6">
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-8 shadow-xl border border-purple-200/50">
@@ -1571,17 +1605,21 @@ export default function DashboardPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gradient-to-r from-primary/10 to-secondary/10 text-left">
               <tr>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Title</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Category</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Publisher</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">RRP</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Discount %</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Quantity</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-primaryDark">Selling Price</th>
+                {([['title', 'Title'], ['category', 'Category'], ['publisher', 'Publisher'], ['rrp', 'RRP'], ['discount', 'Discount %'], ['quantity', 'Quantity'], ['sellingPrice', 'Selling Price']] as [keyof InventoryItem, string][]).map(([key, label]) => (
+                  <th key={key} className="px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={() => handleInventorySort(key)}
+                      className="text-xs font-bold uppercase tracking-wider text-primaryDark hover:text-primary transition-colors cursor-pointer select-none"
+                    >
+                      {label}<SortIcon col={key} />
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {inventory.map((item, index) => (
+              {sortedInventory.map((item, index) => (
                 <tr key={item.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                   <td className="px-6 py-4 font-medium">{item.title}</td>
                   <td className="px-6 py-4">

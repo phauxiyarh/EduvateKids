@@ -102,6 +102,7 @@ export default function HomePage() {
   const [catalogFilter, setCatalogFilter] = useState<string>('All')
   const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
   const [expandedSlider, setExpandedSlider] = useState(0)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -134,44 +135,68 @@ export default function HomePage() {
   return (
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-50 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-2">
-          <a className="flex items-center gap-3" href="#top">
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-4 py-2">
+          <a className="flex items-center gap-2 sm:gap-3 min-w-0" href="#top">
             <Image
               src={logo}
               alt="Eduvate Kids logo"
               width={32}
               height={32}
+              className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0"
             />
-            <span className="flex flex-col">
-              <span className="font-display text-lg font-bold">Eduvate Kids</span>
-              <span className="text-sm text-muted">Islamic Bookstore</span>
+            <span className="flex flex-col min-w-0">
+              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
+              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
             </span>
           </a>
           <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <a className="hover:text-primaryDark" href="#about">
-              About
-            </a>
-            <a className="hover:text-primaryDark" href="#catalog">
-              Catalog
-            </a>
-            <a className="hover:text-primaryDark" href="#partners">
-              Publishers
-            </a>
+            <a className="hover:text-primaryDark" href="#about">About</a>
+            <a className="hover:text-primaryDark" href="#catalog">Catalog</a>
+            <a className="hover:text-primaryDark" href="#partners">Publishers</a>
           </nav>
-          <Link
-            className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
-            href="/auth/login"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Admin Login
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+              href="/auth/login"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Admin Login
+            </Link>
+            {/* Mobile menu button */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="flex md:hidden h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100 transition"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              )}
+            </button>
+          </div>
         </div>
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-black/5 bg-white/95 backdrop-blur">
+            <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
+              <a className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="#about" onClick={() => setMobileMenuOpen(false)}>About</a>
+              <a className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="#catalog" onClick={() => setMobileMenuOpen(false)}>Catalog</a>
+              <a className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="#partners" onClick={() => setMobileMenuOpen(false)}>Publishers</a>
+              <Link className="rounded-xl px-4 py-3 text-sm font-semibold text-primaryDark hover:bg-primary/5 transition flex items-center gap-2" href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                Admin Login
+              </Link>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main id="top">
-        <section className="relative overflow-hidden pb-16 pt-40">
+        <section className="relative overflow-hidden pb-10 pt-24 sm:pb-16 sm:pt-40">
           <div
             className="hero-svg-bg absolute inset-0 z-0"
             style={{
@@ -186,43 +211,43 @@ export default function HomePage() {
             alt=""
             width={420}
             height={420}
-            className="hero-drift pointer-events-none absolute left-6 top-10 z-10 h-48 w-48 opacity-30"
+            className="hero-drift pointer-events-none absolute left-6 top-10 z-10 h-48 w-48 opacity-30 hidden md:block"
           />
           <Image
             src={design2}
             alt=""
             width={520}
             height={520}
-            className="hero-drift delay pointer-events-none absolute left-32 top-44 z-10 h-64 w-64 opacity-25"
+            className="hero-drift delay pointer-events-none absolute left-32 top-44 z-10 h-64 w-64 opacity-25 hidden md:block"
           />
           <Image
             src={design2}
             alt=""
             width={600}
             height={600}
-            className="hero-drift slow pointer-events-none absolute right-10 top-16 z-10 h-72 w-72 opacity-25"
+            className="hero-drift slow pointer-events-none absolute right-10 top-16 z-10 h-72 w-72 opacity-25 hidden lg:block"
           />
           <Image
             src={design2}
             alt=""
             width={360}
             height={360}
-            className="hero-drift delay pointer-events-none absolute right-20 top-64 z-10 h-40 w-40 opacity-30"
+            className="hero-drift delay pointer-events-none absolute right-20 top-64 z-10 h-40 w-40 opacity-30 hidden lg:block"
           />
-          <div className="hero-glow pointer-events-none absolute right-[-120px] top-24 z-0 h-72 w-72 rounded-full" />
-          <div className="hero-glow pointer-events-none absolute left-[-140px] top-52 z-0 h-80 w-80 rounded-full" />
+          <div className="hero-glow pointer-events-none absolute right-[-120px] top-24 z-0 h-72 w-72 rounded-full hidden sm:block" />
+          <div className="hero-glow pointer-events-none absolute left-[-140px] top-52 z-0 h-80 w-80 rounded-full hidden sm:block" />
           <div className="relative z-10 mx-auto grid w-11/12 max-w-6xl items-center gap-12 md:grid-cols-2">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Maryland, USA
               </p>
-              <h1 className="mt-4 font-display text-4xl leading-tight md:text-5xl">
+              <h1 className="mt-4 font-display text-3xl leading-tight sm:text-4xl md:text-5xl">
                 A leading Muslim bookstore for families, schools, and communities.
               </h1>
               <p className="mt-3 text-lg font-semibold gradient-text">
                 Curated stories that inspire faith, curiosity, and character.
               </p>
-              <p className="mt-4 text-lg text-muted">
+              <p className="mt-4 text-base sm:text-lg text-muted">
                 Eduvate Kids curates Islamic children&apos;s literature, crafts, and
                 learning tools with a modern retail experience. We serve families,
                 educators, and community events with thoughtful recommendations,
@@ -241,7 +266,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="glass-card rounded-2xl p-8 shadow-soft">
+            <div className="glass-card rounded-2xl p-5 sm:p-8 shadow-soft">
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>Why Reading Matters</span>
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primaryDark">
@@ -281,7 +306,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="about" className="relative py-20 bg-gradient-to-br from-purple-50 via-white to-pink-50">
+        <section id="about" className="relative py-12 sm:py-20 bg-gradient-to-br from-purple-50 via-white to-pink-50">
           <div
             className="hero-svg-bg absolute inset-0 opacity-10"
             style={{
@@ -303,7 +328,7 @@ export default function HomePage() {
               width={160}
               height={160}
               priority={index === 0}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
@@ -311,7 +336,7 @@ export default function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Our Story
               </p>
-              <h2 className="mt-4 font-display text-4xl">About Eduvate Kids</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">About Eduvate Kids</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                 From a small table of books at community events to a trusted Islamic bookstore
                 for Muslim families across North America.
@@ -352,7 +377,7 @@ export default function HomePage() {
 
               <div className="flex justify-center">
                 <div className="space-y-4 w-full">
-                  <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-primary/10">
+                  <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
                     <div className="text-center">
                       <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-3xl mb-4">
                         🏪
@@ -381,7 +406,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="relative py-20 bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <section className="relative py-12 sm:py-20 bg-gradient-to-br from-blue-50 via-white to-indigo-50">
           <div
             className="hero-svg-bg absolute inset-0 opacity-10"
             style={{
@@ -402,7 +427,7 @@ export default function HomePage() {
               alt=""
               width={160}
               height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
@@ -410,7 +435,7 @@ export default function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Our Purpose
               </p>
-              <h2 className="mt-4 font-display text-4xl">Mission & Vision</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Mission & Vision</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                 Building the most trusted Islamic bookstore experience in North America,
                 rooted in faith, learning, and community.
@@ -418,7 +443,7 @@ export default function HomePage() {
             </div>
 
             <div className="mt-12 grid gap-8 md:grid-cols-2">
-              <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-primary/10">
+              <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-3xl">
                     🎯
@@ -449,7 +474,7 @@ export default function HomePage() {
                 </ul>
               </div>
 
-              <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-secondary/10">
+              <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-secondary/10">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/10 text-3xl">
                     🌟
@@ -481,15 +506,15 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-8 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 p-6 text-center">
-              <p className="text-sm font-semibold text-primaryDark">
+            <div className="mt-6 sm:mt-8 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 sm:p-6 text-center">
+              <p className="text-xs sm:text-sm font-semibold text-primaryDark">
                 💡 Faith-Centered · 📖 Knowledge-Driven · 🤝 Community-Focused · 🌱 Growth-Oriented
               </p>
             </div>
           </div>
         </section>
 
-        <section className="relative py-20 bg-gradient-to-br from-amber-50 via-white to-orange-50">
+        <section className="relative py-12 sm:py-20 bg-gradient-to-br from-amber-50 via-white to-orange-50">
           <div
             className="hero-svg-bg absolute inset-0 opacity-10"
             style={{
@@ -510,7 +535,7 @@ export default function HomePage() {
               alt=""
               width={160}
               height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
@@ -518,7 +543,7 @@ export default function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Community Love
               </p>
-              <h2 className="mt-4 font-display text-4xl">Testimonials</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Testimonials</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                 Trusted by parents, educators, and young readers who see faith and learning
                 come together with joy.
@@ -527,7 +552,7 @@ export default function HomePage() {
 
             <div className="mt-12 grid gap-8 md:grid-cols-2 items-center">
               <div className="space-y-6">
-                <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-primary/10">
+                <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">
                       ⭐
@@ -562,8 +587,8 @@ export default function HomePage() {
 
               <div className="flex justify-center">
                 <div className="w-full">
-                  <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-secondary/10">
-                    <div className="relative min-h-[240px] overflow-hidden">
+                  <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-secondary/10">
+                    <div className="relative min-h-[220px] sm:min-h-[240px] overflow-hidden">
                       {testimonials.map((testimonial, index) => (
                         <div
                           key={testimonial.name}
@@ -637,7 +662,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="relative py-20 bg-gradient-to-br from-emerald-50 via-white to-blue-50">
+        <section className="relative py-12 sm:py-20 bg-gradient-to-br from-emerald-50 via-white to-blue-50">
           <div
             className="hero-svg-bg absolute inset-0 opacity-10"
             style={{
@@ -658,7 +683,7 @@ export default function HomePage() {
               alt=""
               width={160}
               height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
@@ -666,7 +691,7 @@ export default function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Browse Our Collection
               </p>
-              <h2 className="mt-4 font-display text-4xl">View Our Digital Catalog</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">View Our Digital Catalog</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                 Scan the QR code or click below to explore our complete collection of Islamic books,
                 learning kits, and educational materials for all ages.
@@ -675,13 +700,13 @@ export default function HomePage() {
 
             <div className="mt-12 grid gap-8 md:grid-cols-2 items-center">
               <div className="flex justify-center">
-                <div className="animate-float rounded-3xl bg-white p-8 shadow-soft border-2 border-primary/10">
+                <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
                   <Image
                     src={catalogQR}
                     alt="Catalog QR Code"
                     width={280}
                     height={280}
-                    className="rounded-2xl"
+                    className="rounded-2xl w-48 h-48 sm:w-[280px] sm:h-[280px] mx-auto"
                   />
                   <p className="mt-4 text-center text-sm font-semibold text-muted">
                     Scan to view catalog
@@ -736,13 +761,13 @@ export default function HomePage() {
 
         {/* Product Catalog Section */}
         {catalogItems.length > 0 && (
-          <section id="catalog" className="relative py-20 bg-white">
+          <section id="catalog" className="relative py-12 sm:py-20 bg-white">
             <div className="mx-auto w-11/12 max-w-6xl">
               <div className="text-center mb-12">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                   Our Products
                 </p>
-                <h2 className="mt-4 font-display text-4xl">Shop Our Collection</h2>
+                <h2 className="mt-4 font-display text-2xl sm:text-4xl">Shop Our Collection</h2>
                 <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                   Discover our handpicked selection of Islamic books, crafts, puzzles, and gifts for all ages.
                 </p>
@@ -765,7 +790,7 @@ export default function HomePage() {
                 ))}
               </div>
 
-              <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-5 sm:gap-8 grid-cols-2 lg:grid-cols-3">
                 {catalogItems
                   .filter((item) => catalogFilter === 'All' || item.category === catalogFilter)
                   .map((item) => (
@@ -839,20 +864,20 @@ export default function HomePage() {
                     </div>
 
                     {/* Content */}
-                    <div className="flex flex-1 flex-col p-5">
-                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                        <span className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                    <div className="flex flex-1 flex-col p-3 sm:p-5">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-1.5 sm:mb-2">
+                        <span className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-emerald-700">
                           {item.category}
                         </span>
-                        <span className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
+                        <span className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-blue-700">
                           Ages {item.ageCategory}
                         </span>
                       </div>
-                      <h3 className="font-display text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
-                      <p className="mt-1.5 text-[13px] text-muted leading-relaxed line-clamp-2">{item.description}</p>
-                      <div className="mt-auto pt-4 flex items-center justify-between">
-                        <span className="text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
-                        <span className="text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-2.5 py-0.5 border border-purple-200/60 max-w-[120px] truncate">
+                      <h3 className="font-display text-sm sm:text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
+                      <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 hidden sm:block">{item.description}</p>
+                      <div className="mt-auto pt-2 sm:pt-4 flex items-center justify-between gap-1">
+                        <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
+                        <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
                           {item.publisher}
                         </span>
                       </div>
@@ -903,14 +928,14 @@ export default function HomePage() {
 
       </main>
 
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#1a1628] via-[#1f1b2e] to-[#251f3a] py-16 text-white">
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#1a1628] via-[#1f1b2e] to-[#251f3a] py-10 sm:py-16 text-white">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-primary blur-3xl" />
           <div className="absolute right-1/4 bottom-1/4 h-96 w-96 rounded-full bg-secondary blur-3xl" />
         </div>
         <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
-          <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
-            <div>
+          <div className="grid gap-8 sm:gap-12 grid-cols-2 lg:grid-cols-4">
+            <div className="col-span-2 lg:col-span-1">
               <div className="flex items-center gap-3">
                 <Image
                   src={logo}
@@ -1051,23 +1076,23 @@ export default function HomePage() {
       {/* Expanded catalog item modal */}
       {expandedItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4"
           onClick={() => setExpandedItem(null)}
         >
           <div
-            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl"
+            className="relative w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
             <button
               onClick={() => setExpandedItem(null)}
-              className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md hover:bg-white transition-colors"
+              className="absolute right-3 top-3 sm:right-4 sm:top-4 z-10 flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 shadow-md hover:bg-white transition-colors"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
             {/* Image area */}
-            <div className="relative aspect-[4/3] sm:aspect-[16/9] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden rounded-t-3xl">
+            <div className="relative aspect-square sm:aspect-[16/9] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden rounded-t-3xl">
               {expandedItem.images.length > 0 ? (
                 <>
                   <div className="relative h-full w-full">
@@ -1123,8 +1148,8 @@ export default function HomePage() {
             </div>
 
             {/* Details */}
-            <div className="p-6 sm:p-8">
-              <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="p-5 sm:p-8">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3">
                 <span className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">
                   {expandedItem.category}
                 </span>
@@ -1135,10 +1160,10 @@ export default function HomePage() {
                   {expandedItem.publisher}
                 </span>
               </div>
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-primaryDark">{expandedItem.title}</h2>
-              <p className="mt-3 text-muted leading-relaxed">{expandedItem.description}</p>
-              <div className="mt-6 flex items-center gap-4">
-                <span className="text-3xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              <h2 className="font-display text-xl sm:text-3xl font-bold text-primaryDark">{expandedItem.title}</h2>
+              <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted leading-relaxed">{expandedItem.description}</p>
+              <div className="mt-4 sm:mt-6 flex items-center gap-4">
+                <span className="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                   ${expandedItem.price.toFixed(2)}
                 </span>
               </div>

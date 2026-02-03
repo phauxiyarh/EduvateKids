@@ -1,0 +1,1518 @@
+═══════════════════════════════════════════════════════════════════════════════
+                          EDUVATE KIDS PLATFORM                                
+                   PROCESS FLOWCHARTS & DIAGRAMS                             
+                                                                               
+           Complete Visual Workflows for Bookstore Management
+═══════════════════════════════════════════════════════════════════════════════
+
+Document Version: 1.0
+Last Updated: December 31, 2025
+
+This document contains all process flowcharts and system diagrams for the 
+Eduvate Kids bookstore platform.
+
+═══════════════════════════════════════════════════════════════════════════════
+TABLE OF CONTENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1.  System Architecture Diagram
+2.  User Authentication Flow
+3.  Excel Upload & Processing Flow
+4.  Stock Update Workflow
+5.  New Arrival Addition Flow
+6.  Event Creation & Setup Flow
+7.  POS/Cashier Transaction Flow
+8.  Card Payment Fee Calculation
+9.  Low Stock Alert System
+10. Best Seller Calculation Logic
+11. Dashboard Data Aggregation
+12. Publisher Management Flow
+
+═══════════════════════════════════════════════════════════════════════════════
+1. SYSTEM ARCHITECTURE DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
+
+                    ┌─────────────────────────┐
+                    │    END USERS            │
+                    │  (Store Administrators) │
+                    └───────────┬─────────────┘
+                                │
+                    ┌───────────▼──────────────┐
+                    │   PRESENTATION LAYER     │
+                    ├──────────────────────────┤
+                    │                          │
+          ┌─────────┤  Landing Page            │
+          │         │  (Next.js/React)         │
+          │         │  • Hero Section          │
+          │         │  • Book Preview          │
+          │         │  • Contact Info          │
+          │         └──────────┬───────────────┘
+          │                    │
+          │         ┌──────────▼───────────────┐
+          │         │  Dashboard Application   │
+          │         │  (Next.js/React)         │
+          │         │  • Analytics             │
+          │         │  • Inventory             │
+          │         │  • Events                │
+          │         │  • POS System            │
+          │         └──────────┬───────────────┘
+          │                    │
+          │                    │ HTTPS/REST
+          │                    │
+          │         ┌──────────▼───────────────┐
+          │         │   API LAYER              │
+          │         │   (Next.js API Routes)   │
+          │         │                          │
+          │         │  /api/auth/*            │
+          │         │  /api/inventory/*       │
+          │         │  /api/events/*          │
+          │         │  /api/pos/*             │
+          │         │  /api/dashboard/*       │
+          │         └──────────┬───────────────┘
+          │                    │
+          │         ┌──────────▼───────────────┐
+          │         │  BUSINESS LOGIC LAYER    │
+          │         ├──────────────────────────┤
+          │         │                          │
+          │    ┌────┤  Authentication Service  │
+          │    │    │  • Login/Logout          │
+          │    │    │  • Session Management    │
+          │    │    └──────────┬───────────────┘
+          │    │               │
+          │    │    ┌──────────▼───────────────┐
+          │    │    │  Inventory Service       │
+          │    │    │  • CRUD Operations       │
+          │    │    │  • Excel Processing      │
+          │    │    │  • Stock Management      │
+          │    │    └──────────┬───────────────┘
+          │    │               │
+          │    │    ┌──────────▼───────────────┐
+          │    │    │  Event Service           │
+          │    │    │  • Event CRUD            │
+          │    │    │  • Transaction Tracking  │
+          │    │    │  • Statistics            │
+          │    │    └──────────┬───────────────┘
+          │    │               │
+          │    │    ┌──────────▼───────────────┐
+          │    │    │  POS Service             │
+          │    │    │  • Cart Management       │
+          │    │    │  • Payment Processing    │
+          │    │    │  • Stock Deduction       │
+          │    │    └──────────┬───────────────┘
+          │    │               │
+          │    │    ┌──────────▼───────────────┐
+          │    │    │  Analytics Service       │
+          │    │    │  • Dashboard Stats       │
+          │    │    │  • Best Sellers          │
+          │    │    │  • Low Stock Alerts      │
+          │    │    └──────────┬───────────────┘
+          │    │               │
+          │    └───────────────┼───────────────────┐
+          │                    │                   │
+          │         ┌──────────▼──────────┐ ┌─────▼──────────┐
+          │         │  DATABASE LAYER     │ │  FILE STORAGE  │
+          │         ├─────────────────────┤ ├────────────────┤
+          │         │                     │ │                │
+          │         │  PostgreSQL         │ │  Cloudflare R2 │
+          │         │  • Users            │ │  /AWS S3       │
+          │         │  • Books            │ │                │
+          │         │  • Publishers       │ │  • Book covers │
+          │         │  • Events           │ │  • Excel files │
+          │         │  • Transactions     │ │                │
+          │         │  • Event_Books      │ │                │
+          │         │                     │ │                │
+          │         └─────────────────────┘ └────────────────┘
+          │
+          └──────────────────────────────────────────────────┐
+                                                              │
+                                 ┌────────────────────────────▼──┐
+                                 │  EXTERNAL SERVICES            │
+                                 ├───────────────────────────────┤
+                                 │  • NextAuth (Authentication)  │
+                                 │  • Vercel (Hosting)           │
+                                 │  • Railway (Database)         │
+                                 │  • Email Service (Resend)     │
+                                 └───────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+2. USER AUTHENTICATION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Admin Login"     │
+    │ button on landing │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Redirect to       │
+    │ /auth/login page  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Display login     │
+    │ form with:        │
+    │ • Email field     │
+    │ • Password field  │
+    │ • Login button    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User enters       │
+    │ credentials       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Login" button    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Client calls      │
+    │ signIn() with     │
+    │ credentials       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ NextAuth receives │
+    │ credentials       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Email exists in   ├───────────►│ Return error │
+    │ database?         │            │ "User not    │
+    └────┬──────────────┘            │  found"      │
+         │ YES                        └──────┬───────┘
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Retrieve user     │                   │
+    │ record with       │                   │
+    │ hashed password   │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Compare password  │                   │
+    │ with bcrypt       │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐     NO            │
+    │ Password correct? ├───────────────────┤
+    └────┬──────────────┘                   │
+         │ YES                               │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Generate JWT      │                   │
+    │ access token      │                   │
+    │ with user data    │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Create session    │                   │
+    │ in database       │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Return success    │                   │
+    │ with token        │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Client stores     │                   │
+    │ token in          │                   │
+    │ httpOnly cookie   │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐    ┌──────────────▼──┐
+    │ Redirect to       │    │ Show error       │
+    │ /dashboard        │    │ message to user  │
+    └────┬──────────────┘    └──────────────┬──┘
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Dashboard page    │                   │
+    │ loads with        │                   │
+    │ user session      │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼─────┐                            │
+    │   END    │◄───────────────────────────┘
+    └──────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+3. EXCEL UPLOAD & PROCESSING FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User navigates to │
+    │ Inventory page    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Upload Excel"    │
+    │ button            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ File picker opens │
+    │ Accept: .xlsx     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User selects      │
+    │ Excel file        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ File is .xlsx?    ├───────────►│ Show error:  │
+    │                   │            │ Invalid file │
+    └────┬──────────────┘            │ type         │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ File < 10MB?      ├───────────►│ Show error:  │
+    │                   │            │ File too     │
+    └────┬──────────────┘            │ large        │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Show preview:     │
+    │ "Uploading...     │
+    │  Please wait"     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Send file to      │
+    │ /api/inventory/   │
+    │  upload endpoint  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ SERVER: Read file │
+    │ with XLSX library │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Parse first sheet │
+    │ to JSON array     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Validate headers: │
+    │ • Title           │
+    │ • Category        │
+    │ • Publisher       │
+    │ • RRP             │
+    │ • Discount %      │
+    │ • Quantity        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Headers valid?    ├───────────►│ Return error:│
+    │                   │            │ Invalid      │
+    └────┬──────────────┘            │ format       │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ LOOP: For each    │
+    │ row in file       │
+    └────┬──────────────┘
+         │
+         ├──────────────────────────────────┐
+         │                                  │
+    ┌────▼──────────────┐                  │
+    │ Validate row:     │                  │
+    │ • All required    │                  │
+    │   fields present  │                  │
+    │ • RRP is number   │                  │
+    │ • Qty is integer  │                  │
+    └────┬──────────────┘                  │
+         │                                  │
+    ┌────▼──────────────┐     FAIL  ┌──────▼───────┐
+    │ Row valid?        ├───────────►│ Add to error │
+    │                   │            │ log, skip    │
+    └────┬──────────────┘            └──────────────┘
+         │ PASS                              │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Calculate selling │                   │
+    │ price:            │                   │
+    │ price = rrp *     │                   │
+    │   (1 - disc/100)  │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐                   │
+    │ Find or create    │                   │
+    │ publisher in DB   │                   │
+    └────┬──────────────┘                   │
+         │                                   │
+    ┌────▼──────────────┐     EXISTS ┌──────▼───────┐
+    │ Book exists?      ├───────────►│ UPDATE book  │
+    │ (title+publisher) │            │ record       │
+    └────┬──────────────┘            └──────┬───────┘
+         │ NO                               │
+         │                                  │
+    ┌────▼──────────────┐                  │
+    │ CREATE new book   │                  │
+    │ record in DB      │                  │
+    └────┬──────────────┘                  │
+         │                                  │
+    ┌────▼──────────────┐                  │
+    │ Increment success │                  │
+    │ counter           │                  │
+    └────┬──────────────┘                  │
+         │                                  │
+         │◄─────────────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ All rows          │
+    │ processed?        │
+    └────┬──────────────┘
+         │ YES
+         │
+    ┌────▼──────────────┐
+    │ Return summary:   │
+    │ • Success: X      │
+    │ • Failed: Y       │
+    │ • Errors: [...]   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Client displays   │
+    │ success message   │
+    │ with statistics   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Refresh inventory │
+    │ list to show      │
+    │ new/updated books │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+4. STOCK UPDATE WORKFLOW (Sold Items)
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User viewing      │
+    │ Inventory list    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks on a  │
+    │ book row          │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Modal opens with  │
+    │ book details:     │
+    │ • Title           │
+    │ • Current stock   │
+    │ • Update options  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User selects      │
+    │ "Record Sale"     │
+    │ option            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Input field shows:│
+    │ "Sold Quantity"   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User enters       │
+    │ quantity sold     │
+    │ (e.g., 5)         │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Client validates  │
+    │ input             │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Quantity > 0?     ├───────────►│ Show error:  │
+    │                   │            │ Invalid qty  │
+    └────┬──────────────┘            └──────────────┘
+         │ YES
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Qty <= available  ├───────────►│ Show error:  │
+    │ stock?            │            │ Insufficient │
+    └────┬──────────────┘            │ stock        │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Confirm"         │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Send PUT request  │
+    │ to /api/inventory │
+    │  /[id]/update-    │
+    │  stock            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ SERVER: Start DB  │
+    │ transaction       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Fetch current     │
+    │ book record       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Calculate new qty:│
+    │ new = current -   │
+    │       sold        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Update book:      │
+    │ SET quantity =    │
+    │     new_qty       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Create audit log: │
+    │ • Action: SOLD    │
+    │ • Quantity: X     │
+    │ • Date: now       │
+    │ • User: admin     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     YES   ┌──────────────┐
+    │ New qty < 5?      ├───────────►│ Create low   │
+    │ (low stock)       │            │ stock alert  │
+    └────┬──────────────┘            └──────┬───────┘
+         │ NO                               │
+         │◄─────────────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Commit            │
+    │ transaction       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Return success    │
+    │ with new stock    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Client updates    │
+    │ inventory display │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Show success      │
+    │ notification:     │
+    │ "Stock updated!"  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     YES   ┌──────────────┐
+    │ Low stock?        ├───────────►│ Show warning │
+    │                   │            │ badge on book│
+    └────┬──────────────┘            └──────────────┘
+         │ NO
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+5. NEW ARRIVAL ADDITION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks on    │
+    │ book in inventory │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Modal opens       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User selects      │
+    │ "Add New Arrival" │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Form displays:    │
+    │ • Arrival qty     │
+    │ • Publisher       │
+    │   (dropdown)      │
+    │ • Date            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User enters:      │
+    │ • Quantity: 20    │
+    │ • Publisher: Same │
+    │   or different    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Quantity > 0?     ├───────────►│ Show error   │
+    └────┬──────────────┘            └──────────────┘
+         │ YES
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Confirm"         │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Send POST to      │
+    │ /api/inventory/   │
+    │  [id]/arrival     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ SERVER: Fetch     │
+    │ book record       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NEW   ┌──────────────┐
+    │ Publisher same as ├───────────►│ Create new   │
+    │ current?          │            │ publisher if │
+    └────┬──────────────┘            │ needed       │
+         │ SAME                       └──────┬───────┘
+         │◄───────────────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Calculate new qty:│
+    │ new = current +   │
+    │       arrival     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Update book:      │
+    │ SET quantity =    │
+    │     new_qty       │
+    │ SET publisherId = │
+    │     selected      │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Create arrival    │
+    │ record:           │
+    │ • bookId          │
+    │ • quantity        │
+    │ • publisherId     │
+    │ • date            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Return success    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Client updates UI │
+    │ with new stock    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Show success:     │
+    │ "Arrival added!   │
+    │  Stock: X → Y"    │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+6. EVENT CREATION & SETUP FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User navigates to │
+    │ Events page       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Create Event"    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Event form opens: │
+    │ • Name            │
+    │ • Description     │
+    │ • Date            │
+    │ • Vendor cost     │
+    │ • Event hours     │
+    │ • Location        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User fills form:  │
+    │ Name: "Eid Book   │
+    │       Fair 2025"  │
+    │ Date: 2025-04-10  │
+    │ Cost: $500        │
+    │ Hours: 8          │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ All required      ├───────────►│ Show         │
+    │ fields filled?    │            │ validation   │
+    └────┬──────────────┘            │ errors       │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Create Event"    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ POST to           │
+    │ /api/events       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ SERVER: Create    │
+    │ event record in DB│
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Return event ID   │
+    │ and details       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Redirect to event │
+    │ detail page       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Show success:     │
+    │ "Event created!   │
+    │  Ready for sales" │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Event appears in  │
+    │ events list with  │
+    │ status: "Active"  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Initialize event  │
+    │ statistics:       │
+    │ • Total Sales: $0 │
+    │ • Books Sold: 0   │
+    │ • Transactions: 0 │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+7. POS/CASHIER TRANSACTION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ User selects      │
+    │ active event      │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Navigate to POS   │
+    │ interface for     │
+    │ that event        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ POS displays:     │
+    │ • Product search  │
+    │ • Shopping cart   │
+    │ • Payment options │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User searches for │
+    │ book by title or  │
+    │ scans ISBN        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Book results      │
+    │ displayed with:   │
+    │ • Title           │
+    │ • Price           │
+    │ • Available stock │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User clicks       │
+    │ "Add to Cart"     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Quantity dialog   │
+    │ appears           │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User enters       │
+    │ quantity (e.g. 2) │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Qty <= available  ├───────────►│ Show error:  │
+    │ stock?            │            │ Insufficient │
+    └────┬──────────────┘            │ stock        │
+         │ YES                        └──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Add item to cart: │
+    │ • Book details    │
+    │ • Quantity        │
+    │ • Unit price      │
+    │ • Subtotal        │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Update cart       │
+    │ display with      │
+    │ running total     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     YES   ┌──────────────┐
+    │ More items to add?├───────────►│ Repeat book  │
+    │                   │            │ search       │
+    └────┬──────────────┘            └──────┬───────┘
+         │ NO                               │
+         │◄─────────────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User reviews cart:│
+    │ • 3 items         │
+    │ • Subtotal: $45   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ User selects      │
+    │ payment method:   │
+    │ [Cash] or [Card]  │
+    └────┬──────────────┘
+         │
+    ┌────┼──────────────────┐
+    │    │                  │
+    │ CASH                  CARD
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ Add card processing fee:   │
+    │    │    │ • User enters % (e.g. 3%)  │
+    │    │    │ • Fee = subtotal * 0.03    │
+    │    │    │ • New total = subtotal+fee │
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    └──────────────────┘
+    │               │
+    ┌───────────────▼──────────────┐
+    │ Display final total:          │
+    │ Subtotal: $45.00             │
+    │ Card Fee: $1.35 (if card)    │
+    │ TOTAL: $46.35                │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ User clicks                   │
+    │ "Complete Transaction"        │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ POST to                       │
+    │ /api/pos/transaction          │
+    │ with:                         │
+    │ • eventId                     │
+    │ • items[]                     │
+    │ • paymentMethod               │
+    │ • total                       │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ SERVER: Start transaction    │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ FOR EACH item in cart:       │
+    └───────────────┬──────────────┘
+                    │
+         ┌──────────┼──────────┐
+         │                     │
+    ┌────▼──────────────┐     │
+    │ Verify stock      │     │
+    │ available         │     │
+    └────┬──────────────┘     │
+         │                    │
+    ┌────▼──────────────┐     │
+    │ Deduct quantity   │     │
+    │ from stock        │     │
+    └────┬──────────────┘     │
+         │                    │
+    ┌────▼──────────────┐     │
+    │ Create            │     │
+    │ event_book record │     │
+    │ (links book to    │     │
+    │  event with qty)  │     │
+    └────┬──────────────┘     │
+         │                    │
+         └────────────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Create transaction record:   │
+    │ • eventId                     │
+    │ • total                       │
+    │ • paymentMethod               │
+    │ • cardFee (if applicable)    │
+    │ • timestamp                   │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Update event statistics:     │
+    │ • totalRevenue += total      │
+    │ • booksSold += quantities    │
+    │ • transactionCount += 1      │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Commit database transaction  │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Return success with          │
+    │ transaction ID               │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ CLIENT: Clear cart           │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Show success screen:         │
+    │ "Transaction Complete! ✅"   │
+    │ Receipt #: TXN-12345         │
+    │ Total: $46.35                │
+    │                               │
+    │ [Print] [New Transaction]    │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Update dashboard stats in    │
+    │ real-time (if open)          │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │   END                        │
+    └──────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+8. CARD PAYMENT FEE CALCULATION
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    │ (User at │
+    │ checkout)│
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ Cart subtotal     │
+    │ calculated:       │
+    │ $45.00            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Payment method    │
+    │ selection:        │
+    │ [💵 Cash]         │
+    │ [💳 Card]         │
+    └────┬──────────────┘
+         │
+    ┌────┼──────────────────┐
+    │    │                  │
+    │  CASH               CARD
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ Show card fee input:       │
+    │    │    │ "Card processing fee %"    │
+    │    │    │ [___] % (e.g., 3)          │
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ User enters fee %          │
+    │    │    │ (typically 2-5%)           │
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ Calculate fee:             │
+    │    │    │                             │
+    │    │    │ fee = subtotal * (fee%/100)│
+    │    │    │ fee = 45.00 * (3/100)      │
+    │    │    │ fee = $1.35                │
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ Calculate final total:     │
+    │    │    │                             │
+    │    │    │ total = subtotal + fee     │
+    │    │    │ total = 45.00 + 1.35       │
+    │    │    │ total = $46.35             │
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    │    ┌─────────────▼──────────────┐
+    │    │    │ Display breakdown:         │
+    │    │    │ ┌────────────────────────┐│
+    │    │    │ │ Subtotal:     $45.00   ││
+    │    │    │ │ Card Fee (3%): $1.35   ││
+    │    │    │ │ ─────────────────────  ││
+    │    │    │ │ TOTAL:        $46.35   ││
+    │    │    │ └────────────────────────┘│
+    │    │    └─────────────┬──────────────┘
+    │    │                  │
+    │    └──────────────────┘
+    │               │
+    ┌───────────────▼──────────────┐
+    │ Customer sees final amount   │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ User confirms transaction    │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Transaction processed with:  │
+    │ • subtotal: $45.00           │
+    │ • cardFee: $1.35 (if card)   │
+    │ • total: $46.35              │
+    │ • paymentMethod: "card"      │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │ Store in database for        │
+    │ accounting & reporting       │
+    └───────────────┬──────────────┘
+                    │
+    ┌───────────────▼──────────────┐
+    │   END                        │
+    └──────────────────────────────┘
+
+CARD FEE FORMULA:
+─────────────────────────────────────────────────────────────────────────────
+
+Given:
+• subtotal = sum of all items in cart
+• feePercentage = user-entered percentage (e.g., 3 for 3%)
+
+Calculate:
+• cardFee = subtotal × (feePercentage / 100)
+• finalTotal = subtotal + cardFee
+
+Example:
+• subtotal = $45.00
+• feePercentage = 3%
+• cardFee = 45.00 × 0.03 = $1.35
+• finalTotal = 45.00 + 1.35 = $46.35
+
+═══════════════════════════════════════════════════════════════════════════════
+9. LOW STOCK ALERT SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    │(Automated│
+    │  Check)  │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ System runs daily │
+    │ at 9:00 AM or     │
+    │ after any stock   │
+    │ update            │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Query database:   │
+    │ SELECT * FROM     │
+    │ books WHERE       │
+    │ quantity < 15     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NONE  ┌──────────────┐
+    │ Low stock books   ├───────────►│ No action    │
+    │ found?            │            │ needed       │
+    └────┬──────────────┘            └──────────────┘
+         │ YES
+         │
+    ┌────▼──────────────┐
+    │ Categorize by     │
+    │ severity:         │
+    │                   │
+    │ 🔴 Critical: <5   │
+    │ 🟡 Low: 5-14      │
+    │ 🟢 Normal: 15+    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ FOR EACH low      │
+    │ stock book:       │
+    └────┬──────────────┘
+         │
+         ├──────────────────────────┐
+         │                          │
+    ┌────▼──────────────┐          │
+    │ Check if alert    │          │
+    │ already exists    │          │
+    │ (created < 7 days)│          │
+    └────┬──────────────┘          │
+         │                          │
+    ┌────▼──────────────┐     YES  │
+    │ Alert exists?     ├──────────┤
+    │                   │          │
+    └────┬──────────────┘          │
+         │ NO                       │
+         │                          │
+    ┌────▼──────────────┐          │
+    │ Create alert:     │          │
+    │ • bookId          │          │
+    │ • severity        │          │
+    │ • currentStock    │          │
+    │ • date            │          │
+    └────┬──────────────┘          │
+         │                          │
+    ┌────▼──────────────┐          │
+    │ Add to dashboard  │          │
+    │ alerts widget     │          │
+    └────┬──────────────┘          │
+         │                          │
+         └──────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Generate email    │
+    │ notification to   │
+    │ admin             │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Email contains:   │
+    │ • Book title      │
+    │ • Current stock   │
+    │ • Severity level  │
+    │ • Recommended     │
+    │   reorder qty     │
+    │ • Quick link to   │
+    │   reorder         │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Update dashboard  │
+    │ "Low Stock" count │
+    │ badge             │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Show in inventory │
+    │ list with color   │
+    │ coding            │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+LOW STOCK THRESHOLDS:
+─────────────────────────────────────────────────────────────────────────────
+
+🔴 CRITICAL (quantity < 5)
+• Immediate action required
+• Red badge on inventory
+• Email notification sent
+• Priority 1
+
+🟡 LOW (quantity 5-14)
+• Reorder recommended
+• Yellow badge on inventory
+• Dashboard notification
+• Priority 2
+
+🟢 NORMAL (quantity ≥ 15)
+• No action needed
+• Green indicator
+• No alerts
+
+═══════════════════════════════════════════════════════════════════════════════
+10. BEST SELLER CALCULATION LOGIC
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    │(Dashboard│
+    │  Load)   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ Query all events  │
+    │ with transactions │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Query event_books │
+    │ table (links books│
+    │ to events with    │
+    │ quantities sold)  │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ GROUP BY bookId   │
+    │ SUM quantities    │
+    │ across all events │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Calculate revenue │
+    │ per book:         │
+    │ revenue = qty *   │
+    │           price   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ SQL Query:        │
+    │                   │
+    │ SELECT            │
+    │   b.id,           │
+    │   b.title,        │
+    │   b.cover,        │
+    │   p.name as pub,  │
+    │   SUM(eb.qty)     │
+    │     as soldQty,   │
+    │   SUM(eb.qty *    │
+    │     b.price)      │
+    │     as revenue    │
+    │ FROM books b      │
+    │ JOIN event_books  │
+    │   eb ON b.id =    │
+    │   eb.bookId       │
+    │ JOIN publishers p │
+    │   ON b.pubId =    │
+    │   p.id            │
+    │ GROUP BY b.id     │
+    │ ORDER BY soldQty  │
+    │   DESC            │
+    │ LIMIT 10          │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Result set:       │
+    │                   │
+    │ 1. My First Quran │
+    │    Sold: 145      │
+    │    Rev: $2,175    │
+    │                   │
+    │ 2. Prophet Stories│
+    │    Sold: 123      │
+    │    Rev: $1,845    │
+    │                   │
+    │ 3. Crafts Kit     │
+    │    Sold: 98       │
+    │    Rev: $1,470    │
+    │                   │
+    │ ... (up to 10)    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Enrich with       │
+    │ additional data:  │
+    │ • Cover image URL │
+    │ • Publisher name  │
+    │ • Category        │
+    │ • Current stock   │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Cache results for │
+    │ 5 minutes (Redis) │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Return to         │
+    │ dashboard         │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Display in        │
+    │ "Best Sellers"    │
+    │ table with:       │
+    │ • Rank            │
+    │ • Cover image     │
+    │ • Title           │
+    │ • Sold quantity   │
+    │ • Revenue         │
+    │ • Trend indicator │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+BEST SELLER METRICS:
+─────────────────────────────────────────────────────────────────────────────
+
+Primary Metric: Total Quantity Sold
+• Aggregated across ALL events
+• Updated in real-time after each transaction
+• Ranked from highest to lowest
+
+Secondary Metrics:
+• Total Revenue Generated
+• Number of Events Sold At
+• Average Units Per Event
+• Revenue Per Unit
+• Sell-Through Rate (sold / initial stock)
+
+Time Periods:
+• All Time (default for dashboard)
+• Last 30 Days (optional filter)
+• Last 90 Days (optional filter)
+• By Event (event detail page)
+
+═══════════════════════════════════════════════════════════════════════════════
+11. DASHBOARD DATA AGGREGATION
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    │(Dashboard│
+    │  Load)   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────────────────────────────────────────────┐
+    │ PARALLEL DATA FETCHING (Promise.all)                       │
+    └────┬──────────────────────────────────────────────────────┘
+         │
+         ├────┬────┬────┬────┬────┬────┐
+         │    │    │    │    │    │    │
+    ┌────▼──┐ │    │    │    │    │    │
+    │ Total  │ │    │    │    │    │    │
+    │ Books  │ │    │    │    │    │    │
+    │        │ │    │    │    │    │    │
+    │ SELECT │ │    │    │    │    │    │
+    │ COUNT  │ │    │    │    │    │    │
+    │ FROM   │ │    │    │    │    │    │
+    │ books  │ │    │    │    │    │    │
+    └────┬───┘ │    │    │    │    │    │
+         │     │    │    │    │    │    │
+         │ ┌───▼──┐ │    │    │    │    │
+         │ │Total  │ │    │    │    │    │
+         │ │Value  │ │    │    │    │    │
+         │ │       │ │    │    │    │    │
+         │ │SELECT │ │    │    │    │    │
+         │ │SUM    │ │    │    │    │    │
+         │ │(qty * │ │    │    │    │    │
+         │ │ price)│ │    │    │    │    │
+         │ └───┬───┘ │    │    │    │    │
+         │     │     │    │    │    │    │
+         │     │ ┌───▼──┐ │    │    │    │
+         │     │ │Low    │ │    │    │    │
+         │     │ │Stock  │ │    │    │    │
+         │     │ │       │ │    │    │    │
+         │     │ │SELECT │ │    │    │    │
+         │     │ │COUNT  │ │    │    │    │
+         │     │ │WHERE  │ │    │    │    │
+         │     │ │qty<15 │ │    │    │    │
+         │     │ └───┬───┘ │    │    │    │
+         │     │     │     │    │    │    │
+         │     │     │ ┌───▼──┐ │    │    │
+         │     │     │ │Active │ │    │    │
+         │     │     │ │Events │ │    │    │
+         │     │     │ │       │ │    │    │
+         │     │     │ │SELECT │ │    │    │
+         │     │     │ │COUNT  │ │    │    │
+         │     │     │ │FROM   │ │    │    │
+         │     │     │ │events │ │    │    │
+         │     │     │ │WHERE  │ │    │    │
+         │     │     │ │active │ │    │    │
+         │     │     │ └───┬───┘ │    │    │
+         │     │     │     │     │    │    │
+         │     │     │     │ ┌───▼──┐ │    │
+         │     │     │     │ │Sales  │ │    │
+         │     │     │     │ │by Cat │ │    │
+         │     │     │     │ │       │ │    │
+         │     │     │     │ │SELECT │ │    │
+         │     │     │     │ │cat,   │ │    │
+         │     │     │     │ │SUM    │ │    │
+         │     │     │     │ │GROUP  │ │    │
+         │     │     │     │ └───┬───┘ │    │
+         │     │     │     │     │     │    │
+         │     │     │     │     │ ┌───▼──┐ │
+         │     │     │     │     │ │Recent │ │
+         │     │     │     │     │ │Trans  │ │
+         │     │     │     │     │ │       │ │
+         │     │     │     │     │ │SELECT │ │
+         │     │     │     │     │ │TOP 10 │ │
+         │     │     │     │     │ │ORDER  │ │
+         │     │     │     │     │ │BY date│ │
+         │     │     │     │     │ └───┬───┘ │
+         │     │     │     │     │     │     │
+         │     │     │     │     │     │ ┌───▼──┐
+         │     │     │     │     │     │ │Best   │
+         │     │     │     │     │     │ │Seller │
+         │     │     │     │     │     │ │(see   │
+         │     │     │     │     │     │ │flow10)│
+         │     │     │     │     │     │ └───┬───┘
+         │     │     │     │     │     │     │
+         └─────┴─────┴─────┴─────┴─────┴─────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │ Combine all results into single object:            │
+    │ {                                                   │
+    │   totalBooks: 1234,                                │
+    │   totalValue: 45678.90,                            │
+    │   lowStock: 23,                                    │
+    │   activeEvents: 5,                                 │
+    │   salesByCategory: [...],                          │
+    │   recentTransactions: [...],                       │
+    │   bestSellers: [...]                               │
+    │ }                                                   │
+    └─────────────────────────┬──────────────────────────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │ Cache aggregated data in Redis for 5 minutes       │
+    └─────────────────────────┬──────────────────────────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │ Return JSON to frontend                             │
+    └─────────────────────────┬──────────────────────────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │ Frontend renders dashboard with animations         │
+    └─────────────────────────┬──────────────────────────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │ Set up real-time updates via WebSocket (optional) │
+    └─────────────────────────┬──────────────────────────┘
+                              │
+    ┌─────────────────────────▼──────────────────────────┐
+    │   END                                              │
+    └────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+12. PUBLISHER MANAGEMENT FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+    ┌──────────┐
+    │  START   │
+    └────┬─────┘
+         │
+    ┌────▼──────────────┐
+    │ System encounters │
+    │ new publisher     │
+    │ during:           │
+    │ • Excel upload    │
+    │ • Manual entry    │
+    │ • New arrival     │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Check if publisher│
+    │ exists in DB:     │
+    │ WHERE name =      │
+    │   'Goodword'      │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐     NO    ┌──────────────┐
+    │ Publisher exists? ├───────────►│ CREATE new   │
+    │                   │            │ publisher:   │
+    └────┬──────────────┘            │ • name       │
+         │ YES                        │ • discount % │
+         │                            │ • contact    │
+         │                            └──────┬───────┘
+         │◄───────────────────────────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Return publisher  │
+    │ ID for use in     │
+    │ book record       │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Books linked to   │
+    │ publisher via     │
+    │ publisherId FK    │
+    └────┬──────────────┘
+         │
+    ┌────▼──────────────┐
+    │ Publisher discount│
+    │ % applied to all  │
+    │ books from that   │
+    │ publisher         │
+    └────┬──────────────┘
+         │
+    ┌────▼─────┐
+    │   END    │
+    └──────────┘
+
+PUBLISHER ATTRIBUTES:
+─────────────────────────────────────────────────────────────────────────────
+
+• id (UUID)
+• name (string, unique)
+• discountPercentage (decimal) - default discount for books
+• contactEmail (string, optional)
+• contactPhone (string, optional)
+• website (string, optional)
+• createdAt (timestamp)
+• updatedAt (timestamp)
+
+RELATIONSHIP:
+One Publisher → Many Books
+Each book has one publisher
+Publisher discount % can be overridden at book level
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF FLOWCHARTS DOCUMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+This document contains all process flows and visual diagrams for the Eduvate 
+Kids platform. For implementation details, refer to:
+• Eduvate_Kids_Technical_Implementation_Guide.txt
+
+Document Version: 1.0
+Date: December 31, 2025

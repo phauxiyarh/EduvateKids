@@ -11,7 +11,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  getDoc
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { auth, db } from '../../lib/firebase'
@@ -20,7 +21,9 @@ import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
 
-type InventoryCategory = 'Books' | 'Crafts' | 'Puzzles' | 'Gifts'
+type InventoryCategory = 'Books' | 'Activity Books' | 'Cards' | 'Crafts' | 'Puzzles' | 'Games' | 'Gifts' | 'Others'
+
+const ALL_CATALOG_CATEGORIES: InventoryCategory[] = ['Books', 'Activity Books', 'Cards', 'Crafts', 'Puzzles', 'Games', 'Gifts', 'Others']
 
 type InventoryItem = {
   id: string
@@ -64,14 +67,33 @@ type EventRecord = {
   sales: Sale[]
 }
 
-type AgeCategory = '0-3' | '4-6' | '7-9' | '10-12' | '13+'
+type AgeCategory = '0-5' | '6-9' | '10+' | 'Adult'
+
+const AGE_CATEGORIES: Record<AgeCategory, { range: string; title: string }> = {
+  '0-5': { range: '0-5 years', title: 'Little Imaan Explorers' },
+  '6-9': { range: '6-9 years', title: 'Deen Explorers' },
+  '10+': { range: '10+ years', title: 'Young Scholars' },
+  'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
+}
+
+// Migration map for old age categories to new ones
+const MIGRATE_AGE_CATEGORY = (oldCategory: string): AgeCategory => {
+  const migrations: Record<string, AgeCategory> = {
+    '0-3': '0-5',
+    '4-6': '6-9',
+    '7-9': '6-9',
+    '10-12': '10+',
+    '13+': '10+'
+  }
+  return (migrations[oldCategory] as AgeCategory) || (oldCategory as AgeCategory)
+}
 
 type CatalogItem = {
   id: string
   title: string
   description: string
-  category: InventoryCategory
-  ageCategory: AgeCategory
+  category: InventoryCategory[]
+  ageCategory: AgeCategory[]
   price: number
   publisher: string
   images: string[]
@@ -224,6 +246,7 @@ const headerMap: Record<string, keyof InventoryItem> = {
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [userRole, setUserRole] = useState<string>('admin')
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(true)
   const [demoMode, setDemoMode] = useState(() => {
@@ -233,7 +256,7 @@ export default function DashboardPage() {
     }
     return true
   })
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'catalog'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog'>(
     'home'
   )
   const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
@@ -278,8 +301,8 @@ export default function DashboardPage() {
   const [editingCatalogItem, setEditingCatalogItem] = useState<CatalogItem | null>(null)
   const [catalogTitle, setCatalogTitle] = useState('')
   const [catalogDescription, setCatalogDescription] = useState('')
-  const [catalogCategory, setCatalogCategory] = useState<InventoryCategory>('Books')
-  const [catalogAge, setCatalogAge] = useState<AgeCategory>('0-3')
+  const [catalogCategories, setCatalogCategories] = useState<InventoryCategory[]>(['Books'])
+  const [catalogAge, setCatalogAge] = useState<AgeCategory[]>(['0-5'])
   const [catalogPrice, setCatalogPrice] = useState('')
   const [catalogPublisher, setCatalogPublisher] = useState('')
   const [catalogImages, setCatalogImages] = useState<File[]>([])
@@ -290,15 +313,25 @@ export default function DashboardPage() {
   const [isUploadingCatalog, setIsUploadingCatalog] = useState(false)
   const [catalogMessage, setCatalogMessage] = useState('')
   const [catalogSliderIndex, setCatalogSliderIndex] = useState<Record<string, number>>({})
-  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false)
-  const [purgePassword, setPurgePassword] = useState('')
-  const [purgeError, setPurgeError] = useState('')
-  const [purging, setPurging] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser)
+        // Fetch user role from Firestore
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
+          if (userDoc.exists()) {
+            const role = userDoc.data().role || 'admin'
+            setUserRole(role)
+            // Redirect cashiers to POS view
+            if (role === 'cashier') {
+              setActiveView('pos')
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user role:', error)
+        }
         setLoading(false)
       } else {
         router.push('/auth/login')
@@ -312,36 +345,6 @@ export default function DashboardPage() {
     const newMode = !demoMode
     setDemoMode(newMode)
     localStorage.setItem('eduvate-demo-mode', String(newMode))
-  }
-
-  const handlePurgeLiveData = async () => {
-    if (purgePassword !== '1502') {
-      setPurgeError('Incorrect password.')
-      return
-    }
-    setPurging(true)
-    setPurgeError('')
-    try {
-      const collections = ['inventory', 'events', 'generalSales']
-      for (const col of collections) {
-        const snap = await getDocs(collection(db, col))
-        if (!snap.empty) {
-          const batch = writeBatch(db)
-          snap.docs.forEach((d) => batch.delete(d.ref))
-          await batch.commit()
-        }
-      }
-      setInventory([])
-      setEvents([])
-      setGeneralSales([])
-      setShowPurgeConfirm(false)
-      setPurgePassword('')
-    } catch (error) {
-      console.error('Purge error:', error)
-      setPurgeError('Failed to delete data. Check console.')
-    } finally {
-      setPurging(false)
-    }
   }
 
   useEffect(() => {
@@ -414,20 +417,50 @@ export default function DashboardPage() {
         const catalogSnap = await getDocs(collection(db, 'catalog'))
         if (!cancelled) {
           if (!catalogSnap.empty) {
-            const loadedCatalog = catalogSnap.docs.map((snap) => {
+            const loadedCatalog = await Promise.all(catalogSnap.docs.map(async (snap) => {
               const data = snap.data() as Partial<CatalogItem>
+              // Handle both array and single category for backward compatibility
+              const categoryData = data.category
+              const categoryArray: InventoryCategory[] = Array.isArray(categoryData)
+                ? categoryData
+                : categoryData
+                ? [categoryData as InventoryCategory]
+                : ['Books']
+              
+              // Handle age category as array or single value
+              const ageData = data.ageCategory
+              let ageArray: AgeCategory[]
+              
+              if (Array.isArray(ageData)) {
+                // Already an array, migrate any old values
+                ageArray = ageData.map(age => MIGRATE_AGE_CATEGORY(String(age)))
+              } else {
+                // Single value, migrate and convert to array
+                const migratedAge = MIGRATE_AGE_CATEGORY(String(ageData ?? '0-5'))
+                ageArray = [migratedAge]
+                
+                // Update Firestore to array format
+                try {
+                  await updateDoc(doc(db, 'catalog', snap.id), {
+                    ageCategory: ageArray
+                  })
+                } catch (err) {
+                  console.error('Failed to migrate age category for', snap.id, err)
+                }
+              }
+              
               return {
                 id: snap.id,
                 title: String(data.title ?? ''),
                 description: String(data.description ?? ''),
-                category: (data.category ?? 'Books') as InventoryCategory,
-                ageCategory: (data.ageCategory ?? '0-3') as AgeCategory,
+                category: categoryArray,
+                ageCategory: ageArray,
                 price: Number(data.price ?? 0),
                 publisher: String(data.publisher ?? ''),
                 images: Array.isArray(data.images) ? data.images : [],
                 createdAt: String(data.createdAt ?? new Date().toISOString())
               }
-            })
+            }))
             setCatalogItems(loadedCatalog)
           } else {
             setCatalogItems([])
@@ -922,8 +955,8 @@ export default function DashboardPage() {
   const resetCatalogForm = () => {
     setCatalogTitle('')
     setCatalogDescription('')
-    setCatalogCategory('Books')
-    setCatalogAge('0-3')
+    setCatalogCategories(['Books'])
+    setCatalogAge(['0-5'])
     setCatalogPrice('')
     setCatalogPublisher('')
     setCatalogImages([])
@@ -997,6 +1030,7 @@ export default function DashboardPage() {
     if (!catalogTitle.trim()) { setCatalogMessage('Title is required.'); return }
     if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
     if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
+    if (catalogCategories.length === 0) { setCatalogMessage('At least 1 category is required.'); return }
     if (catalogImages.length === 0) { setCatalogMessage('At least 1 image is required.'); return }
 
     setIsUploadingCatalog(true)
@@ -1009,7 +1043,7 @@ export default function DashboardPage() {
         id: itemId,
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
-        category: catalogCategory,
+        category: catalogCategories,
         ageCategory: catalogAge,
         price: parseNumber(catalogPrice),
         publisher: catalogPublisher.trim(),
@@ -1034,7 +1068,7 @@ export default function DashboardPage() {
     setEditingCatalogItem(item)
     setCatalogTitle(item.title)
     setCatalogDescription(item.description)
-    setCatalogCategory(item.category)
+    setCatalogCategories(Array.isArray(item.category) ? item.category : [item.category])
     setCatalogAge(item.ageCategory)
     setCatalogPrice(String(item.price))
     setCatalogPublisher(item.publisher)
@@ -1066,7 +1100,7 @@ export default function DashboardPage() {
       const updatedFields = {
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
-        category: catalogCategory,
+        category: catalogCategories,
         ageCategory: catalogAge,
         price: parseNumber(catalogPrice),
         publisher: catalogPublisher.trim(),
@@ -1109,7 +1143,8 @@ export default function DashboardPage() {
       const matchesSearch = !catalogSearch ||
         item.title.toLowerCase().includes(catalogSearch.toLowerCase()) ||
         item.publisher.toLowerCase().includes(catalogSearch.toLowerCase())
-      const matchesCategory = catalogCategoryFilter === 'All' || item.category === catalogCategoryFilter
+      const itemCategories = Array.isArray(item.category) ? item.category : [item.category]
+      const matchesCategory = catalogCategoryFilter === 'All' || itemCategories.includes(catalogCategoryFilter)
       return matchesSearch && matchesCategory
     })
   }, [catalogItems, catalogSearch, catalogCategoryFilter])
@@ -1659,6 +1694,263 @@ export default function DashboardPage() {
     </div>
   )
 
+  const renderPOS = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Left Column: Search & Browse */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Event Selection Card */}
+        <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100">
+              <span className="text-2xl">🎯</span>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Select Event</label>
+              <select
+                value={selectedEventId}
+                onChange={(event) => setSelectedEventId(event.target.value)}
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+              >
+                <option value="">Choose an event...</option>
+                <option value="general">💰 General Sales (No Event)</option>
+                {events
+                  .filter((event) => event.status === 'active')
+                  .map((event) => (
+                    <option key={event.id} value={event.id}>
+                      🎪 {event.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Search & Catalog Card */}
+        <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
+          <div className="mb-6">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="🔍 Search products by title, publisher, or category..."
+                className="w-full rounded-2xl border-2 border-primary/20 px-5 py-4 pr-12 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Product Grid */}
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            {filteredInventory.length ? (
+              filteredInventory.map((item) => (
+                <div
+                  key={item.id}
+                  className="group flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-purple-50/50 to-pink-50/50 hover:from-purple-50 hover:to-pink-50 border border-primary/10 hover:border-primary/20 hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-gray-800 text-sm mb-1 truncate">{item.title}</h4>
+                    <div className="flex items-center gap-3 text-xs text-muted">
+                      <span className="px-2 py-1 rounded-full bg-white/80 border border-primary/10">
+                        {item.category}
+                      </span>
+                      <span className={`font-semibold ${item.quantity <= 5 ? 'text-red-600' : 'text-green-600'}`}>
+                        {item.quantity > 0 ? `${item.quantity} in stock` : 'Out of stock'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-primary mb-2">${formatNumber(item.sellingPrice)}</p>
+                    <button
+                      onClick={() => handleAddToCart(item.id)}
+                      className="rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-2 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+                      type="button"
+                      disabled={item.quantity === 0}
+                    >
+                      <span className="mr-1">+</span> Add
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-16">
+                <div className="text-6xl mb-4">
+                  {searchQuery ? '🔍' : '📦'}
+                </div>
+                <p className="text-gray-500 font-medium">
+                  {searchQuery ? 'No products found' : 'Start searching to browse products'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Cart & Checkout */}
+      <div className="space-y-6">
+        {/* Shopping Cart Card */}
+        <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10 lg:sticky lg:top-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-pink-100">
+                <span className="text-xl">🛒</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">Cart</h3>
+            </div>
+            {cartItems.length > 0 && (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary text-xs font-bold text-white shadow-md">
+                {cartItems.length}
+              </span>
+            )}
+          </div>
+
+          {/* Cart Items */}
+          <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {cartItems.length ? (
+              cartItems.map((item) => (
+                <div key={item.itemId} className="p-3 rounded-xl bg-gradient-to-r from-purple-50/30 to-pink-50/30 border border-primary/10">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <h4 className="font-bold text-sm text-gray-800 mb-1">{item.title}</h4>
+                      <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveFromCart(item.itemId)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                      type="button"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleUpdateCartQuantity(item.itemId, item.quantity - 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                        type="button"
+                      >
+                        <span className="text-sm font-bold">−</span>
+                      </button>
+                      <span className="w-10 text-center font-bold text-sm">{item.quantity}</span>
+                      <button
+                        onClick={() => handleUpdateCartQuantity(item.itemId, item.quantity + 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                        type="button"
+                      >
+                        <span className="text-sm font-bold">+</span>
+                      </button>
+                    </div>
+                    <span className="text-base font-bold text-primary">
+                      ${formatNumber(item.price * item.quantity)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-5xl mb-3">🛒</div>
+                <p className="text-sm text-gray-400">Your cart is empty</p>
+              </div>
+            )}
+          </div>
+
+          {cartItems.length > 0 && (
+            <>
+              {/* Payment Method */}
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-700 mb-3">Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setPaymentType('Cash')}
+                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
+                      paymentType === 'Cash'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
+                    }`}
+                    type="button"
+                  >
+                    💵 Cash
+                  </button>
+                  <button
+                    onClick={() => setPaymentType('Card')}
+                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
+                      paymentType === 'Card'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
+                    }`}
+                    type="button"
+                  >
+                    💳 Card
+                  </button>
+                  <button
+                    onClick={() => setPaymentType('Transfer')}
+                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
+                      paymentType === 'Transfer'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
+                    }`}
+                    type="button"
+                  >
+                    🏦 Transfer
+                  </button>
+                </div>
+              </div>
+
+              {/* Totals */}
+              <div className="space-y-3 mb-6 p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50">
+                <div className="flex justify-between text-sm text-gray-700">
+                  <span>Subtotal</span>
+                  <span className="font-semibold">${formatNumber(cartTotal)}</span>
+                </div>
+                {paymentType === 'Card' && (
+                  <div className="flex justify-between text-sm text-amber-600">
+                    <span>Card Fee (3%)</span>
+                    <span className="font-semibold">${formatNumber(convenienceFee)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xl font-bold text-gray-800 pt-3 border-t-2 border-primary/20">
+                  <span>Total</span>
+                  <span className="gradient-text">${formatNumber(totalWithFee)}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => setShowConfirmSale(true)}
+                  className="w-full rounded-2xl bg-gradient-to-r from-primary to-secondary px-6 py-4 text-sm font-bold text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  type="button"
+                  disabled={!selectedEventId || cartItems.length === 0}
+                >
+                  <span className="mr-2">💰</span> Complete Sale
+                </button>
+                <button
+                  onClick={handleClearCart}
+                  className="w-full rounded-xl border-2 border-red-200 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  type="button"
+                >
+                  Clear Cart
+                </button>
+              </div>
+
+              {eventMessage && (
+                <div className="mt-4 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200">
+                  <p className="text-xs text-center text-blue-700 font-medium">{eventMessage}</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const renderEvents = () => (
     <div className="fade-up space-y-6">
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-6 shadow-xl border border-blue-200/50">
@@ -1779,182 +2071,6 @@ export default function DashboardPage() {
                 </div>
               )
             })}
-          </div>
-        </div>
-
-        <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-green-100 text-xl">
-              💳
-            </span>
-            <div>
-              <h3 className="font-display text-xl gradient-text">POS Sales</h3>
-              <p className="text-xs text-muted">Record sales for active events</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <select
-              value={selectedEventId}
-              onChange={(event) => setSelectedEventId(event.target.value)}
-              className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm font-medium hover:border-emerald-300 transition-colors"
-            >
-              <option value="">Select active event</option>
-              <option value="general">General Sales (no event)</option>
-              {events
-                .filter((event) => event.status === 'active')
-                .map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.name}
-                  </option>
-                ))}
-            </select>
-
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="🔍 Search catalog by title, publisher, or category"
-              className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
-            />
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <input
-                type="number"
-                min={1}
-                value={addQuantity}
-                onChange={(event) => setAddQuantity(Number(event.target.value))}
-                placeholder="Quantity"
-                className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
-              />
-              <select
-                value={paymentType}
-                onChange={(event) => setPaymentType(event.target.value as Sale['paymentType'])}
-                className="w-full rounded-xl border-2 border-emerald-200 px-4 py-3 text-sm hover:border-emerald-300 transition-colors"
-              >
-                <option value="Cash">💵 Cash</option>
-                <option value="Card">💳 Card (+3%)</option>
-                <option value="Transfer">🏦 Transfer</option>
-              </select>
-            </div>
-
-            <div className="rounded-2xl border-2 border-emerald-200 overflow-hidden">
-              <div className="bg-gradient-to-r from-emerald-100 to-green-100 px-4 py-3 border-b border-emerald-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Catalog</p>
-              </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-emerald-100">
-                {filteredInventory.length ? (
-                  filteredInventory.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 hover:bg-emerald-50/50 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm">{item.title}</p>
-                        <p className="text-xs text-muted mt-1">
-                          {item.category} · Stock: {item.quantity} · ${formatNumber(item.sellingPrice)}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleAddToCart(item.id)}
-                        className="ml-3 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-4 py-2 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        type="button"
-                        disabled={item.quantity === 0}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="py-8 text-center text-xs text-muted">No matches found.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border-2 border-primary/20 overflow-hidden">
-              <div className="bg-gradient-to-r from-primary/10 to-secondary/10 px-4 py-3 border-b border-primary/20 flex items-center justify-between">
-                <p className="text-xs font-bold uppercase tracking-wider text-primaryDark">Cart</p>
-                {cartItems.length > 0 && (
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-primaryDark shadow-sm border border-primary/20">
-                    {cartItems.length} items
-                  </span>
-                )}
-              </div>
-              <div className="p-4">
-                {cartItems.length ? (
-                  <div className="space-y-3">
-                    {cartItems.map((item) => (
-                      <div key={item.itemId} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{item.title}</p>
-                          <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={item.quantity}
-                            onChange={(event) =>
-                              handleUpdateCartQuantity(item.itemId, Number(event.target.value))
-                            }
-                            className="w-16 rounded-lg border-2 border-primary/20 px-2 py-1 text-xs text-center font-bold"
-                          />
-                          <button
-                            onClick={() => handleRemoveFromCart(item.itemId)}
-                            className="text-xs font-bold text-red-600 hover:text-red-700 px-2"
-                            type="button"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="space-y-2 pt-3 border-t-2 border-primary/20">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted">Subtotal</span>
-                        <span className="font-semibold">${formatNumber(cartTotal)}</span>
-                      </div>
-                      {paymentType === 'Card' && (
-                        <div className="flex items-center justify-between text-sm text-amber-600">
-                          <span>Convenience fee (3%)</span>
-                          <span className="font-semibold">${formatNumber(convenienceFee)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between text-lg font-bold pt-2 border-t border-primary/10">
-                        <span className="gradient-text">Total</span>
-                        <span className="gradient-text">${formatNumber(totalWithFee)}</span>
-                      </div>
-                      {paymentType === 'Card' && (
-                        <p className="text-[11px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                          💳 Card payments include a 3% convenience fee.
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleClearCart}
-                      className="w-full rounded-xl border-2 border-red-200 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
-                      type="button"
-                    >
-                      Clear cart
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted text-center py-8">Cart is empty. Add items from the catalog.</p>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowConfirmSale(true)}
-              className="w-full rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-4 text-sm font-bold text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              type="button"
-              disabled={!selectedEventId || cartItems.length === 0}
-            >
-              💰 Record Sale
-            </button>
-            {eventMessage && (
-              <p className="text-xs text-center px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-medium">{eventMessage}</p>
-            )}
           </div>
         </div>
       </div>
@@ -2165,90 +2281,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
-                <p className="mt-2 text-sm text-muted">
-                  {selectedEventId === 'general'
-                    ? 'General Sales (no event)'
-                    : events.find((event) => event.id === selectedEventId)?.name ??
-                      'Selected event'}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              {cartItems.map((item) => (
-                <div key={item.itemId} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
-                  <div>
-                    <p className="font-semibold">{item.title}</p>
-                    <p className="text-xs text-muted mt-1">
-                      {item.quantity} x ${formatNumber(item.price)}
-                    </p>
-                  </div>
-                  <span className="text-lg font-bold gradient-text">
-                    ${formatNumber(item.price * item.quantity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Subtotal</span>
-                <span className="font-semibold">${formatNumber(cartTotal)}</span>
-              </div>
-              {paymentType === 'Card' && (
-                <div className="flex items-center justify-between text-sm text-amber-600">
-                  <span>Convenience fee (3%)</span>
-                  <span className="font-semibold">${formatNumber(convenienceFee)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between text-xl font-bold pt-2 border-t border-primary/10">
-                <span className="gradient-text">Total</span>
-                <span className="gradient-text">${formatNumber(totalWithFee)}</span>
-              </div>
-              {paymentType === 'Card' && (
-                <p className="text-[11px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                  💳 Card payments include a 3% convenience fee.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-8 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  await handleRecordSale()
-                  setShowConfirmSale(false)
-                }}
-                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
-                type="button"
-                disabled={isSubmittingSale}
-              >
-                {isSubmittingSale ? '⏳ Processing...' : '✓ Confirm Sale'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-indigo-50/50 p-6 shadow-xl border border-indigo-200/50">
         <div className="flex items-center gap-3 mb-6">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-2xl shadow-soft">
@@ -2315,18 +2347,21 @@ export default function DashboardPage() {
   )
 
   const catalogAgeBadgeClasses: Record<AgeCategory, string> = {
-    '0-3': 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border border-pink-200',
-    '4-6': 'bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 border border-orange-200',
-    '7-9': 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200',
-    '10-12': 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border border-purple-200',
-    '13+': 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200'
+    '0-5': 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border border-pink-200',
+    '6-9': 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200',
+    '10+': 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border border-purple-200',
+    'Adult': 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200'
   }
 
   const catalogCategoryBadgeClasses: Record<InventoryCategory, string> = {
     Books: 'bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700 border border-emerald-200',
+    'Activity Books': 'bg-gradient-to-r from-teal-100 to-teal-50 text-teal-700 border border-teal-200',
+    Cards: 'bg-gradient-to-r from-sky-100 to-sky-50 text-sky-700 border border-sky-200',
     Crafts: 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200',
     Puzzles: 'bg-gradient-to-r from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-200',
-    Gifts: 'bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700 border border-rose-200'
+    Games: 'bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 border border-orange-200',
+    Gifts: 'bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700 border border-rose-200',
+    Others: 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200'
   }
 
   const renderCatalogFormModal = (isEdit: boolean) => (
@@ -2379,31 +2414,65 @@ export default function DashboardPage() {
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors resize-none"
             />
           </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Category *</label>
-            <select
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value as InventoryCategory)}
-              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-            >
-              {['Books', 'Crafts', 'Puzzles', 'Gifts', ...inventoryCategories]
-                .filter((v, i, a) => a.indexOf(v) === i)
-                .map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Categories * (Select one or more)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {ALL_CATALOG_CATEGORIES.map((cat) => (
+                <label
+                  key={cat}
+                  className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all ${
+                    catalogCategories.includes(cat)
+                      ? 'border-primary bg-primary/10 shadow-sm'
+                      : 'border-primary/20 hover:border-primary/40'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={catalogCategories.includes(cat)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCatalogCategories((prev) => [...prev, cat])
+                      } else {
+                        setCatalogCategories((prev) => prev.filter((c) => c !== cat))
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-primary/30 text-primary focus:ring-primary/50"
+                  />
+                  <span className="text-xs font-semibold text-primaryDark">{cat}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Age Category *</label>
-            <select
-              value={catalogAge}
-              onChange={(e) => setCatalogAge(e.target.value as AgeCategory)}
-              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-            >
-              <option value="0-3">0-3 years</option>
-              <option value="4-6">4-6 years</option>
-              <option value="7-9">7-9 years</option>
-              <option value="10-12">10-12 years</option>
-              <option value="13+">13+ years</option>
-            </select>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Age Category * (Select multiple)</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(AGE_CATEGORIES) as AgeCategory[]).map((age) => (
+                <label
+                  key={age}
+                  className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all ${
+                    catalogAge.includes(age)
+                      ? 'border-primary bg-primary/5'
+                      : 'border-primary/20 hover:border-primary/40'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={catalogAge.includes(age)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setCatalogAge((prev) => [...prev, age])
+                      } else {
+                        setCatalogAge((prev) => prev.filter((a) => a !== age))
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-primary/30 text-primary focus:ring-primary/50"
+                  />
+                  <span className="text-xs font-semibold text-primaryDark">
+                    {AGE_CATEGORIES[age].title}
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Price ($) *</label>
@@ -2563,10 +2632,9 @@ export default function DashboardPage() {
             className="rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
           >
             <option value="All">All Categories</option>
-            <option value="Books">Books</option>
-            <option value="Crafts">Crafts</option>
-            <option value="Puzzles">Puzzles</option>
-            <option value="Gifts">Gifts</option>
+            {ALL_CATALOG_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -2658,12 +2726,20 @@ export default function DashboardPage() {
               <div className="flex flex-1 flex-col p-5">
                 {/* Badges row */}
                 <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[item.category]}`}>
-                    {item.category}
-                  </span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogAgeBadgeClasses[item.ageCategory]}`}>
-                    Ages {item.ageCategory}
-                  </span>
+                  {(Array.isArray(item.category) ? item.category : [item.category]).map((cat) => (
+                    <span key={cat} className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[cat] || catalogCategoryBadgeClasses.Others}`}>
+                      {cat}
+                    </span>
+                  ))}
+                  {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory]).map((age) => (
+                    <span 
+                      key={age}
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogAgeBadgeClasses[age]}`}
+                      title={AGE_CATEGORIES[age]?.range || age}
+                    >
+                      {AGE_CATEGORIES[age]?.title || age}
+                    </span>
+                  ))}
                 </div>
 
                 <h3 className="font-display text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
@@ -2775,11 +2851,12 @@ export default function DashboardPage() {
                 { id: 'home', label: 'Home', emoji: '🏠' },
                 { id: 'inventory', label: 'Inventory', emoji: '📦' },
                 { id: 'events', label: 'Events', emoji: '🎪' },
+                { id: 'pos', label: 'POS', emoji: '💳' },
                 { id: 'catalog', label: 'Catalog', emoji: '📕' }
-              ].map((item) => (
+              ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveView(item.id as typeof activeView); setShowPurgeConfirm(false) }}
+                  onClick={() => setActiveView(item.id as typeof activeView)}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
                     activeView === item.id
                       ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg scale-105'
@@ -2795,53 +2872,28 @@ export default function DashboardPage() {
 
             {/* Right Side - User Info & Actions */}
             <div className="flex items-center gap-3">
-              {/* Demo/Live Mode Toggle */}
-              <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-bold transition-colors ${demoMode ? 'text-amber-600' : 'text-muted'}`}>Demo</span>
-                <button
-                  onClick={handleToggleDemoMode}
-                  className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${demoMode ? 'bg-amber-400' : 'bg-green-500'}`}
-                  type="button"
-                  aria-label={demoMode ? 'Switch to live mode' : 'Switch to demo mode'}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${demoMode ? 'translate-x-0' : 'translate-x-5'}`}
-                  />
-                </button>
-                <span className={`text-[11px] font-bold transition-colors ${!demoMode ? 'text-green-600' : 'text-muted'}`}>Live</span>
-              </div>
-
-              {/* Purge Live Data Button - only in live mode */}
-              {!demoMode && (
-                <button
-                  onClick={() => { setShowPurgeConfirm(true); setPurgePassword(''); setPurgeError('') }}
-                  className="rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
-                  type="button"
-                >
-                  Reset Data
-                </button>
-              )}
-
-              {/* Sync Status Indicator */}
-              <div className="hidden lg:flex items-center gap-2 text-xs font-bold">
-                <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-                <span className={dataLoading ? 'text-amber-600' : 'text-green-600'}>
-                  {dataLoading ? 'Syncing...' : 'Synced'}
+              {/* Mode Indicator */}
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-50 to-green-50 border border-primary/20">
+                <span className={`h-2 w-2 rounded-full ${demoMode ? 'bg-amber-500' : 'bg-green-500'}`} />
+                <span className="text-[11px] font-bold text-primaryDark">
+                  {demoMode ? 'Demo' : 'Live'}
                 </span>
               </div>
 
-              {/* User Email - Desktop Only */}
-              <div className="hidden md:block text-sm text-right">
-                <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
-              </div>
-
-              {/* Sign Out Button - Desktop */}
-              <button
-                onClick={handleLogout}
-                className="hidden md:block rounded-full border-2 border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all duration-300 shadow-sm"
-              >
-                Sign out
-              </button>
+              {/* Settings Button - Admin Only */}
+              {userRole === 'admin' && (
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="rounded-full border-2 border-primary/30 bg-white p-2 hover:bg-primary/5 transition-all"
+                  type="button"
+                  aria-label="Settings"
+                >
+                  <svg className="h-5 w-5 text-primaryDark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
 
               {/* Mobile Hamburger Menu Button */}
               <button
@@ -2869,14 +2921,14 @@ export default function DashboardPage() {
                   { id: 'home', label: 'Home', emoji: '🏠' },
                   { id: 'inventory', label: 'Inventory', emoji: '📦' },
                   { id: 'events', label: 'Events', emoji: '🎪' },
-                { id: 'catalog', label: 'Catalog', emoji: '📕' }
-                ].map((item) => (
+                  { id: 'pos', label: 'POS', emoji: '💳' },
+                  { id: 'catalog', label: 'Catalog', emoji: '📕' }
+                ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                   <button
                     key={item.id}
                     onClick={() => {
                       setActiveView(item.id as typeof activeView)
                       setMobileMenuOpen(false)
-                      setShowPurgeConfirm(false)
                     }}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
                       activeView === item.id
@@ -2892,25 +2944,19 @@ export default function DashboardPage() {
               </nav>
 
               <div className="mt-4 pt-4 border-t border-primary/10 space-y-3">
-                <div className="px-4 text-sm">
-                  <p className="font-semibold text-primaryDark">{user?.email || 'Admin'}</p>
-                  <p className="text-xs text-muted">Signed in</p>
-                </div>
-
-                <div className="px-4">
-                  <div className={`inline-flex items-center gap-2 text-xs font-bold ${dataLoading ? 'text-amber-600' : 'text-green-600'}`}>
-                    <span className={`h-2 w-2 rounded-full ${dataLoading ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
-                    {dataLoading ? 'Syncing data...' : 'All synced'}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleLogout}
-                  className="w-full mx-4 rounded-full border-2 border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-all duration-300 shadow-sm"
-                  style={{ width: 'calc(100% - 2rem)' }}
-                >
-                  Sign out
-                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => { router.push('/settings'); setMobileMenuOpen(false) }}
+                    className="w-full mx-4 rounded-full border-2 border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-all duration-300 shadow-sm flex items-center justify-center gap-2"
+                    style={{ width: 'calc(100% - 2rem)' }}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Settings
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2928,6 +2974,8 @@ export default function DashboardPage() {
                   ? 'Inventory Management'
                   : activeView === 'catalog'
                   ? 'Catalog Management'
+                  : activeView === 'pos'
+                  ? 'Point of Sale'
                   : 'Event Management'}
               </h1>
               <p className="mt-3 text-sm text-muted max-w-2xl">
@@ -2937,7 +2985,9 @@ export default function DashboardPage() {
                   ? 'Upload, update, and manage your complete inventory with ease.'
                   : activeView === 'catalog'
                   ? 'Create, manage, and showcase your product catalog with images and details.'
-                  : 'Create events, record sales through POS, and review comprehensive summaries.'}
+                  : activeView === 'pos'
+                  ? 'Record sales for events or general transactions. Search products, manage cart, and process payments.'
+                  : 'Create events, manage dates and fees, and review event performance summaries.'}
               </p>
             </div>
 
@@ -2945,6 +2995,7 @@ export default function DashboardPage() {
             {activeView === 'inventory' && renderInventory()}
             {activeView === 'events' && renderEvents()}
             {activeView === 'catalog' && renderCatalog()}
+            {activeView === 'pos' && renderPOS()}
           </section>
         </div>
       </main>
@@ -2953,43 +3004,85 @@ export default function DashboardPage() {
       {showCreateCatalog && renderCatalogFormModal(false)}
       {editingCatalogItem && renderCatalogFormModal(true)}
 
-      {showPurgeConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in" onClick={() => setShowPurgeConfirm(false)}>
-          <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl border-2 border-red-200 animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600 text-lg">⚠</span>
-              <h4 className="font-display text-xl text-red-700">Reset All Live Data</h4>
-            </div>
-            <p className="text-sm text-muted mb-4">
-              This will permanently delete <strong>all inventory, events, and sales</strong> from Firestore. This action cannot be undone.
-            </p>
-            <label className="block text-sm font-semibold mb-1">Enter password to confirm</label>
-            <input
-              type="password"
-              value={purgePassword}
-              onChange={(e) => { setPurgePassword(e.target.value); setPurgeError('') }}
-              className="w-full rounded-xl border border-black/10 bg-cream px-4 py-3 text-sm mb-2"
-              placeholder="••••"
-              autoFocus
-            />
-            {purgeError && (
-              <p className="text-xs text-red-600 mb-2">{purgeError}</p>
-            )}
-            <div className="flex gap-3 mt-4">
+      {/* POS Confirm Sale Modal */}
+      {showConfirmSale && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {selectedEventId === 'general'
+                    ? 'General Sales (no event)'
+                    : events.find((event) => event.id === selectedEventId)?.name ??
+                      'Selected event'}
+                </p>
+              </div>
               <button
-                onClick={() => setShowPurgeConfirm(false)}
-                className="flex-1 rounded-full border-2 border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-cream transition-all"
+                onClick={() => setShowConfirmSale(false)}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              {cartItems.map((item) => (
+                <div key={item.itemId} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                  <div>
+                    <p className="font-semibold">{item.title}</p>
+                    <p className="text-xs text-muted mt-1">
+                      {item.quantity} x ${formatNumber(item.price)}
+                    </p>
+                  </div>
+                  <span className="text-lg font-bold gradient-text">
+                    ${formatNumber(item.price * item.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Subtotal</span>
+                <span className="font-semibold">${formatNumber(cartTotal)}</span>
+              </div>
+              {paymentType === 'Card' && (
+                <div className="flex items-center justify-between text-sm text-amber-600">
+                  <span>Convenience fee (3%)</span>
+                  <span className="font-semibold">${formatNumber(convenienceFee)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-xl font-bold pt-2 border-t border-primary/10">
+                <span className="gradient-text">Total</span>
+                <span className="gradient-text">${formatNumber(totalWithFee)}</span>
+              </div>
+              {paymentType === 'Card' && (
+                <p className="text-[11px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                  💳 Card payments include a 3% convenience fee.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowConfirmSale(false)}
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
                 Cancel
               </button>
               <button
-                onClick={handlePurgeLiveData}
-                disabled={purging}
-                className="flex-1 rounded-full bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-all disabled:opacity-50"
+                onClick={async () => {
+                  await handleRecordSale()
+                  setShowConfirmSale(false)
+                }}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
                 type="button"
+                disabled={isSubmittingSale}
               >
-                {purging ? 'Deleting...' : 'Delete All'}
+                {isSubmittingSale ? '⏳ Processing...' : '✓ Confirm Sale'}
               </button>
             </div>
           </div>
@@ -3046,6 +3139,25 @@ export default function DashboardPage() {
             opacity: 1;
             transform: scale(1);
           }
+        }
+
+        /* Custom Scrollbar Styles */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(to bottom, #7c3aed, #ec4899);
+          border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to bottom, #6d28d9, #db2777);
         }
 
         .gradient-text {

@@ -1,0 +1,1962 @@
+═══════════════════════════════════════════════════════════════════════════════
+                          EDUVATE KIDS PLATFORM                                
+              COMPREHENSIVE TECHNICAL IMPLEMENTATION GUIDE                     
+                                   V2
+                                                                               
+             Sections 10-16: Complete System Specifications
+═══════════════════════════════════════════════════════════════════════════════
+
+Document Version: 2.0
+Last Updated: December 31, 2025
+
+This document continues the Eduvate Kids technical implementation guide with
+the remaining sections (10-16) for complete system implementation.
+
+PREVIOUS SECTIONS (V1):
+1. Project Overview
+2. System Architecture
+3. Technology Stack
+4. Design System (Kid-Friendly Theme)
+5. Landing Page Implementation
+6. Authentication System
+7. Dashboard Overview
+8. Inventory Management
+9. Excel Upload System
+
+THIS DOCUMENT (V2):
+10. Event Management System
+11. Cashier/POS System
+12. Analytics & Reporting
+13. Complete Database Schema
+14. API Specifications
+15. Deployment Guide
+16. Security Implementation
+
+═══════════════════════════════════════════════════════════════════════════════
+10. EVENT MANAGEMENT SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+OVERVIEW:
+Events are core to Eduvate Kids operations - book fairs, school visits, 
+community events where books are sold. Each event tracks its own sales, 
+expenses, and profitability.
+
+EVENT LIFECYCLE:
+1. Create Event → 2. Active/Open → 3. Process Sales → 4. Close Event → 5. View Analytics
+
+─────────────────────────────────────────────────────────────────────────────
+10.1 EVENT CREATION INTERFACE
+─────────────────────────────────────────────────────────────────────────────
+
+PAGE: /dashboard/events/new
+
+```typescript
+// app/dashboard/events/new/page.tsx
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { 
+  Calendar, MapPin, DollarSign, Clock, 
+  Save, ArrowLeft, Sparkles 
+} from 'lucide-react'
+import { toast } from 'sonner'
+
+export default function NewEventPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    date: '',
+    location: '',
+    vendorCost: '',
+    eventHours: '',
+    contactPerson: '',
+    expectedAttendees: ''
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          vendorCost: parseFloat(formData.vendorCost),
+          eventHours: parseFloat(formData.eventHours),
+          expectedAttendees: parseInt(formData.expectedAttendees)
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to create event')
+
+      const event = await response.json()
+      
+      toast.success('Event created successfully! 🎉', {
+        description: `${event.name} is ready for sales`
+      })
+      
+      router.push(`/dashboard/events/${event.id}`)
+    } catch (error) {
+      toast.error('Failed to create event')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="p-8 bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 min-h-screen">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-4 hover:bg-white/50"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Events
+          </Button>
+          
+          <div className="flex items-center gap-3">
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-400 rounded-2xl flex items-center justify-center text-2xl"
+            >
+              🎪
+            </motion.div>
+            <div>
+              <h1 className="text-4xl font-bold text-gray-800">
+                Create New Event
+              </h1>
+              <p className="text-gray-600">
+                Set up a new book fair or community event
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Form Card */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="bg-white rounded-3xl shadow-xl p-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Event Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-lg font-semibold text-gray-700">
+                  Event Name *
+                </Label>
+                <div className="relative">
+                  <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 w-5 h-5" />
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g., Eid Book Fair 2025"
+                    className="pl-11 h-12 rounded-xl border-2 focus:border-purple-400"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-lg font-semibold text-gray-700">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Describe the event..."
+                  className="rounded-xl border-2 focus:border-purple-400 min-h-[100px]"
+                />
+              </div>
+
+              {/* Date and Location Row */}
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="date" className="text-lg font-semibold text-gray-700">
+                    Event Date *
+                  </Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 w-5 h-5" />
+                    <Input
+                      id="date"
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="pl-11 h-12 rounded-xl border-2 focus:border-purple-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="location" className="text-lg font-semibold text-gray-700">
+                    Location *
+                  </Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 w-5 h-5" />
+                    <Input
+                      id="location"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="e.g., Community Center"
+                      className="pl-11 h-12 rounded-xl border-2 focus:border-purple-400"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cost and Hours Row */}
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="vendorCost" className="text-lg font-semibold text-gray-700">
+                    Vendor Cost Paid ($) *
+                  </Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 w-5 h-5" />
+                    <Input
+                      id="vendorCost"
+                      type="number"
+                      step="0.01"
+                      value={formData.vendorCost}
+                      onChange={(e) => setFormData({ ...formData, vendorCost: e.target.value })}
+                      placeholder="500.00"
+                      className="pl-11 h-12 rounded-xl border-2 focus:border-purple-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="eventHours" className="text-lg font-semibold text-gray-700">
+                    Event Duration (hours) *
+                  </Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 w-5 h-5" />
+                    <Input
+                      id="eventHours"
+                      type="number"
+                      step="0.5"
+                      value={formData.eventHours}
+                      onChange={(e) => setFormData({ ...formData, eventHours: e.target.value })}
+                      placeholder="8"
+                      className="pl-11 h-12 rounded-xl border-2 focus:border-purple-400"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact and Attendees Row */}
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="contactPerson" className="text-lg font-semibold text-gray-700">
+                    Contact Person
+                  </Label>
+                  <Input
+                    id="contactPerson"
+                    value={formData.contactPerson}
+                    onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                    placeholder="Name and phone"
+                    className="h-12 rounded-xl border-2 focus:border-purple-400"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="expectedAttendees" className="text-lg font-semibold text-gray-700">
+                    Expected Attendees
+                  </Label>
+                  <Input
+                    id="expectedAttendees"
+                    type="number"
+                    value={formData.expectedAttendees}
+                    onChange={(e) => setFormData({ ...formData, expectedAttendees: e.target.value })}
+                    placeholder="200"
+                    className="h-12 rounded-xl border-2 focus:border-purple-400"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-14 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold text-lg shadow-lg"
+                >
+                  {loading ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="mr-2"
+                      >
+                        ⏳
+                      </motion.div>
+                      Creating Event...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5 mr-2" />
+                      Create Event
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+            </form>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+```
+
+─────────────────────────────────────────────────────────────────────────────
+10.2 EVENT LIST & MANAGEMENT
+─────────────────────────────────────────────────────────────────────────────
+
+PAGE: /dashboard/events
+
+```typescript
+// app/dashboard/events/page.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { 
+  Calendar, MapPin, DollarSign, TrendingUp, 
+  Plus, MoreVertical, Edit, Trash, Eye,
+  Clock, Users
+} from 'lucide-react'
+import Link from 'next/link'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+
+export default function EventsPage() {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchEvents()
+  }, [])
+
+  const fetchEvents = async () => {
+    const response = await fetch('/api/events')
+    const data = await response.json()
+    setEvents(data)
+    setLoading(false)
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'from-green-400 to-emerald-600'
+      case 'upcoming': return 'from-blue-400 to-cyan-600'
+      case 'completed': return 'from-gray-400 to-gray-600'
+      default: return 'from-purple-400 to-pink-600'
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const colors = {
+      active: 'bg-green-100 text-green-800',
+      upcoming: 'bg-blue-100 text-blue-800',
+      completed: 'bg-gray-100 text-gray-800'
+    }
+    
+    return (
+      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colors[status]}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    )
+  }
+
+  return (
+    <div className="p-8 bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 flex items-center justify-between"
+        >
+          <div>
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">
+              Events 🎪
+            </h1>
+            <p className="text-gray-600">
+              Manage book fairs and community events
+            </p>
+          </div>
+
+          <Link href="/dashboard/events/new">
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button 
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl shadow-lg"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create Event
+              </Button>
+            </motion.div>
+          </Link>
+        </motion.div>
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {[
+            { label: 'Total Events', value: events.length, icon: Calendar, color: 'purple' },
+            { label: 'Active Now', value: events.filter(e => e.status === 'active').length, icon: TrendingUp, color: 'green' },
+            { label: 'Upcoming', value: events.filter(e => e.status === 'upcoming').length, icon: Clock, color: 'blue' },
+            { label: 'Total Revenue', value: `$${events.reduce((sum, e) => sum + (e.totalRevenue || 0), 0).toLocaleString()}`, icon: DollarSign, color: 'amber' }
+          ].map((stat, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+            >
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow rounded-2xl">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                      <p className="text-3xl font-bold text-gray-800">{stat.value}</p>
+                    </div>
+                    <div className={`p-3 bg-gradient-to-br from-${stat.color}-400 to-${stat.color}-600 rounded-xl`}>
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Events Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {events.map((event, idx) => (
+            <motion.div
+              key={event.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              whileHover={{ y: -5 }}
+            >
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all rounded-2xl overflow-hidden">
+                {/* Event Header with Gradient */}
+                <div className={`h-24 bg-gradient-to-r ${getStatusColor(event.status)} p-6 flex items-center justify-between`}>
+                  <div className="text-white">
+                    <h3 className="text-xl font-bold mb-1">{event.name}</h3>
+                    {getStatusBadge(event.status)}
+                  </div>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                        <MoreVertical className="w-5 h-5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem>
+                        <Eye className="w-4 h-4 mr-2" />
+                        View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Event
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-600">
+                        <Trash className="w-4 h-4 mr-2" />
+                        Delete Event
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <CardContent className="p-6 space-y-4">
+                  {/* Event Details */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <Calendar className="w-4 h-4" />
+                      <span>{new Date(event.date).toLocaleDateString()}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <MapPin className="w-4 h-4" />
+                      <span>{event.location}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <Clock className="w-4 h-4" />
+                      <span>{event.eventHours} hours</span>
+                    </div>
+
+                    {event.expectedAttendees && (
+                      <div className="flex items-center gap-3 text-gray-600">
+                        <Users className="w-4 h-4" />
+                        <span>{event.expectedAttendees} expected</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stats */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Vendor Cost</p>
+                        <p className="text-lg font-bold text-gray-800">
+                          ${event.vendorCost.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Revenue</p>
+                        <p className="text-lg font-bold text-green-600">
+                          ${(event.totalRevenue || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {event.totalRevenue && (
+                      <div className="mt-3">
+                        <p className="text-xs text-gray-500 mb-1">Profit</p>
+                        <p className={`text-xl font-bold ${
+                          event.totalRevenue - event.vendorCost > 0 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          ${((event.totalRevenue || 0) - event.vendorCost).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-4 flex gap-2">
+                    <Link href={`/dashboard/pos?eventId=${event.id}`} className="flex-1">
+                      <Button 
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl"
+                      >
+                        Open POS
+                      </Button>
+                    </Link>
+                    <Link href={`/dashboard/events/${event.id}`}>
+                      <Button variant="outline" className="rounded-xl">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {events.length === 0 && !loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-20"
+          >
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="text-8xl mb-4"
+            >
+              🎪
+            </motion.div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              No events yet
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Create your first book fair or community event
+            </p>
+            <Link href="/dashboard/events/new">
+              <Button 
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create Event
+              </Button>
+            </Link>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+─────────────────────────────────────────────────────────────────────────────
+10.3 EVENT API ENDPOINTS
+─────────────────────────────────────────────────────────────────────────────
+
+```typescript
+// app/api/events/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+
+// GET - List all events
+export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const events = await prisma.event.findMany({
+      include: {
+        _count: {
+          select: {
+            transactions: true,
+            eventBooks: true
+          }
+        }
+      },
+      orderBy: { date: 'desc' }
+    })
+
+    // Calculate total revenue for each event
+    const eventsWithRevenue = await Promise.all(
+      events.map(async (event) => {
+        const transactions = await prisma.transaction.findMany({
+          where: { eventId: event.id }
+        })
+        
+        const totalRevenue = transactions.reduce((sum, t) => sum + t.total, 0)
+        
+        return {
+          ...event,
+          totalRevenue,
+          transactionCount: transactions.length
+        }
+      })
+    )
+
+    return NextResponse.json(eventsWithRevenue)
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch events' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Create new event
+export async function POST(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const data = await req.json()
+
+    // Validate required fields
+    if (!data.name || !data.date || !data.vendorCost || !data.eventHours) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Determine event status based on date
+    const eventDate = new Date(data.date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    let status = 'upcoming'
+    if (eventDate.toDateString() === today.toDateString()) {
+      status = 'active'
+    } else if (eventDate < today) {
+      status = 'completed'
+    }
+
+    const event = await prisma.event.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        date: new Date(data.date),
+        location: data.location,
+        vendorCost: data.vendorCost,
+        eventHours: data.eventHours,
+        contactPerson: data.contactPerson,
+        expectedAttendees: data.expectedAttendees,
+        status: status
+      }
+    })
+
+    return NextResponse.json(event, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to create event' },
+      { status: 500 }
+    )
+  }
+}
+
+// app/api/events/[id]/route.ts
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: params.id },
+      include: {
+        transactions: {
+          include: {
+            eventBooks: {
+              include: {
+                book: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        eventBooks: {
+          include: {
+            book: {
+              include: {
+                publisher: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    }
+
+    // Calculate statistics
+    const stats = {
+      totalRevenue: event.transactions.reduce((sum, t) => sum + t.total, 0),
+      totalTransactions: event.transactions.length,
+      booksSold: event.eventBooks.reduce((sum, eb) => sum + eb.quantity, 0),
+      uniqueBooks: event.eventBooks.length,
+      profit: event.transactions.reduce((sum, t) => sum + t.total, 0) - event.vendorCost
+    }
+
+    return NextResponse.json({ ...event, stats })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch event' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const data = await req.json()
+
+    const event = await prisma.event.update({
+      where: { id: params.id },
+      data: {
+        name: data.name,
+        description: data.description,
+        date: data.date ? new Date(data.date) : undefined,
+        location: data.location,
+        vendorCost: data.vendorCost,
+        eventHours: data.eventHours,
+        contactPerson: data.contactPerson,
+        expectedAttendees: data.expectedAttendees,
+        status: data.status
+      }
+    })
+
+    return NextResponse.json(event)
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to update event' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    // Check if event has transactions
+    const transactionCount = await prisma.transaction.count({
+      where: { eventId: params.id }
+    })
+
+    if (transactionCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete event with transactions' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.event.delete({
+      where: { id: params.id }
+    })
+
+    return NextResponse.json({ message: 'Event deleted successfully' })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to delete event' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+11. CASHIER/POS SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+The Point of Sale (POS) system handles book sales during events with support
+for cash and card payments, including card processing fee calculation.
+
+─────────────────────────────────────────────────────────────────────────────
+11.1 POS INTERFACE
+─────────────────────────────────────────────────────────────────────────────
+
+PAGE: /dashboard/pos
+
+```typescript
+// app/dashboard/pos/page.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Search, ShoppingCart, Plus, Minus, Trash2,
+  CreditCard, Banknote, Check, X, Percent
+} from 'lucide-react'
+import { toast } from 'sonner'
+
+interface CartItem {
+  book: any
+  quantity: number
+}
+
+export default function POSPage() {
+  const searchParams = useSearchParams()
+  const eventId = searchParams.get('eventId')
+  
+  const [event, setEvent] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash')
+  const [cardFeePercent, setCardFeePercent] = useState('3')
+  const [processing, setProcessing] = useState(false)
+
+  useEffect(() => {
+    if (eventId) {
+      fetchEvent()
+    }
+  }, [eventId])
+
+  const fetchEvent = async () => {
+    const response = await fetch(`/api/events/${eventId}`)
+    const data = await response.json()
+    setEvent(data)
+  }
+
+  const searchBooks = async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    const response = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`)
+    const data = await response.json()
+    setSearchResults(data)
+  }
+
+  const addToCart = (book: any) => {
+    const existingItem = cart.find(item => item.book.id === book.id)
+    
+    if (existingItem) {
+      if (existingItem.quantity >= book.quantity) {
+        toast.error('Insufficient stock')
+        return
+      }
+      setCart(cart.map(item =>
+        item.book.id === book.id
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ))
+    } else {
+      setCart([...cart, { book, quantity: 1 }])
+    }
+    
+    toast.success(`Added ${book.title}`)
+  }
+
+  const updateQuantity = (bookId: string, newQuantity: number) => {
+    if (newQuantity === 0) {
+      removeFromCart(bookId)
+      return
+    }
+
+    const item = cart.find(item => item.book.id === bookId)
+    if (item && newQuantity > item.book.quantity) {
+      toast.error('Insufficient stock')
+      return
+    }
+
+    setCart(cart.map(item =>
+      item.book.id === bookId
+        ? { ...item, quantity: newQuantity }
+        : item
+    ))
+  }
+
+  const removeFromCart = (bookId: string) => {
+    setCart(cart.filter(item => item.book.id !== bookId))
+  }
+
+  const calculateSubtotal = () => {
+    return cart.reduce((sum, item) => sum + (item.book.sellingPrice * item.quantity), 0)
+  }
+
+  const calculateCardFee = () => {
+    if (paymentMethod !== 'card') return 0
+    const subtotal = calculateSubtotal()
+    return subtotal * (parseFloat(cardFeePercent) / 100)
+  }
+
+  const calculateTotal = () => {
+    return calculateSubtotal() + calculateCardFee()
+  }
+
+  const processTransaction = async () => {
+    if (cart.length === 0) {
+      toast.error('Cart is empty')
+      return
+    }
+
+    setProcessing(true)
+
+    try {
+      const response = await fetch('/api/pos/transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          items: cart.map(item => ({
+            bookId: item.book.id,
+            quantity: item.quantity,
+            unitPrice: item.book.sellingPrice
+          })),
+          paymentMethod,
+          cardFeePercent: paymentMethod === 'card' ? parseFloat(cardFeePercent) : 0,
+          subtotal: calculateSubtotal(),
+          cardFee: calculateCardFee(),
+          total: calculateTotal()
+        })
+      })
+
+      if (!response.ok) throw new Error('Transaction failed')
+
+      const transaction = await response.json()
+
+      toast.success('Transaction completed! 🎉', {
+        description: `Receipt #${transaction.id.slice(0, 8)}`
+      })
+
+      // Clear cart
+      setCart([])
+      setSearchQuery('')
+      setSearchResults([])
+      
+      // Refresh event data
+      fetchEvent()
+    } catch (error) {
+      toast.error('Transaction failed')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  if (!event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="text-6xl mb-4"
+          >
+            ⏳
+          </motion.div>
+          <p className="text-gray-600">Loading event...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-1">
+                  🛒 Point of Sale
+                </h1>
+                <p className="text-gray-600">Event: {event.name}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Today's Sales</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${event.stats?.totalRevenue.toLocaleString() || '0.00'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left: Product Search */}
+          <div className="lg:col-span-2">
+            <Card className="border-0 shadow-lg rounded-2xl">
+              <CardContent className="p-6">
+                {/* Search Bar */}
+                <div className="relative mb-6">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      searchBooks(e.target.value)
+                    }}
+                    placeholder="Search books by title, ISBN, or category..."
+                    className="pl-12 h-14 text-lg rounded-xl border-2 focus:border-purple-400"
+                  />
+                </div>
+
+                {/* Search Results */}
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {searchResults.map((book: any, idx) => (
+                    <motion.div
+                      key={book.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                    >
+                      <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:shadow-md transition-shadow">
+                        {/* Book Cover */}
+                        <img
+                          src={book.coverImage || '/placeholder-book.png'}
+                          alt={book.title}
+                          className="w-16 h-20 object-cover rounded-lg shadow-md"
+                        />
+
+                        {/* Book Info */}
+                        <div className="flex-1">
+                          <h3 className="font-bold text-gray-800">{book.title}</h3>
+                          <p className="text-sm text-gray-600">{book.publisher?.name}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-lg font-bold text-purple-600">
+                              ${book.sellingPrice.toFixed(2)}
+                            </span>
+                            <span className={`text-sm ${
+                              book.quantity < 5 ? 'text-red-600' :
+                              book.quantity < 15 ? 'text-amber-600' :
+                              'text-green-600'
+                            }`}>
+                              Stock: {book.quantity}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Add Button */}
+                        <Button
+                          onClick={() => addToCart(book)}
+                          disabled={book.quantity === 0}
+                          className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {searchQuery && searchResults.length === 0 && (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">No books found</p>
+                    </div>
+                  )}
+
+                  {!searchQuery && (
+                    <div className="text-center py-12">
+                      <motion.div
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="text-6xl mb-4"
+                      >
+                        🔍
+                      </motion.div>
+                      <p className="text-gray-500">Search for books to add to cart</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: Shopping Cart */}
+          <div>
+            <Card className="border-0 shadow-lg rounded-2xl sticky top-6">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <ShoppingCart className="w-6 h-6 text-purple-600" />
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    Cart ({cart.length})
+                  </h2>
+                </div>
+
+                {/* Cart Items */}
+                <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto">
+                  <AnimatePresence>
+                    {cart.map((item) => (
+                      <motion.div
+                        key={item.book.id}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="p-3 bg-gray-50 rounded-xl"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800 text-sm">
+                              {item.book.title}
+                            </h4>
+                            <p className="text-xs text-gray-600">
+                              ${item.book.sellingPrice.toFixed(2)} each
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeFromCart(item.book.id)}
+                            className="h-8 w-8 text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => updateQuantity(item.book.id, item.quantity - 1)}
+                              className="h-8 w-8 rounded-lg"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="w-8 text-center font-semibold">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => updateQuantity(item.book.id, item.quantity + 1)}
+                              className="h-8 w-8 rounded-lg"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <span className="font-bold text-purple-600">
+                            ${(item.book.sellingPrice * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {cart.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400">Cart is empty</p>
+                    </div>
+                  )}
+                </div>
+
+                {cart.length > 0 && (
+                  <>
+                    {/* Payment Method */}
+                    <div className="mb-6">
+                      <p className="text-sm font-semibold text-gray-700 mb-3">
+                        Payment Method
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                          onClick={() => setPaymentMethod('cash')}
+                          className={`rounded-xl ${
+                            paymentMethod === 'cash'
+                              ? 'bg-gradient-to-r from-emerald-600 to-green-600'
+                              : ''
+                          }`}
+                        >
+                          <Banknote className="w-4 h-4 mr-2" />
+                          Cash
+                        </Button>
+                        <Button
+                          variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                          onClick={() => setPaymentMethod('card')}
+                          className={`rounded-xl ${
+                            paymentMethod === 'card'
+                              ? 'bg-gradient-to-r from-blue-600 to-cyan-600'
+                              : ''
+                          }`}
+                        >
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Card
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Card Fee Input */}
+                    {paymentMethod === 'card' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-6"
+                      >
+                        <p className="text-sm font-semibold text-gray-700 mb-2">
+                          Card Processing Fee (%)
+                        </p>
+                        <div className="relative">
+                          <Percent className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <Input
+                            type="number"
+                            step="0.1"
+                            value={cardFeePercent}
+                            onChange={(e) => setCardFeePercent(e.target.value)}
+                            className="pl-10 h-11 rounded-xl border-2"
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Totals */}
+                    <div className="space-y-3 mb-6 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
+                      <div className="flex justify-between text-gray-700">
+                        <span>Subtotal:</span>
+                        <span className="font-semibold">
+                          ${calculateSubtotal().toFixed(2)}
+                        </span>
+                      </div>
+
+                      {paymentMethod === 'card' && (
+                        <div className="flex justify-between text-gray-700">
+                          <span>Card Fee ({cardFeePercent}%):</span>
+                          <span className="font-semibold">
+                            ${calculateCardFee().toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-xl font-bold text-gray-800 pt-3 border-t-2 border-purple-200">
+                        <span>TOTAL:</span>
+                        <span className="text-purple-600">
+                          ${calculateTotal().toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Complete Transaction Button */}
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Button
+                        onClick={processTransaction}
+                        disabled={processing}
+                        className="w-full h-14 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-bold text-lg shadow-lg"
+                      >
+                        {processing ? (
+                          <>
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                              className="mr-2"
+                            >
+                              ⏳
+                            </motion.div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-5 h-5 mr-2" />
+                            Complete Transaction
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+─────────────────────────────────────────────────────────────────────────────
+11.2 POS API ENDPOINTS
+─────────────────────────────────────────────────────────────────────────────
+
+```typescript
+// app/api/pos/transaction/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const data = await req.json()
+
+    // Validate required fields
+    if (!data.eventId || !data.items || data.items.length === 0) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    // Start transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Verify stock availability and update stock
+      for (const item of data.items) {
+        const book = await tx.book.findUnique({
+          where: { id: item.bookId }
+        })
+
+        if (!book) {
+          throw new Error(`Book ${item.bookId} not found`)
+        }
+
+        if (book.quantity < item.quantity) {
+          throw new Error(`Insufficient stock for ${book.title}`)
+        }
+
+        // Deduct stock
+        await tx.book.update({
+          where: { id: item.bookId },
+          data: {
+            quantity: {
+              decrement: item.quantity
+            }
+          }
+        })
+
+        // Create or update event_book record
+        await tx.eventBook.upsert({
+          where: {
+            eventId_bookId: {
+              eventId: data.eventId,
+              bookId: item.bookId
+            }
+          },
+          update: {
+            quantity: {
+              increment: item.quantity
+            }
+          },
+          create: {
+            eventId: data.eventId,
+            bookId: item.bookId,
+            quantity: item.quantity
+          }
+        })
+      }
+
+      // Create transaction record
+      const transaction = await tx.transaction.create({
+        data: {
+          eventId: data.eventId,
+          paymentMethod: data.paymentMethod,
+          subtotal: data.subtotal,
+          cardFee: data.cardFee || 0,
+          cardFeePercent: data.cardFeePercent || 0,
+          total: data.total,
+          userId: session.user.id
+        }
+      })
+
+      return transaction
+    })
+
+    return NextResponse.json(result, { status: 201 })
+  } catch (error) {
+    console.error('Transaction error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Transaction failed' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+12. ANALYTICS & REPORTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Comprehensive reporting system for business insights.
+
+─────────────────────────────────────────────────────────────────────────────
+12.1 ANALYTICS API
+─────────────────────────────────────────────────────────────────────────────
+
+```typescript
+// app/api/dashboard/stats/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    // Parallel queries for performance
+    const [
+      totalBooks,
+      lowStockBooks,
+      activeEvents,
+      salesByCategory,
+      bestSellers,
+      recentTransactions,
+      totalValue
+    ] = await Promise.all([
+      // Total books count
+      prisma.book.count(),
+
+      // Low stock books (< 15)
+      prisma.book.count({
+        where: { quantity: { lt: 15 } }
+      }),
+
+      // Active events
+      prisma.event.count({
+        where: { status: 'active' }
+      }),
+
+      // Sales by category
+      prisma.eventBook.groupBy({
+        by: ['bookId'],
+        _sum: {
+          quantity: true
+        }
+      }).then(async (results) => {
+        const books = await prisma.book.findMany({
+          where: {
+            id: { in: results.map(r => r.bookId) }
+          },
+          select: { id: true, category: true }
+        })
+
+        const categoryMap = new Map(books.map(b => [b.id, b.category]))
+        const categorySums: Record<string, number> = {}
+
+        results.forEach(r => {
+          const category = categoryMap.get(r.bookId) || 'Other'
+          categorySums[category] = (categorySums[category] || 0) + (r._sum.quantity || 0)
+        })
+
+        const total = Object.values(categorySums).reduce((sum, val) => sum + val, 0)
+
+        return Object.entries(categorySums).map(([name, value]) => ({
+          name,
+          value: Math.round((value / total) * 100)
+        }))
+      }),
+
+      // Best sellers (top 10 across all events)
+      prisma.eventBook.groupBy({
+        by: ['bookId'],
+        _sum: {
+          quantity: true
+        },
+        orderBy: {
+          _sum: {
+            quantity: 'desc'
+          }
+        },
+        take: 10
+      }).then(async (results) => {
+        const books = await prisma.book.findMany({
+          where: {
+            id: { in: results.map(r => r.bookId) }
+          },
+          include: {
+            publisher: true
+          }
+        })
+
+        return results.map(r => {
+          const book = books.find(b => b.id === r.bookId)
+          return {
+            title: book?.title || 'Unknown',
+            cover: book?.coverImage || null,
+            publisher: book?.publisher?.name || 'Unknown',
+            soldQuantity: r._sum.quantity || 0,
+            revenue: (r._sum.quantity || 0) * (book?.sellingPrice || 0)
+          }
+        })
+      }),
+
+      // Recent transactions (last 10)
+      prisma.transaction.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          event: true
+        }
+      }).then(transactions =>
+        transactions.map(t => ({
+          description: `${t.event.name} - ${t.paymentMethod}`,
+          amount: `$${t.total.toFixed(2)}`,
+          date: new Date(t.createdAt).toLocaleDateString(),
+          type: 'event'
+        }))
+      ),
+
+      // Total inventory value
+      prisma.book.aggregate({
+        _sum: {
+          quantity: true
+        }
+      }).then(async (result) => {
+        const books = await prisma.book.findMany({
+          select: { quantity: true, sellingPrice: true }
+        })
+        return books.reduce((sum, book) => sum + (book.quantity * book.sellingPrice), 0)
+      })
+    ])
+
+    return NextResponse.json({
+      totalBooks,
+      lowStock: lowStockBooks,
+      activeEvents,
+      totalValue,
+      salesByCategory,
+      bestSellers,
+      recentTransactions
+    })
+  } catch (error) {
+    console.error('Dashboard stats error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch dashboard stats' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+13. COMPLETE DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+```prisma
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Authentication
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  password      String
+  role          String    @default("admin")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  transactions  Transaction[]
+}
+
+// Publishers
+model Publisher {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  discountPercentage Float   @default(0)
+  contactEmail      String?
+  contactPhone      String?
+  website           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  books             Book[]
+}
+
+// Books/Products
+model Book {
+  id                String   @id @default(uuid())
+  title             String
+  isbn              String?
+  author            String?
+  description       String?
+  category          String   // Books, Crafts, Puzzles, Gifts
+  publisherId       String
+  rrp               Float    // Recommended Retail Price
+  discountPercentage Float   @default(0)
+  sellingPrice      Float
+  quantity          Int      @default(0)
+  ageRange          String?
+  coverImage        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  publisher         Publisher   @relation(fields: [publisherId], references: [id])
+  eventBooks        EventBook[]
+  arrivals          Arrival[]
+  
+  @@unique([title, publisherId])
+}
+
+// Events (Book Fairs, Community Events)
+model Event {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  date              DateTime
+  location          String
+  vendorCost        Float    // Cost paid to venue/vendor
+  eventHours        Float    // Duration in hours
+  contactPerson     String?
+  expectedAttendees Int?
+  status            String   @default("upcoming") // upcoming, active, completed
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  transactions      Transaction[]
+  eventBooks        EventBook[]
+}
+
+// Books sold at events (junction table with quantities)
+model EventBook {
+  id        String   @id @default(uuid())
+  eventId   String
+  bookId    String
+  quantity  Int      @default(0) // Total sold at this event
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  book      Book  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  
+  @@unique([eventId, bookId])
+}
+
+// Transactions (individual sales)
+model Transaction {
+  id              String   @id @default(uuid())
+  eventId         String
+  userId          String
+  paymentMethod   String   // cash, card
+  subtotal        Float
+  cardFee         Float    @default(0)
+  cardFeePercent  Float    @default(0)
+  total           Float
+  createdAt       DateTime @default(now())
+  
+  event           Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user            User  @relation(fields: [userId], references: [id])
+}
+
+// Stock arrivals/updates
+model Arrival {
+  id          String   @id @default(uuid())
+  bookId      String
+  quantity    Int
+  publisherId String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  
+  book        Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+// Low stock alerts
+model LowStockAlert {
+  id          String   @id @default(uuid())
+  bookId      String
+  currentStock Int
+  threshold   Int      @default(5)
+  severity    String   // critical, low, normal
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+}
+```
+
+DATABASE SETUP COMMANDS:
+```bash
+# Install Prisma
+npm install prisma @prisma/client
+
+# Initialize Prisma
+npx prisma init
+
+# Create migration
+npx prisma migrate dev --name init
+
+# Generate Prisma Client
+npx prisma generate
+
+# Seed database (optional)
+npx prisma db seed
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+14. API SPECIFICATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+COMPLETE API REFERENCE:
+
+AUTHENTICATION ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+POST   /api/auth/[...nextauth]     NextAuth.js authentication
+GET    /api/auth/session            Get current session
+POST   /api/auth/signout            Sign out user
+
+BOOKS/INVENTORY ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GET    /api/books                   List all books
+POST   /api/books                   Create book
+GET    /api/books/:id               Get book details
+PUT    /api/books/:id               Update book
+DELETE /api/books/:id               Delete book
+GET    /api/books/search?q=...      Search books
+POST   /api/inventory/upload        Upload Excel file
+POST   /api/inventory/:id/arrival   Add new stock arrival
+PUT    /api/inventory/:id/update    Update stock (sales)
+
+EVENTS ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GET    /api/events                  List all events
+POST   /api/events                  Create event
+GET    /api/events/:id              Get event details with stats
+PUT    /api/events/:id              Update event
+DELETE /api/events/:id              Delete event
+
+POS ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+POST   /api/pos/transaction         Process sale transaction
+
+ANALYTICS ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GET    /api/dashboard/stats         Dashboard statistics
+GET    /api/analytics/bestsellers   Best selling books
+GET    /api/analytics/low-stock     Low stock items
+
+PUBLISHERS ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GET    /api/publishers              List all publishers
+POST   /api/publishers              Create publisher
+GET    /api/publishers/:id          Get publisher
+PUT    /api/publishers/:id          Update publisher
+DELETE /api/publishers/:id          Delete publisher
+
+═══════════════════════════════════════════════════════════════════════════════
+15. DEPLOYMENT GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: PREPARE FOR DEPLOYMENT
+─────────────────────────────────────────────────────────────────────────────
+
+1. Environment Variables (.env.production):
+```bash
+# Database
+DATABASE_URL="postgresql://user:password@host:5432/eduvatekids"
+
+# NextAuth
+NEXTAUTH_URL="https://eduvatekids.com"
+NEXTAUTH_SECRET="your-secret-key-here"
+
+# File Storage
+CLOUDFLARE_R2_ENDPOINT="..."
+CLOUDFLARE_R2_ACCESS_KEY="..."
+CLOUDFLARE_R2_SECRET_KEY="..."
+```
+
+2. Build Application:
+```bash
+npm run build
+```
+
+3. Test Production Build Locally:
+```bash
+npm run start
+```
+
+STEP 2: DATABASE DEPLOYMENT (Railway)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Sign up at railway.app
+2. Create new project → PostgreSQL
+3. Copy DATABASE_URL from Railway
+4. Run migrations:
+```bash
+DATABASE_URL="..." npx prisma migrate deploy
+```
+
+STEP 3: FRONTEND DEPLOYMENT (Vercel)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Push code to GitHub
+2. Import project in Vercel
+3. Configure environment variables
+4. Deploy
+
+STEP 4: FILE STORAGE (Cloudflare R2)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Create R2 bucket in Cloudflare dashboard
+2. Configure CORS for uploads
+3. Add credentials to environment
+
+═══════════════════════════════════════════════════════════════════════════════
+16. SECURITY IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+SECURITY CHECKLIST:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+☑ Password hashing (bcrypt with 12 rounds)
+☑ JWT tokens for authentication
+☑ HTTPS only in production
+☑ CSRF protection (NextAuth built-in)
+☑ Input validation and sanitization
+☑ SQL injection prevention (Prisma ORM)
+☑ Rate limiting (500 requests/min per IP)
+☑ File upload validation (.xlsx only, max 10MB)
+☑ Environment variables for secrets
+☑ Session timeout (30 days)
+☑ Secure HTTP headers
+☑ Content Security Policy
+☑ Regular dependency updates
+
+MIDDLEWARE PROTECTION:
+```typescript
+// middleware.ts
+import { withAuth } from 'next-auth/middleware'
+
+export default withAuth({
+  callbacks: {
+    authorized: ({ token }) => !!token
+  }
+})
+
+export const config = {
+  matcher: [
+    '/dashboard/:path*',
+    '/api/:path*'
+  ]
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF EDUVATE KIDS TECHNICAL IMPLEMENTATION GUIDE V2
+═══════════════════════════════════════════════════════════════════════════════
+
+This completes the comprehensive technical implementation guide for Eduvate Kids
+platform with all sections (1-16) covered across V1 and V2.
+
+COMPLETE DOCUMENTATION SET:
+• Eduvate_Kids_Technical_Implementation_Guide.txt (V1: Sections 1-9)
+• Eduvate_Kids_Technical_Implementation_Guide_v2.txt (V2: Sections 10-16)
+• Eduvate_Kids_Process_Flowcharts.txt (All visual diagrams)
+
+Ready for professional implementation! 🚀📚🌙
+
+Document Version: 2.0
+Date: December 31, 2025

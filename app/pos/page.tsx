@@ -60,6 +60,8 @@ export default function POSPage() {
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
   const [message, setMessage] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [discount, setDiscount] = useState(0)
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage')
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -112,8 +114,19 @@ export default function POSPage() {
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cartItems]
   )
-  const convenienceFee = Number((cartTotal * convenienceFeeRate).toFixed(2))
-  const totalWithFee = Number((cartTotal + (paymentType === 'Card' ? convenienceFee : 0)).toFixed(2))
+  
+  const discountAmount = useMemo(() => {
+    if (discount <= 0) return 0
+    if (discountType === 'percentage') {
+      const percentage = Math.min(100, Math.max(0, discount))
+      return Number((cartTotal * (percentage / 100)).toFixed(2))
+    }
+    return Math.min(cartTotal, Math.max(0, discount))
+  }, [cartTotal, discount, discountType])
+  
+  const subtotalAfterDiscount = Number((cartTotal - discountAmount).toFixed(2))
+  const convenienceFee = Number((subtotalAfterDiscount * convenienceFeeRate).toFixed(2))
+  const totalWithFee = Number((subtotalAfterDiscount + (paymentType === 'Card' ? convenienceFee : 0)).toFixed(2))
 
   const handleAddToCart = (itemId: string) => {
     const item = inventory.find((stock) => stock.id === itemId)
@@ -167,6 +180,7 @@ export default function POSPage() {
 
   const handleClearCart = () => {
     setCartItems([])
+    setDiscount(0)
   }
 
   const handleRecordSale = async () => {
@@ -186,15 +200,25 @@ export default function POSPage() {
 
     const timestamp = new Date().toISOString()
     const feeMultiplier = paymentType === 'Card' ? 1.03 : 1
-    const salesToAdd: Sale[] = cartItems.map((cartItem) => ({
-      id: `sale-${Date.now()}-${cartItem.itemId}`,
-      itemId: cartItem.itemId,
-      title: cartItem.title,
-      quantity: cartItem.quantity,
-      paymentType,
-      total: Number((cartItem.price * cartItem.quantity * feeMultiplier).toFixed(2)),
-      timestamp
-    }))
+    
+    // Calculate discount ratio to apply proportionally to each item
+    const discountRatio = cartTotal > 0 ? (1 - (discountAmount / cartTotal)) : 1
+    
+    const salesToAdd: Sale[] = cartItems.map((cartItem) => {
+      const itemSubtotal = cartItem.price * cartItem.quantity
+      const itemAfterDiscount = itemSubtotal * discountRatio
+      const itemTotal = Number((itemAfterDiscount * feeMultiplier).toFixed(2))
+      
+      return {
+        id: `sale-${Date.now()}-${cartItem.itemId}`,
+        itemId: cartItem.itemId,
+        title: cartItem.title,
+        quantity: cartItem.quantity,
+        paymentType,
+        total: itemTotal,
+        timestamp
+      }
+    })
 
     const nextInventory = inventory.map((item) => {
       const cartItem = cartItems.find((entry) => entry.itemId === item.id)
@@ -204,6 +228,7 @@ export default function POSPage() {
 
     setInventory(nextInventory)
     setCartItems([])
+    setDiscount(0)
     setMessage(`Sale recorded (${salesToAdd.length} items).`)
     setShowConfirmSale(false)
 
@@ -458,12 +483,67 @@ export default function POSPage() {
                       </div>
                     </div>
 
+                    {/* Discount */}
+                    <div className="mb-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Discount (Optional)</p>
+                      <div className="flex gap-2 mb-2">
+                        <button
+                          onClick={() => setDiscountType('percentage')}
+                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all ${
+                            discountType === 'percentage'
+                              ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                              : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
+                          }`}
+                          type="button"
+                        >
+                          % Percentage
+                        </button>
+                        <button
+                          onClick={() => setDiscountType('amount')}
+                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all ${
+                            discountType === 'amount'
+                              ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                              : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
+                          }`}
+                          type="button"
+                        >
+                          $ Amount
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          max={discountType === 'percentage' ? 100 : cartTotal}
+                          step={discountType === 'percentage' ? 1 : 0.01}
+                          value={discount || ''}
+                          onChange={(e) => setDiscount(Number(e.target.value))}
+                          placeholder={discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount'}
+                          className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 transition-colors pr-10"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">
+                          {discountType === 'percentage' ? '%' : '$'}
+                        </span>
+                      </div>
+                      {discount > 0 && (
+                        <p className="text-xs text-green-600 mt-1 font-medium">
+                          💰 Discount: -${formatNumber(discountAmount)}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Totals */}
                     <div className="space-y-2 p-4 rounded-xl bg-white border-2 border-primary/10 mb-4">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted">Subtotal</span>
                         <span className="font-semibold">${formatNumber(cartTotal)}</span>
                       </div>
+                      {discount > 0 && (
+                        <div className="flex items-center justify-between text-sm text-green-600">
+                          <span>Discount ({discountType === 'percentage' ? `${discount}%` : `$${formatNumber(discount)}`})</span>
+                          <span className="font-semibold">-${formatNumber(discountAmount)}</span>
+                        </div>
+                      )}
                       {paymentType === 'Card' && (
                         <div className="flex items-center justify-between text-sm text-amber-600">
                           <span>Card Fee (3%)</span>

@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -16,12 +18,40 @@ export default function ContactUsPage() {
     subject: '',
     message: ''
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Form submission logic would go here
-    console.log('Contact form submitted:', formData)
-    alert('Thank you for reaching out! We will get back to you within 1 business day.')
+    setIsSubmitting(true)
+
+    try {
+      // Save contact message to Firestore
+      await addDoc(collection(db, 'contactMessages'), {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || '',
+        subject: formData.subject,
+        message: formData.message,
+        status: 'unread',
+        createdAt: serverTimestamp()
+      })
+
+      alert('Thank you for reaching out! We will get back to you within 1 business day.')
+      
+      // Clear form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        subject: '',
+        message: ''
+      })
+    } catch (error) {
+      console.error('Error submitting contact form:', error)
+      alert('There was an error sending your message. Please try again or contact us via WhatsApp.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -242,9 +272,10 @@ export default function ContactUsPage() {
 
                       <button
                         type="submit"
-                        className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 font-semibold text-white shadow-soft transition hover:-translate-y-1 hover:shadow-lg"
+                        disabled={isSubmitting}
+                        className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 font-semibold text-white shadow-soft transition hover:-translate-y-1 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                       >
-                        Send Message
+                        {isSubmitting ? 'Sending...' : 'Send Message'}
                       </button>
 
                       <p className="text-xs text-center text-muted">

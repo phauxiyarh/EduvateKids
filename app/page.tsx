@@ -441,103 +441,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="relative py-12 sm:py-20 bg-gradient-to-br from-emerald-50 via-white to-blue-50">
-          <div
-            className="hero-svg-bg absolute inset-0 opacity-10"
-            style={{
-              backgroundImage: `url(${bg1.src})`,
-              backgroundSize: '65% auto',
-              backgroundRepeat: 'repeat'
-            }}
-          />
-          {[
-            'left-10 top-12 h-24 w-24 opacity-25',
-            'right-16 top-16 h-32 w-32 opacity-20',
-            'left-1/4 bottom-20 h-20 w-20 opacity-30',
-            'right-1/3 bottom-12 h-28 w-28 opacity-25'
-          ].map((classes, index) => (
-            <Image
-              key={`catalog-design-${index}`}
-              src={design2}
-              alt=""
-              width={160}
-              height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
-            />
-          ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
-            <div className="text-center">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
-                Browse Our Collection
-              </p>
-              <h2 className="mt-4 font-display text-2xl sm:text-4xl">View Our Digital Catalog</h2>
-              <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
-                Scan the QR code or click below to explore our complete collection of Islamic books,
-                learning kits, and educational materials for all ages.
-              </p>
-            </div>
-
-            <div className="mt-12 grid gap-8 md:grid-cols-2 items-center">
-              <div className="flex justify-center">
-                <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
-                  <Image
-                    src={catalogQR}
-                    alt="Catalog QR Code"
-                    width={280}
-                    height={280}
-                    className="rounded-2xl w-48 h-48 sm:w-[280px] sm:h-[280px] mx-auto"
-                  />
-                  <p className="mt-4 text-center text-sm font-semibold text-muted">
-                    Scan to view catalog
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="rounded-2xl bg-white p-6 shadow-soft">
-                  <h3 className="font-display text-2xl gradient-text">Explore Our Catalog</h3>
-                  <p className="mt-3 text-muted">
-                    Browse through hundreds of carefully curated titles, from picture books
-                    to chapter series, Islamic studies to STEM learning. Find the perfect
-                    resource for your family, classroom, or library.
-                  </p>
-                  <ul className="mt-4 space-y-2 text-sm">
-                    {[
-                      'Age-appropriate Islamic literature',
-                      'Educational kits and activities',
-                      'Arabic learning resources',
-                      'Character-building stories'
-                    ].map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <span className="text-primary">✦</span>
-                        <span className="text-muted">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <a
-                  href="https://wa.me/c/16674377777"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-3 rounded-full bg-gradient-to-r from-green-500 to-green-600 px-8 py-4 font-semibold text-white shadow-soft transition hover:-translate-y-1 hover:shadow-lg"
-                >
-                  <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                  </svg>
-                  View Catalog on WhatsApp
-                </a>
-
-                <div className="rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 text-center">
-                  <p className="text-sm font-semibold text-primaryDark">
-                    📚 Updated Weekly · 📦 Ready for Events · 🎁 Gift Wrapping Available
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Product Catalog Section */}
         {catalogItems.length > 0 && (
           <section id="catalog" className="relative py-12 sm:py-20 bg-white">
@@ -546,7 +449,7 @@ export default function HomePage() {
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                   Our Products
                 </p>
-                <h2 className="mt-4 font-display text-2xl sm:text-4xl">Shop Our Collection</h2>
+                <h2 className="mt-4 font-display text-2xl sm:text-4xl">View Our Collection</h2>
                 <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                   Discover our handpicked selection of Islamic books, crafts, puzzles, and gifts for all ages.
                 </p>
@@ -667,6 +570,103 @@ export default function HomePage() {
             </div>
           </section>
         )}
+
+        <section className="relative py-12 sm:py-20 bg-gradient-to-br from-emerald-50 via-white to-blue-50">
+          <div
+            className="hero-svg-bg absolute inset-0 opacity-10"
+            style={{
+              backgroundImage: `url(${bg1.src})`,
+              backgroundSize: '65% auto',
+              backgroundRepeat: 'repeat'
+            }}
+          />
+          {[
+            'left-10 top-12 h-24 w-24 opacity-25',
+            'right-16 top-16 h-32 w-32 opacity-20',
+            'left-1/4 bottom-20 h-20 w-20 opacity-30',
+            'right-1/3 bottom-12 h-28 w-28 opacity-25'
+          ].map((classes, index) => (
+            <Image
+              key={`catalog-design-${index}`}
+              src={design2}
+              alt=""
+              width={160}
+              height={160}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
+            />
+          ))}
+          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+                Ready to Order?
+              </p>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Place Your Order Here</h2>
+              <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
+                Scan the QR code or click below to explore our complete collection of Islamic books,
+                learning kits, and educational materials for all ages.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-8 md:grid-cols-2 items-center">
+              <div className="flex justify-center">
+                <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-primary/10">
+                  <Image
+                    src={catalogQR}
+                    alt="Catalog QR Code"
+                    width={280}
+                    height={280}
+                    className="rounded-2xl w-48 h-48 sm:w-[280px] sm:h-[280px] mx-auto"
+                  />
+                  <p className="mt-4 text-center text-sm font-semibold text-muted">
+                    Scan to View/Place your order
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-2xl bg-white p-6 shadow-soft">
+                  <h3 className="font-display text-2xl gradient-text">Explore Our Catalog</h3>
+                  <p className="mt-3 text-muted">
+                    Browse through hundreds of carefully curated titles, from picture books
+                    to chapter series, Islamic studies to STEM learning. Find the perfect
+                    resource for your family, classroom, or library.
+                  </p>
+                  <ul className="mt-4 space-y-2 text-sm">
+                    {[
+                      'Age-appropriate Islamic literature',
+                      'Educational kits and activities',
+                      'Arabic learning resources',
+                      'Character-building stories'
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-2">
+                        <span className="text-primary">✦</span>
+                        <span className="text-muted">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <a
+                  href="https://wa.me/c/16674377777"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-3 rounded-full bg-gradient-to-r from-green-500 to-green-600 px-8 py-4 font-semibold text-white shadow-soft transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                  </svg>
+                  Place your order via our whatsapp catalog
+                </a>
+
+                <div className="rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 text-center">
+                  <p className="text-sm font-semibold text-primaryDark">
+                    📚 Updated Weekly · 📦 Ready for Events · 🎁 Gift Wrapping Available
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="relative py-12 sm:py-20 bg-gradient-to-br from-amber-50 via-white to-orange-50">
           <div

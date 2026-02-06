@@ -287,7 +287,10 @@ export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
+  const [discount, setDiscount] = useState(0)
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage')
   const [editingEvent, setEditingEvent] = useState<EventRecord | null>(null)
+  const [viewingEventTransactions, setViewingEventTransactions] = useState<EventRecord | null>(null)
   const [editEventName, setEditEventName] = useState('')
   const [editEventCost, setEditEventCost] = useState('')
   const [editEventStart, setEditEventStart] = useState('')
@@ -510,9 +513,19 @@ export default function DashboardPage() {
     [cartItems]
   )
 
+  const discountAmount = useMemo(() => {
+    if (discount <= 0) return 0
+    if (discountType === 'percentage') {
+      const percentage = Math.min(100, Math.max(0, discount))
+      return Number((cartTotal * (percentage / 100)).toFixed(2))
+    }
+    return Math.min(cartTotal, Math.max(0, discount))
+  }, [cartTotal, discount, discountType])
+
+  const subtotalAfterDiscount = Number((cartTotal - discountAmount).toFixed(2))
   const convenienceFeeRate = paymentType === 'Card' ? 0.03 : 0
-  const convenienceFee = Number((cartTotal * convenienceFeeRate).toFixed(2))
-  const totalWithFee = Number((cartTotal + convenienceFee).toFixed(2))
+  const convenienceFee = Number((subtotalAfterDiscount * convenienceFeeRate).toFixed(2))
+  const totalWithFee = Number((subtotalAfterDiscount + convenienceFee).toFixed(2))
 
   const allSales = useMemo(
     () =>
@@ -1226,6 +1239,7 @@ export default function DashboardPage() {
 
   const handleClearCart = () => {
     setCartItems([])
+    setDiscount(0)
   }
 
   const handleRecordSale = async () => {
@@ -1249,15 +1263,25 @@ export default function DashboardPage() {
 
     const timestamp = new Date().toISOString()
     const feeMultiplier = paymentType === 'Card' ? 1.03 : 1
-    const salesToAdd: Sale[] = cartItems.map((cartItem) => ({
-      id: `sale-${Date.now()}-${cartItem.itemId}`,
-      itemId: cartItem.itemId,
-      title: cartItem.title,
-      quantity: cartItem.quantity,
-      paymentType,
-      total: Number((cartItem.price * cartItem.quantity * feeMultiplier).toFixed(2)),
-      timestamp
-    }))
+    
+    // Calculate discount ratio to apply proportionally to each item
+    const discountRatio = cartTotal > 0 ? (1 - (discountAmount / cartTotal)) : 1
+    
+    const salesToAdd: Sale[] = cartItems.map((cartItem) => {
+      const itemSubtotal = cartItem.price * cartItem.quantity
+      const itemAfterDiscount = itemSubtotal * discountRatio
+      const itemTotal = Number((itemAfterDiscount * feeMultiplier).toFixed(2))
+      
+      return {
+        id: `sale-${Date.now()}-${cartItem.itemId}`,
+        itemId: cartItem.itemId,
+        title: cartItem.title,
+        quantity: cartItem.quantity,
+        paymentType,
+        total: itemTotal,
+        timestamp
+      }
+    })
 
     const updatedSales = eventRecord ? [...salesToAdd, ...eventRecord.sales] : salesToAdd
     const nextInventory = inventory.map((item) => {
@@ -1282,6 +1306,7 @@ export default function DashboardPage() {
     setInventory(nextInventory)
 
     setCartItems([])
+    setDiscount(0)
     setEventMessage(`Sale recorded (${salesToAdd.length} items).`)
 
     try {
@@ -1902,12 +1927,67 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Discount */}
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-700 mb-3">Discount (Optional)</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    onClick={() => setDiscountType('percentage')}
+                    className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                      discountType === 'percentage'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
+                    }`}
+                    type="button"
+                  >
+                    % Percentage
+                  </button>
+                  <button
+                    onClick={() => setDiscountType('amount')}
+                    className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                      discountType === 'amount'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
+                    }`}
+                    type="button"
+                  >
+                    $ Amount
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    max={discountType === 'percentage' ? 100 : cartTotal}
+                    step={discountType === 'percentage' ? 1 : 0.01}
+                    value={discount || ''}
+                    onChange={(e) => setDiscount(Number(e.target.value))}
+                    placeholder={discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount'}
+                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors pr-10"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">
+                    {discountType === 'percentage' ? '%' : '$'}
+                  </span>
+                </div>
+                {discount > 0 && (
+                  <p className="text-xs text-green-600 mt-2 font-medium">
+                    💰 Discount: -${formatNumber(discountAmount)}
+                  </p>
+                )}
+              </div>
+
               {/* Totals */}
               <div className="space-y-3 mb-6 p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50">
                 <div className="flex justify-between text-sm text-gray-700">
                   <span>Subtotal</span>
                   <span className="font-semibold">${formatNumber(cartTotal)}</span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount ({discountType === 'percentage' ? `${discount}%` : `$${formatNumber(discount)}`})</span>
+                    <span className="font-semibold">-${formatNumber(discountAmount)}</span>
+                  </div>
+                )}
                 {paymentType === 'Card' && (
                   <div className="flex justify-between text-sm text-amber-600">
                     <span>Card Fee (3%)</span>
@@ -2046,6 +2126,13 @@ export default function DashboardPage() {
                           type="button"
                         >
                           ✎ Edit
+                        </button>
+                        <button
+                          onClick={() => setViewingEventTransactions(event)}
+                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                          type="button"
+                        >
+                          📊 View Transactions
                         </button>
                       </div>
                     </div>
@@ -2276,6 +2363,132 @@ export default function DashboardPage() {
               >
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingEventTransactions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">{viewingEventTransactions.name} - Sales Record</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {viewingEventTransactions.sales.length} total sales · ${formatNumber(viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0))} total revenue
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingEventTransactions(null)}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {viewingEventTransactions.sales.length === 0 ? (
+              <div className="text-center py-16 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl">
+                <div className="text-6xl mb-4">📊</div>
+                <p className="text-lg font-semibold text-gray-700">No transactions yet</p>
+                <p className="text-sm text-muted mt-2">Sales will appear here once the event goes live</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                {(() => {
+                  // Group sales by itemId
+                  const groupedSales = viewingEventTransactions.sales.reduce((acc, sale) => {
+                    const key = sale.itemId || sale.title;
+                    if (!acc[key]) {
+                      acc[key] = {
+                        itemId: sale.itemId,
+                        title: sale.title,
+                        totalQuantity: 0,
+                        totalAmount: 0,
+                        transactions: 0,
+                        paymentTypes: new Set<string>(),
+                        firstTimestamp: sale.timestamp
+                      };
+                    }
+                    acc[key].totalQuantity += sale.quantity;
+                    acc[key].totalAmount += sale.total;
+                    acc[key].transactions += 1;
+                    acc[key].paymentTypes.add(sale.paymentType);
+                    return acc;
+                  }, {} as Record<string, {
+                    itemId: string;
+                    title: string;
+                    totalQuantity: number;
+                    totalAmount: number;
+                    transactions: number;
+                    paymentTypes: Set<string>;
+                    firstTimestamp: string;
+                  }>);
+
+                  return Object.values(groupedSales).map((item, index) => (
+                    <div key={item.itemId || item.title} className="rounded-2xl border-2 border-primary/10 p-5 bg-gradient-to-br from-white to-primary/5 hover:border-primary/30 transition-all">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
+                            Item #{Object.values(groupedSales).length - index}
+                          </p>
+                          <p className="font-bold text-lg text-primaryDark mb-2">{item.title}</p>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            {Array.from(item.paymentTypes).map((paymentType) => (
+                              <span key={paymentType} className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                                paymentType === 'Cash' 
+                                  ? 'bg-green-100 text-green-700 border border-green-200'
+                                  : paymentType === 'Card'
+                                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                  : 'bg-purple-100 text-purple-700 border border-purple-200'
+                              }`}>
+                                {paymentType === 'Cash' ? '💵' : paymentType === 'Card' ? '💳' : '🏦'} {paymentType}
+                              </span>
+                            ))}
+                            <span className="text-xs text-muted">
+                              {item.transactions} transaction{item.transactions > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <p className="text-2xl font-bold gradient-text">${formatNumber(item.totalAmount)}</p>
+                          <p className="text-xs text-muted mt-1">{item.totalQuantity} × item{item.totalQuantity > 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+
+            <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Sales</p>
+                  <p className="text-2xl font-bold gradient-text">{viewingEventTransactions.sales.length}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
+                  <p className="text-2xl font-bold gradient-text">
+                    ${formatNumber(viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
+                  <p className="text-2xl font-bold gradient-text">
+                    {viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.quantity, 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Sale</p>
+                  <p className="text-2xl font-bold gradient-text">
+                    ${formatNumber(viewingEventTransactions.sales.length > 0 
+                      ? viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0) / viewingEventTransactions.sales.length 
+                      : 0
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

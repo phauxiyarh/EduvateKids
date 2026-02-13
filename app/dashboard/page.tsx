@@ -297,6 +297,7 @@ export default function DashboardPage() {
   const [editEventEnd, setEditEventEnd] = useState('')
   const [editEventLocation, setEditEventLocation] = useState('')
   const [editEventType, setEditEventType] = useState<EventRecord['type']>('Bazaar')
+  const [editEventStatus, setEditEventStatus] = useState<EventStatus>('active')
 
   // Catalog state
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
@@ -899,14 +900,21 @@ export default function DashboardPage() {
   }
 
   const handleToggleEventStatus = async (eventId: string) => {
-    let nextStatus: EventStatus = 'active'
+    const targetEvent = events.find((event) => event.id === eventId)
+    if (!targetEvent) return
+
+    // Closed events cannot be reopened via toggle - must edit the event
+    if (targetEvent.status === 'closed') {
+      setEventMessage('Closed events can only be re-activated by editing the event.')
+      return
+    }
+
+    const nextStatus: EventStatus = 'closed'
 
     setEvents((current) =>
-      current.map((event) => {
-        if (event.id !== eventId) return event
-        nextStatus = event.status === 'active' ? 'closed' : 'active'
-        return { ...event, status: nextStatus }
-      })
+      current.map((event) =>
+        event.id === eventId ? { ...event, status: nextStatus } : event
+      )
     )
 
     try {
@@ -925,6 +933,7 @@ export default function DashboardPage() {
     setEditEventEnd(event.endDate)
     setEditEventLocation(event.location)
     setEditEventType(event.type)
+    setEditEventStatus(event.status)
   }
 
   const handleEditEvent = async () => {
@@ -946,7 +955,8 @@ export default function DashboardPage() {
       startDate: editEventStart,
       endDate: editEventEnd,
       location: editEventLocation.trim(),
-      type: editEventType
+      type: editEventType,
+      status: editEventStatus
     }
 
     setEvents((current) =>
@@ -2111,14 +2121,15 @@ export default function DashboardPage() {
                         </span>
                         <button
                           onClick={() => handleToggleEventStatus(event.id)}
-                          className={`rounded-full px-3 py-1 text-xs font-bold transition-all hover:scale-105 ${
+                          className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
                             event.status === 'active'
-                              ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200'
-                              : 'bg-gray-100 text-gray-600 border border-gray-200'
+                              ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200 hover:scale-105 cursor-pointer'
+                              : 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed opacity-70'
                           }`}
                           type="button"
+                          title={event.status === 'closed' ? 'Edit event to reactivate' : 'Click to close event'}
                         >
-                          {event.status === 'active' ? '● Active' : '○ Closed'}
+                          {event.status === 'active' ? '● Active' : '🔒 Closed'}
                         </button>
                         <button
                           onClick={() => openEditEvent(event)}
@@ -2345,6 +2356,22 @@ export default function DashboardPage() {
                   placeholder="e.g., 120"
                   className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Event status *</label>
+                <select
+                  value={editEventStatus}
+                  onChange={(e) => setEditEventStatus(e.target.value as EventStatus)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                >
+                  <option value="active">● Active</option>
+                  <option value="closed">○ Closed</option>
+                </select>
+                <p className="text-[10px] text-muted mt-1">
+                  {editEventStatus === 'active'
+                    ? 'Event is active and accepting transactions.'
+                    : 'Event is closed. No new transactions will be accepted.'}
+                </p>
               </div>
             </div>
 

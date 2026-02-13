@@ -1404,7 +1404,7 @@ export default function DashboardPage() {
   }
 
   const handleDeleteOrder = async (order: Order) => {
-    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This will restore inventory quantities. Continue?`)) return
+    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This will restore inventory and remove all related sales records. Continue?`)) return
 
     // Restore inventory quantities from the deleted order
     const restoredInventory = inventory.map((item) => {
@@ -1416,10 +1416,17 @@ export default function DashboardPage() {
 
     const isGeneralOrder = order.eventId === 'general'
     if (isGeneralOrder) {
+      // Remove order
       setGeneralOrders((current) => current.filter((o) => o.id !== order.id))
+      // Remove matching sales (same timestamp)
+      const salesToRemove = generalSales.filter((s) => s.timestamp === order.timestamp)
+      setGeneralSales((current) => current.filter((s) => s.timestamp !== order.timestamp))
       try {
         const batch = writeBatch(db)
         batch.delete(doc(db, 'generalOrders', order.id))
+        salesToRemove.forEach((sale) => {
+          batch.delete(doc(db, 'generalSales', sale.id))
+        })
         restoredInventory.forEach((item) => {
           batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
         })
@@ -1431,9 +1438,11 @@ export default function DashboardPage() {
       const eventRecord = events.find((e) => e.id === order.eventId)
       if (!eventRecord) return
       const updatedOrders = eventRecord.orders.filter((o) => o.id !== order.id)
+      // Remove matching sales (same timestamp)
+      const updatedSales = eventRecord.sales.filter((s) => s.timestamp !== order.timestamp)
       setEvents((current) =>
         current.map((e) =>
-          e.id === eventRecord.id ? { ...e, orders: updatedOrders } : e
+          e.id === eventRecord.id ? { ...e, orders: updatedOrders, sales: updatedSales } : e
         )
       )
       if (viewingOrderHistory) {
@@ -1441,7 +1450,7 @@ export default function DashboardPage() {
       }
       try {
         const batch = writeBatch(db)
-        batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+        batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, sales: updatedSales, _live: true })
         restoredInventory.forEach((item) => {
           batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
         })

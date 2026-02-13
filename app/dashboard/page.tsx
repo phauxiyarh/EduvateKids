@@ -1404,12 +1404,26 @@ export default function DashboardPage() {
   }
 
   const handleDeleteOrder = async (order: Order) => {
-    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This cannot be undone.`)) return
+    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This will restore inventory quantities. Continue?`)) return
+
+    // Restore inventory quantities from the deleted order
+    const restoredInventory = inventory.map((item) => {
+      const orderItem = order.items.find((oi) => oi.itemId === item.id)
+      if (!orderItem) return item
+      return { ...item, quantity: item.quantity + orderItem.quantity }
+    })
+    setInventory(restoredInventory)
+
     const isGeneralOrder = order.eventId === 'general'
     if (isGeneralOrder) {
       setGeneralOrders((current) => current.filter((o) => o.id !== order.id))
       try {
-        await deleteDoc(doc(db, 'generalOrders', order.id))
+        const batch = writeBatch(db)
+        batch.delete(doc(db, 'generalOrders', order.id))
+        restoredInventory.forEach((item) => {
+          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+        })
+        await batch.commit()
       } catch (error) {
         console.error('Delete order error:', error)
       }
@@ -1426,7 +1440,12 @@ export default function DashboardPage() {
         setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
       }
       try {
-        await updateDoc(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+        const batch = writeBatch(db)
+        batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+        restoredInventory.forEach((item) => {
+          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+        })
+        await batch.commit()
       } catch (error) {
         console.error('Delete order error:', error)
       }

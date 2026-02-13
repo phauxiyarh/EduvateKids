@@ -1448,6 +1448,9 @@ export default function DashboardPage() {
       if (viewingOrderHistory) {
         setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
       }
+      if (viewingEventTransactions) {
+        setViewingEventTransactions({ ...viewingEventTransactions, sales: updatedSales })
+      }
       try {
         const batch = writeBatch(db)
         batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, sales: updatedSales, _live: true })

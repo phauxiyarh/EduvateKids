@@ -46,6 +46,28 @@ type Sale = {
   timestamp: string
 }
 
+type OrderItem = {
+  itemId: string
+  title: string
+  price: number
+  quantity: number
+  lineTotal: number
+}
+
+type Order = {
+  id: string
+  items: OrderItem[]
+  subtotal: number
+  discount: number
+  discountType: 'percentage' | 'amount'
+  discountValue: number
+  convenienceFee: number
+  paymentType: 'Cash' | 'Card' | 'Transfer'
+  total: number
+  timestamp: string
+  eventId: string
+}
+
 type CartItem = {
   itemId: string
   title: string
@@ -65,6 +87,7 @@ type EventRecord = {
   type: 'Bazaar' | 'Bookfair' | 'Jummah Boot'
   status: EventStatus
   sales: Sale[]
+  orders: Order[]
 }
 
 type AgeCategory = '0-5' | '6-9' | '10+' | 'Adult'
@@ -153,7 +176,8 @@ const defaultEvents: EventRecord[] = [
     location: 'Downtown Masjid',
     type: 'Bookfair',
     status: 'active',
-    sales: []
+    sales: [],
+    orders: []
   },
   {
     id: 'event-2',
@@ -164,7 +188,8 @@ const defaultEvents: EventRecord[] = [
     location: 'Greenwood School',
     type: 'Bazaar',
     status: 'closed',
-    sales: []
+    sales: [],
+    orders: []
   }
 ]
 
@@ -298,6 +323,11 @@ export default function DashboardPage() {
   const [editEventLocation, setEditEventLocation] = useState('')
   const [editEventType, setEditEventType] = useState<EventRecord['type']>('Bazaar')
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('active')
+  const [viewingOrderHistory, setViewingOrderHistory] = useState<EventRecord | null>(null)
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  const [editOrderItems, setEditOrderItems] = useState<OrderItem[]>([])
+  const [editOrderPaymentType, setEditOrderPaymentType] = useState<Sale['paymentType']>('Cash')
+  const [generalOrders, setGeneralOrders] = useState<Order[]>([])
 
   // Catalog state
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
@@ -370,10 +400,12 @@ export default function DashboardPage() {
           const inventoryRef = collection(db, 'inventory')
           const eventsRef = collection(db, 'events')
           const generalSalesRef = collection(db, 'generalSales')
-          const [inventorySnap, eventsSnap, generalSalesSnap] = await Promise.all([
+          const generalOrdersRef = collection(db, 'generalOrders')
+          const [inventorySnap, eventsSnap, generalSalesSnap, generalOrdersSnap] = await Promise.all([
             getDocs(inventoryRef),
             getDocs(eventsRef),
-            getDocs(generalSalesRef)
+            getDocs(generalSalesRef),
+            getDocs(generalOrdersRef)
           ])
 
           // Check for a flag that indicates the user has real data
@@ -404,7 +436,8 @@ export default function DashboardPage() {
                   location: String(data.location ?? ''),
                   type: (data.type ?? 'Bazaar') as EventRecord['type'],
                   status: (data.status ?? 'closed') as EventStatus,
-                  sales
+                  sales,
+                  orders: Array.isArray(data.orders) ? data.orders as Order[] : []
                 }
               })
             setEvents(loadedEvents)
@@ -414,6 +447,11 @@ export default function DashboardPage() {
               .map((snap) => normalizeSale(snap.data() as Partial<Sale>))
               .filter((sale): sale is Sale => Boolean(sale))
             setGeneralSales(loadedGeneralSales)
+
+            const loadedGeneralOrders = generalOrdersSnap.docs
+              .filter((snap) => snap.data()._live === true)
+              .map((snap) => snap.data() as Order)
+            setGeneralOrders(loadedGeneralOrders)
           }
         }
 
@@ -878,7 +916,8 @@ export default function DashboardPage() {
       location: newEventLocation.trim(),
       type: newEventType,
       status: 'active',
-      sales: []
+      sales: [],
+      orders: []
     }
 
     setEvents((current) => [newEvent, ...current])
@@ -1293,7 +1332,29 @@ export default function DashboardPage() {
       }
     })
 
+    // Create Order record for this transaction
+    const orderRecord: Order = {
+      id: `order-${Date.now()}`,
+      items: cartItems.map((cartItem) => ({
+        itemId: cartItem.itemId,
+        title: cartItem.title,
+        price: cartItem.price,
+        quantity: cartItem.quantity,
+        lineTotal: Number((cartItem.price * cartItem.quantity).toFixed(2))
+      })),
+      subtotal: cartTotal,
+      discount: discountAmount,
+      discountType,
+      discountValue: discount,
+      convenienceFee: paymentType === 'Card' ? convenienceFee : 0,
+      paymentType,
+      total: totalWithFee,
+      timestamp,
+      eventId: selectedEventId
+    }
+
     const updatedSales = eventRecord ? [...salesToAdd, ...eventRecord.sales] : salesToAdd
+    const updatedOrders = eventRecord ? [orderRecord, ...eventRecord.orders] : [orderRecord]
     const nextInventory = inventory.map((item) => {
       const cartItem = cartItems.find((entry) => entry.itemId === item.id)
       if (!cartItem) return item
@@ -1306,11 +1367,12 @@ export default function DashboardPage() {
     if (eventRecord) {
       setEvents((current) =>
         current.map((event) =>
-          event.id === eventRecord.id ? { ...event, sales: updatedSales } : event
+          event.id === eventRecord.id ? { ...event, sales: updatedSales, orders: updatedOrders } : event
         )
       )
     } else {
       setGeneralSales((current) => [...salesToAdd, ...current])
+      setGeneralOrders((current) => [orderRecord, ...current])
     }
 
     setInventory(nextInventory)
@@ -1322,11 +1384,12 @@ export default function DashboardPage() {
     try {
       const batch = writeBatch(db)
       if (eventRecord) {
-        batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, _live: true })
+        batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
       } else {
         salesToAdd.forEach((sale) => {
           batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
         })
+        batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
       }
       nextInventory.forEach((item) => {
         batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
@@ -1338,6 +1401,104 @@ export default function DashboardPage() {
     } finally {
       setIsSubmittingSale(false)
     }
+  }
+
+  const handleDeleteOrder = async (order: Order) => {
+    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This cannot be undone.`)) return
+    const isGeneralOrder = order.eventId === 'general'
+    if (isGeneralOrder) {
+      setGeneralOrders((current) => current.filter((o) => o.id !== order.id))
+      try {
+        await deleteDoc(doc(db, 'generalOrders', order.id))
+      } catch (error) {
+        console.error('Delete order error:', error)
+      }
+    } else {
+      const eventRecord = events.find((e) => e.id === order.eventId)
+      if (!eventRecord) return
+      const updatedOrders = eventRecord.orders.filter((o) => o.id !== order.id)
+      setEvents((current) =>
+        current.map((e) =>
+          e.id === eventRecord.id ? { ...e, orders: updatedOrders } : e
+        )
+      )
+      if (viewingOrderHistory) {
+        setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
+      }
+      try {
+        await updateDoc(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+      } catch (error) {
+        console.error('Delete order error:', error)
+      }
+    }
+  }
+
+  const handleSaveEditOrder = async () => {
+    if (!editingOrder) return
+    const updatedOrder: Order = {
+      ...editingOrder,
+      items: editOrderItems,
+      subtotal: editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0),
+      paymentType: editOrderPaymentType,
+      total: (() => {
+        const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
+        const discAmt = editingOrder.discountType === 'percentage'
+          ? sub * (editingOrder.discountValue / 100)
+          : editingOrder.discountValue
+        const afterDiscount = sub - discAmt
+        const fee = editOrderPaymentType === 'Card' ? afterDiscount * 0.03 : 0
+        return Number((afterDiscount + fee).toFixed(2))
+      })(),
+      discount: (() => {
+        const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
+        return editingOrder.discountType === 'percentage'
+          ? Number((sub * (editingOrder.discountValue / 100)).toFixed(2))
+          : editingOrder.discountValue
+      })(),
+      convenienceFee: (() => {
+        const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
+        const discAmt = editingOrder.discountType === 'percentage'
+          ? sub * (editingOrder.discountValue / 100)
+          : editingOrder.discountValue
+        const afterDiscount = sub - discAmt
+        return editOrderPaymentType === 'Card' ? Number((afterDiscount * 0.03).toFixed(2)) : 0
+      })()
+    }
+
+    const isGeneralOrder = updatedOrder.eventId === 'general'
+    if (isGeneralOrder) {
+      setGeneralOrders((current) => current.map((o) => o.id === updatedOrder.id ? updatedOrder : o))
+      try {
+        await updateDoc(doc(db, 'generalOrders', updatedOrder.id), { ...updatedOrder, _live: true })
+      } catch (error) {
+        console.error('Edit order error:', error)
+      }
+    } else {
+      const eventRecord = events.find((e) => e.id === updatedOrder.eventId)
+      if (!eventRecord) return
+      const updatedOrders = eventRecord.orders.map((o) => o.id === updatedOrder.id ? updatedOrder : o)
+      setEvents((current) =>
+        current.map((e) =>
+          e.id === eventRecord.id ? { ...e, orders: updatedOrders } : e
+        )
+      )
+      if (viewingOrderHistory) {
+        setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
+      }
+      try {
+        await updateDoc(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+      } catch (error) {
+        console.error('Edit order error:', error)
+      }
+    }
+    setEditingOrder(null)
+    setEditOrderItems([])
+  }
+
+  const openEditOrder = (order: Order) => {
+    setEditingOrder(order)
+    setEditOrderItems(order.items.map((item) => ({ ...item })))
+    setEditOrderPaymentType(order.paymentType)
   }
 
   const renderHome = () => (
@@ -2145,6 +2306,13 @@ export default function DashboardPage() {
                         >
                           📊 View Transactions
                         </button>
+                        <button
+                          onClick={() => setViewingOrderHistory(event)}
+                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                          type="button"
+                        >
+                          📋 Order History
+                        </button>
                       </div>
                     </div>
                     <div className="text-right">
@@ -2516,6 +2684,278 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order History Modal */}
+      {viewingOrderHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-amber-200/50 animate-scale-in my-8">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingOrderHistory(null)}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {viewingOrderHistory.orders.length === 0 ? (
+              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl">
+                <div className="text-6xl mb-4">📋</div>
+                <p className="text-lg font-semibold text-gray-700">No orders yet</p>
+                <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                {viewingOrderHistory.orders.map((order, idx) => (
+                  <div key={order.id} className="rounded-2xl border-2 border-amber-100 p-5 bg-gradient-to-br from-white to-amber-50/50 hover:border-amber-200 transition-all">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
+                          Order #{viewingOrderHistory.orders.length - idx}
+                        </p>
+                        <p className="text-xs text-muted">
+                          🕐 {new Date(order.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                          order.paymentType === 'Cash'
+                            ? 'bg-green-100 text-green-700 border border-green-200'
+                            : order.paymentType === 'Card'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-purple-100 text-purple-700 border border-purple-200'
+                        }`}>
+                          {order.paymentType === 'Cash' ? '💵' : order.paymentType === 'Card' ? '💳' : '🏦'} {order.paymentType}
+                        </span>
+                        {userRole === 'admin' && (
+                          <>
+                            <button
+                              onClick={() => openEditOrder(order)}
+                              className="rounded-full px-3 py-1 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                              type="button"
+                            >
+                              ✎ Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOrder(order)}
+                              className="rounded-full px-3 py-1 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                              type="button"
+                            >
+                              🗑 Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-3">
+                      {order.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-primary/5 text-sm">
+                          <div>
+                            <span className="font-semibold">{item.quantity}× </span>
+                            <span>{item.title}</span>
+                          </div>
+                          <span className="font-bold text-primaryDark">${formatNumber(item.lineTotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1 px-3 py-2 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/5 text-sm">
+                      <div className="flex justify-between text-muted">
+                        <span>Subtotal</span>
+                        <span>${formatNumber(order.subtotal)}</span>
+                      </div>
+                      {order.discount > 0 && (
+                        <div className="flex justify-between text-red-600">
+                          <span>Discount ({order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})</span>
+                          <span>-${formatNumber(order.discount)}</span>
+                        </div>
+                      )}
+                      {order.convenienceFee > 0 && (
+                        <div className="flex justify-between text-amber-600">
+                          <span>Card fee (3%)</span>
+                          <span>+${formatNumber(order.convenienceFee)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
+                        <span className="gradient-text">Total</span>
+                        <span className="gradient-text">${formatNumber(order.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {viewingOrderHistory.orders.length > 0 && (
+              <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Orders</p>
+                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
+                    <p className="text-2xl font-bold gradient-text">${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
+                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Order</p>
+                    <p className="text-2xl font-bold gradient-text">
+                      ${formatNumber(viewingOrderHistory.orders.length > 0
+                        ? viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0) / viewingOrderHistory.orders.length
+                        : 0
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Order Modal (Admin Only) */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-blue-200/50 animate-scale-in my-8">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {new Date(editingOrder.timestamp).toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted">Items</label>
+              {editOrderItems.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm">{item.title}</p>
+                    <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditOrderItems((prev) =>
+                          prev.map((it, idx) => idx === i && it.quantity > 1
+                            ? { ...it, quantity: it.quantity - 1, lineTotal: Number(((it.quantity - 1) * it.price).toFixed(2)) }
+                            : it
+                          )
+                        )
+                      }}
+                      className="w-7 h-7 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
+                      type="button"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center font-bold">{item.quantity}</span>
+                    <button
+                      onClick={() => {
+                        setEditOrderItems((prev) =>
+                          prev.map((it, idx) => idx === i
+                            ? { ...it, quantity: it.quantity + 1, lineTotal: Number(((it.quantity + 1) * it.price).toFixed(2)) }
+                            : it
+                          )
+                        )
+                      }}
+                      className="w-7 h-7 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="font-bold text-primaryDark min-w-[70px] text-right">${formatNumber(item.quantity * item.price)}</span>
+                  <button
+                    onClick={() => setEditOrderItems((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="w-7 h-7 rounded-full bg-red-50 border border-red-200 text-red-600 text-sm hover:bg-red-100 transition-colors"
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Payment Type</label>
+              <select
+                value={editOrderPaymentType}
+                onChange={(e) => setEditOrderPaymentType(e.target.value as Sale['paymentType'])}
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+              >
+                <option value="Cash">💵 Cash</option>
+                <option value="Card">💳 Card</option>
+                <option value="Transfer">🏦 Transfer</option>
+              </select>
+            </div>
+
+            <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10 text-sm space-y-1 mb-6">
+              <div className="flex justify-between text-muted">
+                <span>Subtotal</span>
+                <span>${formatNumber(editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0))}</span>
+              </div>
+              {editingOrder.discountValue > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Discount ({editingOrder.discountType === 'percentage' ? `${editingOrder.discountValue}%` : `$${editingOrder.discountValue}`})</span>
+                  <span>-${formatNumber(
+                    editingOrder.discountType === 'percentage'
+                      ? editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0) * (editingOrder.discountValue / 100)
+                      : editingOrder.discountValue
+                  )}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
+                <span>Total</span>
+                <span className="gradient-text">${formatNumber((() => {
+                  const sub = editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0)
+                  const disc = editingOrder.discountType === 'percentage' ? sub * (editingOrder.discountValue / 100) : editingOrder.discountValue
+                  const after = sub - disc
+                  const fee = editOrderPaymentType === 'Card' ? after * 0.03 : 0
+                  return after + fee
+                })())}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEditOrder}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                type="button"
+                disabled={editOrderItems.length === 0}
+              >
+                ✓ Save Changes
+              </button>
             </div>
           </div>
         </div>

@@ -1784,6 +1784,25 @@ export default function DashboardPage() {
     </span>
   )
 
+  const handleClearInventory = async () => {
+    if (!confirm('Are you sure you want to clear ALL inventory? This will remove every item from stock. Events and catalog will not be affected.')) return
+    if (!confirm('This action cannot be undone. Type OK to confirm you want to delete all inventory items.')) return
+    const oldInventory = [...inventory]
+    setInventory([])
+    setUploadMessage('Inventory cleared successfully.')
+    try {
+      const batch = writeBatch(db)
+      oldInventory.forEach((item) => {
+        batch.delete(doc(db, 'inventory', item.id))
+      })
+      await batch.commit()
+    } catch (error) {
+      console.error('Clear inventory error:', error)
+      setInventory(oldInventory)
+      setUploadMessage('Failed to clear inventory. Restored locally.')
+    }
+  }
+
   const renderInventory = () => (
     <div className="fade-up space-y-6">
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-8 shadow-xl border border-purple-200/50">
@@ -1833,6 +1852,17 @@ export default function DashboardPage() {
               Export Stock
             </span>
           </button>
+          {userRole === 'admin' && inventory.length > 0 && (
+            <button
+              onClick={handleClearInventory}
+              className="rounded-full border-2 border-red-300 bg-white px-6 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 hover:-translate-y-0.5 transition-all shadow-sm"
+              type="button"
+            >
+              <span className="inline-flex items-center gap-2">
+                🗑 Clear Inventory
+              </span>
+            </button>
+          )}
           {uploadMessage && (
             <span className="rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-700 border border-green-200">
               {uploadMessage}

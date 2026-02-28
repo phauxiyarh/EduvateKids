@@ -2513,6 +2513,59 @@ export default function DashboardPage() {
                 </div>
               )
             })}
+
+            {/* General Sales Card */}
+            {generalSales.length > 0 && (
+              <div className="group rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-300 hover:shadow-lg transition-all bg-gradient-to-br from-white to-emerald-50/50">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <p className="font-bold text-lg text-primaryDark mb-1">💰 General Sales</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-200">
+                        No Event
+                      </span>
+                      <span className="rounded-full px-3 py-1 text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                        ● Always Active
+                      </span>
+                      <button
+                        onClick={() => setViewingEventTransactions({
+                          id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
+                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders
+                        })}
+                        className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                        type="button"
+                      >
+                        📊 View Transactions
+                      </button>
+                      <button
+                        onClick={() => setViewingOrderHistory({
+                          id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
+                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders
+                        })}
+                        className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                        type="button"
+                      >
+                        📋 Order History
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold gradient-text">${formatNumber(generalSales.reduce((sum, s) => sum + s.total, 0))}</p>
+                    <p className="text-xs text-muted">{generalSales.length} transactions</p>
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs text-muted bg-white/50 rounded-xl p-3 border border-emerald-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-600">💰</span>
+                    <span>Sales made outside of any specific event</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-600">📦</span>
+                    <span>{generalOrders.length} order{generalOrders.length !== 1 ? 's' : ''} recorded</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -3145,6 +3198,49 @@ export default function DashboardPage() {
           <h3 className="font-display text-2xl gradient-text">Event Summaries</h3>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
+          {/* General Sales Summary */}
+          {generalSales.length > 0 && (() => {
+            const totalSales = generalSales.reduce((sum, sale) => sum + sale.total, 0)
+            const transactions = generalSales.length
+            const bestSeller = generalSales
+              .reduce((acc, sale) => {
+                acc[sale.title] = (acc[sale.title] ?? 0) + sale.quantity
+                return acc
+              }, {} as Record<string, number>)
+            const bestSellerName = Object.entries(bestSeller)
+              .sort(([, a], [, b]) => b - a)
+              .map(([name]) => name)[0]
+            return (
+              <div className="rounded-2xl border-2 border-emerald-200/50 p-5 bg-gradient-to-br from-white to-emerald-50/30 hover:border-emerald-300 hover:shadow-lg transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="font-bold text-lg text-primaryDark">💰 General Sales</p>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                    ● Always Active
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-muted">
+                    <span className="text-emerald-600">💰</span>
+                    <span>Sales outside events · {generalOrders.length} orders</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-emerald-200/50">
+                    <div className="rounded-xl bg-white/80 p-3 border border-emerald-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Total Sales</p>
+                      <p className="text-lg font-bold gradient-text">${formatNumber(totalSales)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-3 border border-emerald-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Transactions</p>
+                      <p className="text-lg font-bold text-primaryDark">{transactions}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-emerald-200/50">
+                    <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">Best Seller</p>
+                    <p className="font-semibold text-primaryDark">{bestSellerName ?? 'No sales yet'}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           {events.map((event) => {
             const totalSales = event.sales.reduce((sum, sale) => sum + sale.total, 0)
             const transactions = event.sales.length

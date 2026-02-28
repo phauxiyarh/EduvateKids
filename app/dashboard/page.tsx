@@ -82,6 +82,14 @@ type CartItem = {
 
 type EventStatus = 'active' | 'closed'
 
+type Expense = {
+  id: string
+  description: string
+  amount: number
+  category: 'Transport' | 'Supplies' | 'Food' | 'Printing' | 'Decoration' | 'Other'
+  date: string
+}
+
 type EventRecord = {
   id: string
   name: string
@@ -93,6 +101,7 @@ type EventRecord = {
   status: EventStatus
   sales: Sale[]
   orders: Order[]
+  expenses: Expense[]
 }
 
 type AgeCategory = '0-5' | '6-9' | '10+' | 'Adult'
@@ -182,7 +191,8 @@ const defaultEvents: EventRecord[] = [
     type: 'Bookfair',
     status: 'active',
     sales: [],
-    orders: []
+    orders: [],
+    expenses: []
   },
   {
     id: 'event-2',
@@ -194,7 +204,8 @@ const defaultEvents: EventRecord[] = [
     type: 'Bazaar',
     status: 'closed',
     sales: [],
-    orders: []
+    orders: [],
+    expenses: []
   }
 ]
 
@@ -334,6 +345,15 @@ export default function DashboardPage() {
   const [editOrderPaymentType, setEditOrderPaymentType] = useState<Sale['paymentType']>('Cash')
   const [generalOrders, setGeneralOrders] = useState<Order[]>([])
 
+  // Expense state
+  const [viewingExpenses, setViewingExpenses] = useState<EventRecord | null>(null)
+  const [showAddExpense, setShowAddExpense] = useState(false)
+  const [expenseDescription, setExpenseDescription] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseCategory, setExpenseCategory] = useState<Expense['category']>('Other')
+  const [expenseDate, setExpenseDate] = useState('')
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+
   // Inventory edit state
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null)
   const [showAddInventoryItem, setShowAddInventoryItem] = useState(false)
@@ -453,7 +473,8 @@ export default function DashboardPage() {
                   type: (data.type ?? 'Bazaar') as EventRecord['type'],
                   status: (data.status ?? 'closed') as EventStatus,
                   sales,
-                  orders: Array.isArray(data.orders) ? data.orders as Order[] : []
+                  orders: Array.isArray(data.orders) ? data.orders as Order[] : [],
+                  expenses: Array.isArray(data.expenses) ? data.expenses as Expense[] : []
                 }
               })
             setEvents(loadedEvents)
@@ -705,12 +726,17 @@ export default function DashboardPage() {
 
   const eventRevenue = useMemo(() => {
     return events
-      .map((event) => ({
-        name: event.name.length > 15 ? event.name.slice(0, 15) + '…' : event.name,
-        revenue: event.sales.reduce((sum, sale) => sum + sale.total, 0),
-        cost: event.cost,
-        profit: event.sales.reduce((sum, sale) => sum + sale.total, 0) - event.cost
-      }))
+      .map((event) => {
+        const totalExpenses = event.expenses.reduce((s, e) => s + e.amount, 0)
+        const totalCost = event.cost + totalExpenses
+        const revenue = event.sales.reduce((sum, sale) => sum + sale.total, 0)
+        return {
+          name: event.name.length > 15 ? event.name.slice(0, 15) + '…' : event.name,
+          revenue,
+          cost: totalCost,
+          profit: revenue - totalCost
+        }
+      })
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 6)
   }, [events])
@@ -954,7 +980,8 @@ export default function DashboardPage() {
       type: newEventType,
       status: 'active',
       sales: [],
-      orders: []
+      orders: [],
+      expenses: []
     }
 
     setEvents((current) => [newEvent, ...current])
@@ -1060,6 +1087,87 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Edit event error:', error)
       setEventMessage('Event updated locally, but failed to sync.')
+    }
+  }
+
+  // Expense handlers
+  const openExpenses = (event: EventRecord) => {
+    setViewingExpenses(event)
+    setShowAddExpense(false)
+    resetExpenseForm()
+  }
+
+  const resetExpenseForm = () => {
+    setExpenseDescription('')
+    setExpenseAmount('')
+    setExpenseCategory('Other')
+    setExpenseDate(new Date().toISOString().slice(0, 10))
+    setEditingExpense(null)
+  }
+
+  const openEditExpense = (expense: Expense) => {
+    setEditingExpense(expense)
+    setExpenseDescription(expense.description)
+    setExpenseAmount(String(expense.amount))
+    setExpenseCategory(expense.category)
+    setExpenseDate(expense.date)
+    setShowAddExpense(true)
+  }
+
+  const handleSaveExpense = async () => {
+    if (!viewingExpenses) return
+    if (!expenseDescription.trim()) return
+    const amount = parseNumber(expenseAmount)
+    if (amount <= 0) return
+
+    const expense: Expense = {
+      id: editingExpense?.id ?? `exp-${Date.now()}`,
+      description: expenseDescription.trim(),
+      amount,
+      category: expenseCategory,
+      date: expenseDate || new Date().toISOString().slice(0, 10)
+    }
+
+    let updatedExpenses: Expense[]
+    if (editingExpense) {
+      updatedExpenses = viewingExpenses.expenses.map((e) => e.id === editingExpense.id ? expense : e)
+    } else {
+      updatedExpenses = [expense, ...viewingExpenses.expenses]
+    }
+
+    setEvents((current) =>
+      current.map((ev) =>
+        ev.id === viewingExpenses.id ? { ...ev, expenses: updatedExpenses } : ev
+      )
+    )
+    setViewingExpenses({ ...viewingExpenses, expenses: updatedExpenses })
+    setShowAddExpense(false)
+    resetExpenseForm()
+
+    try {
+      await updateDoc(doc(db, 'events', viewingExpenses.id), { expenses: updatedExpenses, _live: true })
+    } catch (error) {
+      console.error('Save expense error:', error)
+    }
+  }
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!viewingExpenses) return
+    if (!confirm('Delete this expense?')) return
+
+    const updatedExpenses = viewingExpenses.expenses.filter((e) => e.id !== expenseId)
+
+    setEvents((current) =>
+      current.map((ev) =>
+        ev.id === viewingExpenses.id ? { ...ev, expenses: updatedExpenses } : ev
+      )
+    )
+    setViewingExpenses({ ...viewingExpenses, expenses: updatedExpenses })
+
+    try {
+      await updateDoc(doc(db, 'events', viewingExpenses.id), { expenses: updatedExpenses, _live: true })
+    } catch (error) {
+      console.error('Delete expense error:', error)
     }
   }
 
@@ -1776,7 +1884,7 @@ export default function DashboardPage() {
                   <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
                   <Tooltip
                     contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '13px' }}
-                    formatter={(value: any, name: any) => [`$${formatNumber(Number(value))}`, name === 'revenue' ? 'Revenue' : name === 'cost' ? 'Vendor Fee' : 'Profit']}
+                    formatter={(value: any, name: any) => [`$${formatNumber(Number(value))}`, name === 'revenue' ? 'Revenue' : name === 'cost' ? 'Total Costs' : 'Profit']}
                   />
                   <Bar dataKey="revenue" fill="url(#revenueBarGrad)" radius={[6, 6, 0, 0]} barSize={18} />
                   <Bar dataKey="profit" fill="url(#profitBarGrad)" radius={[6, 6, 0, 0]} barSize={18} />
@@ -1864,6 +1972,15 @@ export default function DashboardPage() {
                     </span>
                     <span>Vendor fee: ${formatNumber(bestEvent.cost)}</span>
                   </div>
+                  {bestEvent.expenses.length > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span className="text-primary">💸</span>
+                        {bestEvent.expenses.length} expense{bestEvent.expenses.length !== 1 ? 's' : ''}
+                      </span>
+                      <span>${formatNumber(bestEvent.expenses.reduce((s, e) => s + e.amount, 0))}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2649,6 +2766,13 @@ export default function DashboardPage() {
                         >
                           📋 Order History
                         </button>
+                        <button
+                          onClick={() => openExpenses(event)}
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 border border-teal-200 transition-all hover:scale-105"
+                          type="button"
+                        >
+                          💸 Expenses{event.expenses.length > 0 ? ` (${event.expenses.length})` : ''}
+                        </button>
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
@@ -2663,6 +2787,11 @@ export default function DashboardPage() {
                     <div className="text-right">
                       <p className="text-2xl font-bold gradient-text">${formatNumber(totalSales)}</p>
                       <p className="text-xs text-muted">{event.sales.length} transactions</p>
+                      {(event.expenses.length > 0 || event.cost > 0) && (
+                        <p className="text-xs text-muted mt-1">
+                          Costs: ${formatNumber(event.cost + event.expenses.reduce((s, e) => s + e.amount, 0))}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1 text-xs text-muted bg-white/50 rounded-xl p-3 border border-primary/5">
@@ -2678,6 +2807,12 @@ export default function DashboardPage() {
                       <span className="text-primary">💵</span>
                       <span>Vendor fee: ${formatNumber(event.cost)}</span>
                     </div>
+                    {event.expenses.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary">💸</span>
+                        <span>{event.expenses.length} expense{event.expenses.length !== 1 ? 's' : ''}: ${formatNumber(event.expenses.reduce((s, e) => s + e.amount, 0))}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -2699,7 +2834,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => setViewingEventTransactions({
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
-                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders
+                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
                         className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                         type="button"
@@ -2709,7 +2844,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => setViewingOrderHistory({
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
-                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders
+                          startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
                         className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                         type="button"
@@ -3359,6 +3494,178 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Expenses Modal */}
+      {viewingExpenses && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-scale-in my-8">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">{viewingExpenses.name} - Expenses</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {viewingExpenses.expenses.length} expense{viewingExpenses.expenses.length !== 1 ? 's' : ''} · ${formatNumber(viewingExpenses.expenses.reduce((sum, e) => sum + e.amount, 0))} total
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { resetExpenseForm(); setShowAddExpense(true) }}
+                  className="rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 px-5 py-2 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                  type="button"
+                >
+                  + Add Expense
+                </button>
+                <button
+                  onClick={() => { setViewingExpenses(null); resetExpenseForm(); setShowAddExpense(false) }}
+                  className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+              <div className="rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-50 p-4 border border-teal-200/50 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Expenses</p>
+                <p className="text-2xl font-bold text-teal-700">${formatNumber(viewingExpenses.expenses.reduce((s, e) => s + e.amount, 0))}</p>
+              </div>
+              <div className="rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-4 border border-blue-200/50 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">+ Vendor Fee</p>
+                <p className="text-2xl font-bold text-blue-700">${formatNumber(viewingExpenses.cost)}</p>
+              </div>
+              <div className="rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50 p-4 border border-purple-200/50 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Costs</p>
+                <p className="text-2xl font-bold gradient-text">${formatNumber(viewingExpenses.cost + viewingExpenses.expenses.reduce((s, e) => s + e.amount, 0))}</p>
+              </div>
+            </div>
+
+            {/* Add / Edit Expense Form */}
+            {showAddExpense && (
+              <div className="mb-6 rounded-2xl bg-gradient-to-br from-teal-50/50 to-cyan-50/30 p-5 border border-teal-200/30">
+                <h5 className="font-display text-lg gradient-text mb-4">{editingExpense ? 'Edit Expense' : 'Add New Expense'}</h5>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted mb-1 block">Description *</label>
+                    <input
+                      type="text"
+                      value={expenseDescription}
+                      onChange={(e) => setExpenseDescription(e.target.value)}
+                      placeholder="e.g., Uber to venue"
+                      className="w-full rounded-xl border-2 border-teal-200 px-4 py-3 text-sm hover:border-teal-400 transition-colors focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted mb-1 block">Amount ($) *</label>
+                    <input
+                      type="number"
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-full rounded-xl border-2 border-teal-200 px-4 py-3 text-sm hover:border-teal-400 transition-colors focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted mb-1 block">Category</label>
+                    <select
+                      value={expenseCategory}
+                      onChange={(e) => setExpenseCategory(e.target.value as Expense['category'])}
+                      className="w-full rounded-xl border-2 border-teal-200 px-4 py-3 text-sm hover:border-teal-400 transition-colors focus:border-teal-500 focus:outline-none"
+                    >
+                      <option value="Transport">🚗 Transport</option>
+                      <option value="Supplies">🛒 Supplies</option>
+                      <option value="Food">🍔 Food</option>
+                      <option value="Printing">🖨️ Printing</option>
+                      <option value="Decoration">🎨 Decoration</option>
+                      <option value="Other">📌 Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted mb-1 block">Date</label>
+                    <input
+                      type="date"
+                      value={expenseDate}
+                      onChange={(e) => setExpenseDate(e.target.value)}
+                      className="w-full rounded-xl border-2 border-teal-200 px-4 py-3 text-sm hover:border-teal-400 transition-colors focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <button
+                      onClick={handleSaveExpense}
+                      disabled={!expenseDescription.trim() || parseNumber(expenseAmount) <= 0}
+                      className="flex-1 rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      type="button"
+                    >
+                      {editingExpense ? '✓ Update' : '+ Add'}
+                    </button>
+                    <button
+                      onClick={() => { setShowAddExpense(false); resetExpenseForm() }}
+                      className="rounded-full border-2 border-teal-200 px-4 py-3 text-sm font-bold text-teal-700 hover:bg-teal-50 transition-colors"
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Expense List */}
+            {viewingExpenses.expenses.length > 0 ? (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                {viewingExpenses.expenses.map((expense) => {
+                  const categoryIcons: Record<Expense['category'], string> = {
+                    Transport: '🚗', Supplies: '🛒', Food: '🍔', Printing: '🖨️', Decoration: '🎨', Other: '📌'
+                  }
+                  return (
+                    <div key={expense.id} className="group flex items-center justify-between rounded-2xl border border-teal-100 bg-gradient-to-br from-white to-teal-50/30 p-4 hover:border-teal-200 hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-100 to-cyan-100 text-lg shrink-0">
+                          {categoryIcons[expense.category] || '📌'}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-primaryDark truncate">{expense.description}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
+                            <span className="rounded-full bg-teal-100 px-2 py-0.5 text-teal-700 font-medium">{expense.category}</span>
+                            <span>{expense.date}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-lg font-bold text-teal-700">${formatNumber(expense.amount)}</span>
+                        <button
+                          onClick={() => openEditExpense(expense)}
+                          className="rounded-full p-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors"
+                          type="button"
+                          title="Edit"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          className="rounded-full p-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                          type="button"
+                          title="Delete"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-5xl mb-3">💸</div>
+                <p className="text-sm text-muted">No expenses recorded for this event yet.</p>
+                <p className="text-xs text-muted mt-1">Click &quot;+ Add Expense&quot; to track costs.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-indigo-50/50 p-6 shadow-xl border border-indigo-200/50">
         <div className="flex items-center gap-3 mb-6">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-2xl shadow-soft">
@@ -3452,6 +3759,16 @@ export default function DashboardPage() {
                     <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
                       <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Transactions</p>
                       <p className="text-lg font-bold text-primaryDark">{transactions}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Total Costs</p>
+                      <p className="text-lg font-bold text-red-600">${formatNumber(event.cost + event.expenses.reduce((s, e) => s + e.amount, 0))}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
+                      <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Net Profit</p>
+                      <p className={`text-lg font-bold ${totalSales - event.cost - event.expenses.reduce((s, e) => s + e.amount, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ${formatNumber(totalSales - event.cost - event.expenses.reduce((s, e) => s + e.amount, 0))}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-indigo-200/50">

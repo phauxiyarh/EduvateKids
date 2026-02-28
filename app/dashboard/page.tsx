@@ -739,7 +739,7 @@ export default function DashboardPage() {
           name: event.name.length > 15 ? event.name.slice(0, 15) + '…' : event.name,
           revenue,
           cost: totalCost,
-          profit: markup - totalExpenses
+          profit: markup - totalCost
         }
       })
       .sort((a, b) => b.revenue - a.revenue)
@@ -3776,12 +3776,12 @@ export default function DashboardPage() {
                       <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Net Profit</p>
                       <p className={`text-lg font-bold ${(() => {
                         const markup = event.sales.reduce((s, sale) => s + (sale.sellingPrice - sale.rrp) * sale.quantity, 0)
-                        const expenses = event.expenses.reduce((s, e) => s + e.amount, 0)
+                        const expenses = event.expenses.reduce((s, e) => s + e.amount, 0) + event.cost
                         return markup - expenses >= 0 ? 'text-green-600' : 'text-red-600'
                       })()}`}>
                         ${formatNumber((() => {
                           const markup = event.sales.reduce((s, sale) => s + (sale.sellingPrice - sale.rrp) * sale.quantity, 0)
-                          const expenses = event.expenses.reduce((s, e) => s + e.amount, 0)
+                          const expenses = event.expenses.reduce((s, e) => s + e.amount, 0) + event.cost
                           return markup - expenses
                         })())}
                       </p>

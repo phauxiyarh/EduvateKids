@@ -15,6 +15,11 @@ import {
   getDoc
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+  AreaChart, Area, CartesianGrid
+} from 'recharts'
 import { auth, db } from '../../lib/firebase'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
@@ -688,6 +693,27 @@ export default function DashboardPage() {
 
     return { labels, values }
   }, [allSales])
+
+  const paymentBreakdown = useMemo(() => {
+    const buckets: Record<string, number> = {}
+    allSales.forEach((sale) => {
+      const type = sale.paymentType || 'Cash'
+      buckets[type] = (buckets[type] ?? 0) + sale.total
+    })
+    return Object.entries(buckets).map(([name, value]) => ({ name, value }))
+  }, [allSales])
+
+  const eventRevenue = useMemo(() => {
+    return events
+      .map((event) => ({
+        name: event.name.length > 15 ? event.name.slice(0, 15) + '…' : event.name,
+        revenue: event.sales.reduce((sum, sale) => sum + sale.total, 0),
+        cost: event.cost,
+        profit: event.sales.reduce((sum, sale) => sum + sale.total, 0) - event.cost
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6)
+  }, [events])
 
   const summaryCards = useMemo(() => {
     const totalSales = allSales.reduce((sum, sale) => sum + sale.total, 0)
@@ -1608,82 +1634,203 @@ export default function DashboardPage() {
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '100ms' }}>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="font-display text-xl gradient-text">Weekly Sales Trend</h3>
             <span className="text-xs font-semibold text-muted bg-primary/10 px-3 py-1 rounded-full">Last 7 days</span>
           </div>
           {salesTrend.labels.length ? (
-            <div className="mt-4 space-y-3 text-sm text-muted">
-              {salesTrend.labels.map((label, index) => (
-                <div key={label} className="flex items-center justify-between rounded-xl bg-white/80 px-4 py-3 shadow-soft border border-primary/5">
-                  <span className="font-medium">{label}</span>
-                  <span className="text-base font-semibold text-primaryDark">
-                    ${formatNumber(salesTrend.values[index] ?? 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="flex items-end gap-2 mt-1 mb-4">
+                <span className="text-3xl font-bold gradient-text">${formatNumber(salesTrend.values.reduce((a, b) => a + b, 0))}</span>
+                <span className="text-xs text-muted pb-1">total this week</span>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={salesTrend.labels.map((label, i) => ({ day: label, sales: salesTrend.values[i] ?? 0 }))} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '16px', border: '1px solid #e5e7eb', boxShadow: '0 10px 40px rgba(0,0,0,0.1)', fontSize: '13px' }}
+                      formatter={(value: any) => [`$${formatNumber(Number(value))}`, 'Sales']}
+                    />
+                    <Area type="monotone" dataKey="sales" stroke="#7c3aed" strokeWidth={3} fill="url(#salesGradient)" dot={{ r: 5, fill: '#7c3aed', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 7, fill: '#5b21b6', stroke: '#fff', strokeWidth: 3 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </>
           ) : (
-            <p className="mt-4 text-sm text-muted text-center py-8">
-              No sales data yet. Record a sale to see trends.
-            </p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="text-5xl mb-3">📊</div>
+              <p className="text-sm text-muted">No sales data yet. Record a sale to see trends.</p>
+            </div>
           )}
         </div>
 
         <div className="grid gap-6">
           <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-secondary/5 p-6 shadow-xl border border-secondary/10" style={{ animationDelay: '150ms' }}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-display text-xl gradient-text">Category Mix</h3>
               <span className="text-xs font-semibold text-muted bg-secondary/10 px-3 py-1 rounded-full">Current inventory</span>
             </div>
-            {categoryMix.labels.length ? (
-              <div className="mt-4 space-y-3 text-sm text-muted">
-                {categoryMix.labels.map((label, index) => (
-                  <div key={label} className="flex items-center justify-between rounded-xl bg-white/80 px-4 py-3 shadow-soft border border-secondary/5">
-                    <span className="font-medium">{label}</span>
-                    <span className="text-base font-semibold text-primaryDark">
-                      {formatNumber(categoryMix.values[index] ?? 0)} items
-                    </span>
-                  </div>
-                ))}
+            {categoryMix.labels.some((_, i) => categoryMix.values[i] > 0) ? (
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryMix.labels.map((label, i) => ({ name: label, value: categoryMix.values[i] ?? 0 })).filter(d => d.value > 0)}
+                      cx="50%" cy="50%"
+                      innerRadius={45} outerRadius={75}
+                      paddingAngle={4}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {categoryMix.labels.map((_, i) => (
+                        <Cell key={i} fill={['#7c3aed', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4', '#f43e5e'][i % 8]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '13px' }} formatter={(value: any) => [`${formatNumber(Number(value))} items`, '']} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', fontWeight: 500 }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-muted text-center py-8">
-                No inventory data yet.
-              </p>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="text-5xl mb-3">📦</div>
+                <p className="text-sm text-muted">No inventory data yet.</p>
+              </div>
             )}
           </div>
 
           <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-primary/5 p-6 shadow-xl border border-primary/10" style={{ animationDelay: '200ms' }}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-display text-xl gradient-text">Best Sellers</h3>
               <span className="text-xs font-semibold text-muted bg-primary/10 px-3 py-1 rounded-full">Across all events</span>
             </div>
             {bestSellers.length ? (
-              <ul className="mt-4 space-y-3 text-sm">
-                {bestSellers.map((item, index) => (
-                  <li key={item.title} className="flex items-center justify-between group hover:bg-primary/5 p-3 rounded-xl transition-colors" style={{ animationDelay: `${index * 50}ms` }}>
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 text-xs font-bold text-primaryDark">{index + 1}</span>
-                      <span className="font-medium">{item.title}</span>
-                    </div>
-                    <span className="rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 px-4 py-2 text-sm font-semibold text-primaryDark border border-primary/10">
-                      {item.quantity} sold
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={bestSellers.map((item) => ({ name: item.title.length > 18 ? item.title.slice(0, 18) + '…' : item.title, qty: item.quantity, revenue: item.revenue, fullName: item.title }))}
+                    layout="vertical"
+                    margin={{ top: 5, right: 15, left: 5, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="bestSellerGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#7c3aed" />
+                        <stop offset="100%" stopColor="#ec4899" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={110} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '13px' }}
+                      formatter={(value: any, name: any) => [name === 'qty' ? `${Number(value)} sold` : `$${formatNumber(Number(value))}`, name === 'qty' ? 'Quantity' : 'Revenue']}
+                    />
+                    <Bar dataKey="qty" fill="url(#bestSellerGradient)" radius={[0, 8, 8, 0]} barSize={16} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <p className="mt-4 text-sm text-muted text-center py-8">
-                No sales yet. Record a sale to see top items.
-              </p>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="text-5xl mb-3">🏅</div>
+                <p className="text-sm text-muted">No sales yet. Record a sale to see top items.</p>
+              </div>
             )}
           </div>
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <section className="grid gap-6 lg:grid-cols-2">
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-accentThree/5 p-6 shadow-xl border border-accentThree/10" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">📊</span>
+              <h3 className="font-display text-xl gradient-text">Event Revenue</h3>
+            </div>
+            <span className="text-xs font-semibold text-muted bg-accentThree/10 px-3 py-1 rounded-full">Top events</span>
+          </div>
+          {eventRevenue.length ? (
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={eventRevenue} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="revenueBarGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#7c3aed" />
+                    </linearGradient>
+                    <linearGradient id="profitBarGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '13px' }}
+                    formatter={(value: any, name: any) => [`$${formatNumber(Number(value))}`, name === 'revenue' ? 'Revenue' : name === 'cost' ? 'Vendor Fee' : 'Profit']}
+                  />
+                  <Bar dataKey="revenue" fill="url(#revenueBarGrad)" radius={[6, 6, 0, 0]} barSize={18} />
+                  <Bar dataKey="profit" fill="url(#profitBarGrad)" radius={[6, 6, 0, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="text-5xl mb-3">🎪</div>
+              <p className="text-sm text-muted">No events created yet.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-pink-50/50 p-6 shadow-xl border border-secondary/10" style={{ animationDelay: '300ms' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-primary/20 text-2xl">💳</span>
+              <h3 className="font-display text-xl gradient-text">Payment Split</h3>
+            </div>
+            <span className="text-xs font-semibold text-muted bg-secondary/10 px-3 py-1 rounded-full">By type</span>
+          </div>
+          {paymentBreakdown.length ? (
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentBreakdown}
+                    cx="50%" cy="50%"
+                    innerRadius={50} outerRadius={80}
+                    paddingAngle={4}
+                    dataKey="value"
+                    stroke="none"
+                    label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  >
+                    {paymentBreakdown.map((_, i) => (
+                      <Cell key={i} fill={['#10b981', '#3b82f6', '#f59e0b', '#ec4899'][i % 4]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '13px' }} formatter={(value: any) => [`$${formatNumber(Number(value))}`, '']} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="text-5xl mb-3">💳</div>
+              <p className="text-sm text-muted">No sales data yet.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-accentThree/5 p-6 shadow-xl border border-accentThree/10" style={{ animationDelay: '350ms' }}>
           <div className="flex items-center gap-3 mb-4">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">🏆</span>
             <h3 className="font-display text-xl gradient-text">Best Event</h3>
@@ -1725,7 +1872,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-amber-50/50 p-6 shadow-xl border border-amber-200/50" style={{ animationDelay: '300ms' }}>
+        <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-amber-50/50 p-6 shadow-xl border border-amber-200/50" style={{ animationDelay: '400ms' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 text-2xl">📦</span>

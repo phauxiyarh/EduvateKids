@@ -16,6 +16,7 @@
     "node-fetch": "^2.7.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "recharts": "^3.7.0",
     "tweetsodium": "^0.0.4",
     "xlsx": "0.18.5"
   },

@@ -43,7 +43,7 @@ export default function AdminLoginPage() {
         }}
       />
       <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-16">
-        <div className="grid w-full gap-10 rounded-3xl bg-white p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid w-full gap-6 sm:gap-10 rounded-3xl bg-white p-5 sm:p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
           <Link className="flex items-center gap-3 md:col-span-2" href="/">
             <Image
               src={logo}
@@ -60,7 +60,7 @@ export default function AdminLoginPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Admin Portal
             </p>
-            <h1 className="mt-4 font-display text-3xl">Sign in to Eduvate Kids</h1>
+            <h1 className="mt-4 font-display text-2xl sm:text-3xl">Sign in to Eduvate Kids</h1>
             <p className="mt-3 text-muted">
               Access inventory, event sales, and POS dashboards. This is a
               static demo login screen; hook into NextAuth for production.

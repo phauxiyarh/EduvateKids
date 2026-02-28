@@ -65,12 +65,12 @@ export default function BookEventPage() {
   return (
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-2">
-          <Link className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} />
-            <span className="flex flex-col">
-              <span className="font-display text-lg font-bold">Eduvate Kids</span>
-              <span className="text-sm text-muted">Islamic Bookstore</span>
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-2">
+          <Link className="flex items-center gap-2 sm:gap-3 min-w-0" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} className="flex-shrink-0" />
+            <span className="flex flex-col min-w-0">
+              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
+              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
@@ -82,7 +82,7 @@ export default function BookEventPage() {
             </Link>
           </nav>
           <Link
-            className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+            className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
             href="/auth/login"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,11 +90,20 @@ export default function BookEventPage() {
             </svg>
             Admin Login
           </Link>
+          <Link
+            className="sm:hidden flex items-center justify-center rounded-full border border-primary/30 bg-white p-2.5 text-primaryDark"
+            href="/auth/login"
+            aria-label="Admin Login"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </Link>
         </div>
       </header>
 
       <main>
-        <section className="relative overflow-hidden pb-16 pt-32">
+        <section className="relative overflow-hidden pb-10 sm:pb-16 pt-24 sm:pt-32">
           <div
             className="hero-svg-bg absolute inset-0 z-0 opacity-15"
             style={{
@@ -115,15 +124,15 @@ export default function BookEventPage() {
               alt=""
               width={160}
               height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-4xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Partner With Us
             </p>
-            <h1 className="mt-4 font-display text-5xl">Book an Event</h1>
-            <p className="mt-4 text-lg text-muted">
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl">Book an Event</h1>
+            <p className="mt-4 text-base sm:text-lg text-muted">
               Bring Eduvate Kids to your school, masjid, or community event. We provide
               carefully curated Islamic books and educational materials with complete setup
               and support.
@@ -143,9 +152,9 @@ export default function BookEventPage() {
               {eventTypes.map((event) => (
                 <div
                   key={event.title}
-                  className="rounded-3xl bg-white p-8 shadow-soft border border-primary/10 transition hover:-translate-y-1"
+                  className="rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10 transition hover:-translate-y-1"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-3xl">
                       {event.icon}
                     </div>
@@ -175,7 +184,7 @@ export default function BookEventPage() {
                 discuss your event needs.
               </p>
             </div>
-            <form onSubmit={handleSubmit} className="rounded-3xl bg-cream p-8 shadow-soft border border-primary/10">
+            <form onSubmit={handleSubmit} className="rounded-3xl bg-cream p-5 sm:p-8 shadow-soft border border-primary/10">
               <div className="grid gap-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <label className="grid gap-2 font-semibold text-sm">
@@ -317,8 +326,8 @@ export default function BookEventPage() {
 
         <section className="relative py-16 bg-gradient-to-br from-emerald-50 to-blue-50">
           <div className="mx-auto w-11/12 max-w-4xl">
-            <div className="rounded-3xl bg-white p-10 shadow-soft text-center">
-              <h2 className="font-display text-3xl">Why Partner With Eduvate Kids?</h2>
+            <div className="rounded-3xl bg-white p-6 sm:p-10 shadow-soft text-center">
+              <h2 className="font-display text-2xl sm:text-3xl">Why Partner With Eduvate Kids?</h2>
               <div className="mt-8 grid gap-6 md:grid-cols-3 text-left">
                 <div className="rounded-2xl bg-cream p-6">
                   <div className="text-3xl mb-3">📚</div>

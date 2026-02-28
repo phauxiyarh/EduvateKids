@@ -426,7 +426,7 @@ export default function SettingsPage() {
               </div>
             </div>
             
-            <div className="flex items-center justify-between p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-green-50 border-2 border-primary/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-green-50 border-2 border-primary/20">
               <div>
                 <p className="font-bold text-primaryDark mb-1">
                   {demoMode ? '📊 Demo Mode' : '🟢 Live Mode'}
@@ -490,7 +490,7 @@ export default function SettingsPage() {
 
               {/* Backup Actions */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-50">
                   <div>
                     <p className="text-sm font-semibold text-primaryDark">Create Backup</p>
                     <p className="text-xs text-muted">Save all data (inventory, events, sales, orders, catalog) to Firebase</p>
@@ -498,7 +498,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleCreateBackup}
                     disabled={backingUp}
-                    className="rounded-full bg-gradient-to-r from-green-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="rounded-full bg-gradient-to-r from-green-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-start sm:self-center"
                     type="button"
                   >
                     {backingUp ? (
@@ -509,7 +509,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-50">
                   <div>
                     <p className="text-sm font-semibold text-primaryDark">Download Backup</p>
                     <p className="text-xs text-muted">Download the latest backup as a JSON file to your device</p>
@@ -517,7 +517,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleDownloadBackup}
                     disabled={downloadingBackup || !lastBackupId}
-                    className="rounded-full border-2 border-green-400 bg-white px-5 py-2.5 text-sm font-bold text-green-700 hover:bg-green-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="rounded-full border-2 border-green-400 bg-white px-5 py-2.5 text-sm font-bold text-green-700 hover:bg-green-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-start sm:self-center"
                     type="button"
                   >
                     {downloadingBackup ? (
@@ -528,7 +528,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
                   <div>
                     <p className="text-sm font-semibold text-primaryDark">Restore from Backup</p>
                     <p className="text-xs text-muted">Upload a backup JSON file to restore all data</p>
@@ -543,7 +543,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => restoreInputRef.current?.click()}
                     disabled={restoring}
-                    className="rounded-full border-2 border-amber-400 bg-white px-5 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="rounded-full border-2 border-amber-400 bg-white px-5 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 self-start sm:self-center"
                     type="button"
                   >
                     {restoring ? (

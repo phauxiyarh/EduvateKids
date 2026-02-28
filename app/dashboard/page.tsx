@@ -1592,7 +1592,7 @@ export default function DashboardPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">{card.label}</p>
                   <span className="text-2xl">{card.icon}</span>
                 </div>
-                <h2 className="mt-4 font-display text-4xl gradient-text">
+                <h2 className="mt-4 font-display text-2xl sm:text-4xl gradient-text">
                   {'prefix' in card ? card.prefix : ''}
                   {formatNumber(card.value)}
                 </h2>
@@ -1989,7 +1989,7 @@ export default function DashboardPage() {
             <thead className="bg-gradient-to-r from-primary/10 to-secondary/10 text-left">
               <tr>
                 {([['title', 'Title'], ['category', 'Category'], ['publisher', 'Publisher'], ['rrp', 'RRP'], ['discount', 'Discount %'], ['quantity', 'Quantity'], ['sellingPrice', 'Selling Price']] as [keyof InventoryItem, string][]).map(([key, label]) => (
-                  <th key={key} className="px-6 py-4">
+                  <th key={key} className="px-3 sm:px-6 py-3 sm:py-4">
                     <button
                       type="button"
                       onClick={() => handleInventorySort(key)}
@@ -2000,7 +2000,7 @@ export default function DashboardPage() {
                   </th>
                 ))}
                 {userRole === 'admin' && (
-                  <th className="px-6 py-4">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Actions</span>
                   </th>
                 )}
@@ -2009,15 +2009,15 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-black/5">
               {sortedInventory.map((item, index) => (
                 <tr key={item.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                  <td className="px-6 py-4 font-medium">{item.title}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">{item.title}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark border border-primary/20">
                       {item.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-muted">{item.publisher}</td>
-                  <td className="px-6 py-4 font-semibold">${formatNumber(item.rrp)}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-muted">{item.publisher}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold">${formatNumber(item.rrp)}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4">
                     {item.discount > 0 ? (
                       <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">
                         {item.discount}%
@@ -2026,7 +2026,7 @@ export default function DashboardPage() {
                       <span className="text-muted">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <span className={`rounded-full px-3 py-1 text-xs font-bold ${
                       item.quantity <= 5
                         ? 'bg-red-100 text-red-700 border border-red-200'
@@ -2037,20 +2037,20 @@ export default function DashboardPage() {
                       {item.quantity}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
                   {userRole === 'admin' && (
-                    <td className="px-6 py-4">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEditInventoryItem(item)}
-                          className="rounded-full px-3 py-1 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
                           type="button"
                         >
                           ✎ Edit
                         </button>
                         <button
                           onClick={() => handleDeleteInventoryItem(item)}
-                          className="rounded-full px-3 py-1 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
                           type="button"
                         >
                           🗑
@@ -2460,18 +2460,18 @@ export default function DashboardPage() {
               const totalSales = event.sales.reduce((sum, sale) => sum + sale.total, 0)
               return (
                 <div key={event.id} className="group rounded-2xl border-2 border-primary/10 p-5 hover:border-primary/30 hover:shadow-lg transition-all bg-gradient-to-br from-white to-primary/5">
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-2">
                     <div className="flex-1">
-                      <p className="font-bold text-lg text-primaryDark mb-1">{event.name}</p>
+                      <p className="font-bold text-base sm:text-lg text-primaryDark mb-1">{event.name}</p>
                       <div className="flex flex-wrap gap-2 items-center">
                         <span
-                          className={`rounded-full px-3 py-1 text-[11px] font-bold ${eventTypeBadgeClasses[event.type]}`}
+                          className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${eventTypeBadgeClasses[event.type]}`}
                         >
                           {event.type}
                         </span>
                         <button
                           onClick={() => handleToggleEventStatus(event.id)}
-                          className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                          className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
                             event.status === 'active'
                               ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200 hover:scale-105 cursor-pointer'
                               : 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed opacity-70'
@@ -2483,21 +2483,21 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => openEditEvent(event)}
-                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
                           type="button"
                         >
                           ✎ Edit
                         </button>
                         <button
                           onClick={() => setViewingEventTransactions(event)}
-                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                           type="button"
                         >
                           📊 View Transactions
                         </button>
                         <button
                           onClick={() => setViewingOrderHistory(event)}
-                          className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                           type="button"
                         >
                           📋 Order History
@@ -2505,7 +2505,7 @@ export default function DashboardPage() {
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
-                            className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
+                            className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
                             type="button"
                           >
                             🗑 Delete
@@ -2594,7 +2594,7 @@ export default function DashboardPage() {
 
       {showCreateEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Create New Event</h4>
@@ -2698,7 +2698,7 @@ export default function DashboardPage() {
 
       {editingEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Edit Event</h4>
@@ -2816,7 +2816,7 @@ export default function DashboardPage() {
 
       {viewingEventTransactions && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingEventTransactions.name} - Sales Record</h4>
@@ -2943,7 +2943,7 @@ export default function DashboardPage() {
       {/* Order History Modal */}
       {viewingOrderHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-amber-200/50 animate-scale-in my-8">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-scale-in my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
@@ -3083,7 +3083,7 @@ export default function DashboardPage() {
       {/* Edit Order Modal (Admin Only) */}
       {editingOrder && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-blue-200/50 animate-scale-in my-8">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-scale-in my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
@@ -3340,7 +3340,7 @@ export default function DashboardPage() {
 
   const renderCatalogFormModal = (isEdit: boolean) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h4 className="font-display text-2xl gradient-text">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
@@ -3981,7 +3981,7 @@ export default function DashboardPage() {
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">
@@ -4108,7 +4108,7 @@ export default function DashboardPage() {
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>

@@ -102,12 +102,12 @@ export default function PoliciesPage() {
   return (
     <div className="min-h-screen text-ink">
       <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-6 py-2">
-          <Link className="flex items-center gap-3" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} />
-            <span className="flex flex-col">
-              <span className="font-display text-lg font-bold">Eduvate Kids</span>
-              <span className="text-sm text-muted">Islamic Bookstore</span>
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-2">
+          <Link className="flex items-center gap-2 sm:gap-3 min-w-0" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} className="flex-shrink-0" />
+            <span className="flex flex-col min-w-0">
+              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
+              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
@@ -119,7 +119,7 @@ export default function PoliciesPage() {
             </Link>
           </nav>
           <Link
-            className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+            className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
             href="/auth/login"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,11 +127,20 @@ export default function PoliciesPage() {
             </svg>
             Admin Login
           </Link>
+          <Link
+            className="sm:hidden flex items-center justify-center rounded-full border border-primary/30 bg-white p-2.5 text-primaryDark"
+            href="/auth/login"
+            aria-label="Admin Login"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </Link>
         </div>
       </header>
 
       <main>
-        <section className="relative overflow-hidden pb-16 pt-32">
+        <section className="relative overflow-hidden pb-10 sm:pb-16 pt-24 sm:pt-32">
           <div
             className="hero-svg-bg absolute inset-0 z-0 opacity-20"
             style={{
@@ -152,15 +161,15 @@ export default function PoliciesPage() {
               alt=""
               width={160}
               height={160}
-              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 ${classes}`}
+              className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
           <div className="relative z-10 mx-auto w-11/12 max-w-4xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Legal Information
             </p>
-            <h1 className="mt-4 font-display text-5xl">Policies & Terms</h1>
-            <p className="mt-4 text-lg text-muted">
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl">Policies & Terms</h1>
+            <p className="mt-4 text-base sm:text-lg text-muted">
               We believe in transparency and trust. Review our policies to understand
               how we protect your privacy and ensure a great shopping experience.
             </p>
@@ -172,14 +181,14 @@ export default function PoliciesPage() {
             {policies.map((policy, policyIndex) => (
               <div
                 key={policy.title}
-                className="animate-float rounded-3xl bg-white p-8 shadow-soft border border-primary/10"
+                className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10"
               >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-3xl">
+                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                  <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-2xl sm:text-3xl flex-shrink-0">
                     {policy.icon}
                   </div>
                   <div className="flex-1">
-                    <h2 className="font-display text-3xl gradient-text">{policy.title}</h2>
+                    <h2 className="font-display text-2xl sm:text-3xl gradient-text">{policy.title}</h2>
                     <div className="mt-6 space-y-6">
                       {policy.sections.map((section, sectionIndex) => (
                         <div key={sectionIndex}>
@@ -201,7 +210,7 @@ export default function PoliciesPage() {
 
         <section className="relative py-16 bg-gradient-to-br from-emerald-50 to-blue-50">
           <div className="mx-auto w-11/12 max-w-4xl text-center">
-            <h2 className="font-display text-3xl">Questions About Our Policies?</h2>
+            <h2 className="font-display text-2xl sm:text-3xl">Questions About Our Policies?</h2>
             <p className="mt-3 text-muted">
               We're here to help. Reach out to our team if you need clarification
               on any of our policies or have specific concerns.

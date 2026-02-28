@@ -489,7 +489,7 @@ export default function HomePage() {
                                   const cur = catalogSlider[item.id] ?? 0
                                   setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
                                 }}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white/90 shadow-md sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                               </button>
@@ -500,20 +500,20 @@ export default function HomePage() {
                                   const cur = catalogSlider[item.id] ?? 0
                                   setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
                                 }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white/90 shadow-md sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                               </button>
-                              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-2 py-1">
                                 {item.images.map((_, dotIdx) => (
                                   <button
                                     key={dotIdx}
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx })) }}
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                                    className={`h-2 rounded-full transition-all duration-300 ${
                                       dotIdx === (catalogSlider[item.id] ?? 0)
-                                        ? 'w-5 bg-white shadow-sm'
-                                        : 'w-1.5 bg-white/50 hover:bg-white/80'
+                                        ? 'w-6 bg-white shadow-sm'
+                                        : 'w-2 bg-white/50 hover:bg-white/80'
                                     }`}
                                   />
                                 ))}

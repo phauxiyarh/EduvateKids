@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, getDocs, deleteDoc, doc, getDoc, setDoc, query, orderBy, limit, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc, getDoc, setDoc, query, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebase'
 import Image from 'next/image'
 import logo from '../../assets/logo.png'
@@ -79,6 +79,21 @@ export default function SettingsPage() {
     if (user) loadLastBackup()
   }, [user])
 
+  // Helper to convert Firestore data to plain JSON-safe objects
+  const sanitizeForJSON = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj
+    if (obj.toDate && typeof obj.toDate === 'function') return obj.toDate().toISOString()
+    if (Array.isArray(obj)) return obj.map(sanitizeForJSON)
+    if (typeof obj === 'object') {
+      const clean: any = {}
+      for (const key of Object.keys(obj)) {
+        clean[key] = sanitizeForJSON(obj[key])
+      }
+      return clean
+    }
+    return obj
+  }
+
   const handleCreateBackup = async () => {
     if (!user) return
     setBackingUp(true)
@@ -92,29 +107,47 @@ export default function SettingsPage() {
         getDocs(collection(db, 'catalog'))
       ])
 
-      const backupData = {
-        inventory: inventorySnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        events: eventsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        generalSales: generalSalesSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        generalOrders: generalOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-        catalog: catalogSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const collections: Record<string, any[]> = {
+        inventory: inventorySnap.docs.map(d => sanitizeForJSON({ id: d.id, ...d.data() })),
+        events: eventsSnap.docs.map(d => sanitizeForJSON({ id: d.id, ...d.data() })),
+        generalSales: generalSalesSnap.docs.map(d => sanitizeForJSON({ id: d.id, ...d.data() })),
+        generalOrders: generalOrdersSnap.docs.map(d => sanitizeForJSON({ id: d.id, ...d.data() })),
+        catalog: catalogSnap.docs.map(d => sanitizeForJSON({ id: d.id, ...d.data() }))
       }
 
       const now = new Date()
       const backupId = `backup_${now.getTime()}`
 
+      // Save metadata document
       await setDoc(doc(db, 'backups', backupId), {
         createdAt: Timestamp.fromDate(now),
         createdBy: user.email || 'unknown',
         itemCounts: {
-          inventory: backupData.inventory.length,
-          events: backupData.events.length,
-          generalSales: backupData.generalSales.length,
-          generalOrders: backupData.generalOrders.length,
-          catalog: backupData.catalog.length
-        },
-        data: JSON.stringify(backupData)
+          inventory: collections.inventory.length,
+          events: collections.events.length,
+          generalSales: collections.generalSales.length,
+          generalOrders: collections.generalOrders.length,
+          catalog: collections.catalog.length
+        }
       })
+
+      // Save each collection in a subcollection document to avoid 1MB doc limit
+      const batch = writeBatch(db)
+      for (const [colName, items] of Object.entries(collections)) {
+        const jsonStr = JSON.stringify(items)
+        // Split into chunks of ~800KB if needed
+        const chunkSize = 800000
+        if (jsonStr.length <= chunkSize) {
+          batch.set(doc(db, 'backups', backupId, 'data', colName), { json: jsonStr })
+        } else {
+          const totalChunks = Math.ceil(jsonStr.length / chunkSize)
+          for (let i = 0; i < totalChunks; i++) {
+            const chunk = jsonStr.slice(i * chunkSize, (i + 1) * chunkSize)
+            await setDoc(doc(db, 'backups', backupId, 'data', `${colName}_chunk${i}`), { json: chunk, chunkIndex: i, totalChunks, collection: colName })
+          }
+        }
+      }
+      await batch.commit()
 
       setLastBackupId(backupId)
       setLastBackupDate(now.toLocaleString('en-GB', {
@@ -138,19 +171,47 @@ export default function SettingsPage() {
     }
     setDownloadingBackup(true)
     try {
-      const backupDoc = await getDoc(doc(db, 'backups', lastBackupId))
-      if (!backupDoc.exists()) {
+      const backupMetaDoc = await getDoc(doc(db, 'backups', lastBackupId))
+      if (!backupMetaDoc.exists()) {
         alert('Backup not found in database.')
+        setDownloadingBackup(false)
         return
       }
 
-      const backupRaw = backupDoc.data()
-      const backupData = JSON.parse(backupRaw.data)
+      const meta = backupMetaDoc.data()
+
+      // Read all data subcollection docs
+      const dataSnap = await getDocs(collection(db, 'backups', lastBackupId, 'data'))
+
+      // Reassemble: handle both whole docs and chunked docs
+      const wholeCollections: Record<string, any[]> = {}
+      const chunks: Record<string, { totalChunks: number; parts: Record<number, string> }> = {}
+
+      for (const d of dataSnap.docs) {
+        const data = d.data()
+        if (data.totalChunks) {
+          const colName = data.collection
+          if (!chunks[colName]) chunks[colName] = { totalChunks: data.totalChunks, parts: {} }
+          chunks[colName].parts[data.chunkIndex] = data.json
+        } else {
+          wholeCollections[d.id] = JSON.parse(data.json)
+        }
+      }
+
+      // Reassemble chunked collections
+      for (const [colName, chunkInfo] of Object.entries(chunks)) {
+        let fullJson = ''
+        for (let i = 0; i < chunkInfo.totalChunks; i++) {
+          fullJson += chunkInfo.parts[i]
+        }
+        wholeCollections[colName] = JSON.parse(fullJson)
+      }
+
       const downloadPayload = {
-        exportedAt: backupRaw.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
-        exportedBy: backupRaw.createdBy,
-        itemCounts: backupRaw.itemCounts,
-        ...backupData
+        exportedAt: meta.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+        exportedBy: meta.createdBy,
+        itemCounts: meta.itemCounts,
+        ...wholeCollections
       }
 
       const blob = new Blob([JSON.stringify(downloadPayload, null, 2)], { type: 'application/json' })

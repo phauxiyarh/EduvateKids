@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc, getDoc, setDoc, query, orderBy, limit, Timestamp } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebase'
 import Image from 'next/image'
 import logo from '../../assets/logo.png'
@@ -18,6 +18,10 @@ export default function SettingsPage() {
   const [purgePassword, setPurgePassword] = useState('')
   const [purgeError, setPurgeError] = useState('')
   const [purging, setPurging] = useState(false)
+  const [lastBackupDate, setLastBackupDate] = useState<string | null>(null)
+  const [lastBackupId, setLastBackupId] = useState<string | null>(null)
+  const [backingUp, setBackingUp] = useState(false)
+  const [downloadingBackup, setDownloadingBackup] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -49,6 +53,122 @@ export default function SettingsPage() {
     const newMode = !demoMode
     setDemoMode(newMode)
     localStorage.setItem('eduvate-demo-mode', String(newMode))
+  }
+
+  // Load last backup info
+  useEffect(() => {
+    const loadLastBackup = async () => {
+      try {
+        const backupsSnap = await getDocs(query(collection(db, 'backups'), orderBy('createdAt', 'desc'), limit(1)))
+        if (!backupsSnap.empty) {
+          const backupDoc = backupsSnap.docs[0]
+          const data = backupDoc.data()
+          setLastBackupId(backupDoc.id)
+          if (data.createdAt) {
+            const date = data.createdAt.toDate()
+            setLastBackupDate(date.toLocaleString('en-GB', {
+              day: '2-digit', month: 'short', year: 'numeric',
+              hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading last backup:', error)
+      }
+    }
+    if (user) loadLastBackup()
+  }, [user])
+
+  const handleCreateBackup = async () => {
+    if (!user) return
+    setBackingUp(true)
+    try {
+      // Fetch all collections
+      const [inventorySnap, eventsSnap, generalSalesSnap, generalOrdersSnap, catalogSnap] = await Promise.all([
+        getDocs(collection(db, 'inventory')),
+        getDocs(collection(db, 'events')),
+        getDocs(collection(db, 'generalSales')),
+        getDocs(collection(db, 'generalOrders')),
+        getDocs(collection(db, 'catalog'))
+      ])
+
+      const backupData = {
+        inventory: inventorySnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        events: eventsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        generalSales: generalSalesSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        generalOrders: generalOrdersSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        catalog: catalogSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      }
+
+      const now = new Date()
+      const backupId = `backup_${now.getTime()}`
+
+      await setDoc(doc(db, 'backups', backupId), {
+        createdAt: Timestamp.fromDate(now),
+        createdBy: user.email || 'unknown',
+        itemCounts: {
+          inventory: backupData.inventory.length,
+          events: backupData.events.length,
+          generalSales: backupData.generalSales.length,
+          generalOrders: backupData.generalOrders.length,
+          catalog: backupData.catalog.length
+        },
+        data: JSON.stringify(backupData)
+      })
+
+      setLastBackupId(backupId)
+      setLastBackupDate(now.toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      }))
+
+      alert('✅ Backup created successfully!')
+    } catch (error) {
+      console.error('Error creating backup:', error)
+      alert('❌ Failed to create backup. Please try again.')
+    } finally {
+      setBackingUp(false)
+    }
+  }
+
+  const handleDownloadBackup = async () => {
+    if (!lastBackupId) {
+      alert('No backup available to download. Create a backup first.')
+      return
+    }
+    setDownloadingBackup(true)
+    try {
+      const backupDoc = await getDoc(doc(db, 'backups', lastBackupId))
+      if (!backupDoc.exists()) {
+        alert('Backup not found in database.')
+        return
+      }
+
+      const backupRaw = backupDoc.data()
+      const backupData = JSON.parse(backupRaw.data)
+      const downloadPayload = {
+        exportedAt: backupRaw.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+        exportedBy: backupRaw.createdBy,
+        itemCounts: backupRaw.itemCounts,
+        ...backupData
+      }
+
+      const blob = new Blob([JSON.stringify(downloadPayload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const dateStr = new Date().toISOString().slice(0, 10)
+      a.download = `EduvateKids_Backup_${dateStr}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading backup:', error)
+      alert('❌ Failed to download backup.')
+    } finally {
+      setDownloadingBackup(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -207,6 +327,81 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* Backup & Restore Card - Admin Only */}
+          {!demoMode && userRole === 'admin' && (
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-lg border border-primary/10">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-green-500 to-teal-500 text-2xl">
+                  💾
+                </div>
+                <div>
+                  <h2 className="font-display text-xl font-bold text-primaryDark">Backup & Restore</h2>
+                  <p className="text-sm text-muted">Create and download database backups</p>
+                </div>
+              </div>
+
+              {/* Last Backup Info */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-200 mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🕐</span>
+                  <p className="text-sm font-bold text-primaryDark">Last Backup</p>
+                </div>
+                {lastBackupDate ? (
+                  <p className="text-sm text-green-700 font-semibold ml-7">{lastBackupDate}</p>
+                ) : (
+                  <p className="text-sm text-muted ml-7">No backups yet</p>
+                )}
+              </div>
+
+              {/* Backup Actions */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
+                  <div>
+                    <p className="text-sm font-semibold text-primaryDark">Create Backup</p>
+                    <p className="text-xs text-muted">Save all data (inventory, events, sales, orders, catalog) to Firebase</p>
+                  </div>
+                  <button
+                    onClick={handleCreateBackup}
+                    disabled={backingUp}
+                    className="rounded-full bg-gradient-to-r from-green-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    type="button"
+                  >
+                    {backingUp ? (
+                      <><span className="animate-spin">⏳</span> Backing up...</>
+                    ) : (
+                      <><span>💾</span> Backup Now</>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50">
+                  <div>
+                    <p className="text-sm font-semibold text-primaryDark">Download Backup</p>
+                    <p className="text-xs text-muted">Download the latest backup as a JSON file to your device</p>
+                  </div>
+                  <button
+                    onClick={handleDownloadBackup}
+                    disabled={downloadingBackup || !lastBackupId}
+                    className="rounded-full border-2 border-green-400 bg-white px-5 py-2.5 text-sm font-bold text-green-700 hover:bg-green-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    type="button"
+                  >
+                    {downloadingBackup ? (
+                      <><span className="animate-spin">⏳</span> Downloading...</>
+                    ) : (
+                      <><span>📥</span> Download</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                <p className="text-xs text-blue-800">
+                  <strong>Tip:</strong> Create regular backups before making large changes. Backups include all inventory, events, sales, orders, and catalog data.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Data Management Card - Admin Only */}
           {!demoMode && userRole === 'admin' && (

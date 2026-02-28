@@ -975,6 +975,19 @@ export default function DashboardPage() {
     }
   }
 
+  const handleDeleteEvent = async (eventId: string) => {
+    const targetEvent = events.find((e) => e.id === eventId)
+    if (!targetEvent) return
+    if (!confirm(`Delete event "${targetEvent.name}"? This will remove all its sales and orders. This cannot be undone.`)) return
+    setEvents((current) => current.filter((e) => e.id !== eventId))
+    try {
+      await deleteDoc(doc(db, 'events', eventId))
+    } catch (error) {
+      console.error('Delete event error:', error)
+      setEventMessage('Failed to delete event from server.')
+    }
+  }
+
   const openEditEvent = (event: EventRecord) => {
     setEditingEvent(event)
     setEditEventName(event.name)
@@ -2489,6 +2502,15 @@ export default function DashboardPage() {
                         >
                           📋 Order History
                         </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => handleDeleteEvent(event.id)}
+                            className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
+                            type="button"
+                          >
+                            🗑 Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">

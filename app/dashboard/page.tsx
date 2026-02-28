@@ -329,6 +329,17 @@ export default function DashboardPage() {
   const [editOrderPaymentType, setEditOrderPaymentType] = useState<Sale['paymentType']>('Cash')
   const [generalOrders, setGeneralOrders] = useState<Order[]>([])
 
+  // Inventory edit state
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null)
+  const [showAddInventoryItem, setShowAddInventoryItem] = useState(false)
+  const [invEditTitle, setInvEditTitle] = useState('')
+  const [invEditCategory, setInvEditCategory] = useState<InventoryCategory>('Books')
+  const [invEditPublisher, setInvEditPublisher] = useState('')
+  const [invEditRrp, setInvEditRrp] = useState('')
+  const [invEditDiscount, setInvEditDiscount] = useState('')
+  const [invEditQuantity, setInvEditQuantity] = useState('')
+  const [invEditSellingPrice, setInvEditSellingPrice] = useState('')
+
   // Catalog state
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [showCreateCatalog, setShowCreateCatalog] = useState(false)
@@ -1796,6 +1807,64 @@ export default function DashboardPage() {
     </span>
   )
 
+  const openEditInventoryItem = (item: InventoryItem) => {
+    setEditingInventoryItem(item)
+    setInvEditTitle(item.title)
+    setInvEditCategory(item.category)
+    setInvEditPublisher(item.publisher)
+    setInvEditRrp(String(item.rrp))
+    setInvEditDiscount(String(item.discount))
+    setInvEditQuantity(String(item.quantity))
+    setInvEditSellingPrice(String(item.sellingPrice))
+  }
+
+  const openAddInventoryItem = () => {
+    setShowAddInventoryItem(true)
+    setInvEditTitle('')
+    setInvEditCategory('Books')
+    setInvEditPublisher('')
+    setInvEditRrp('')
+    setInvEditDiscount('0')
+    setInvEditQuantity('')
+    setInvEditSellingPrice('')
+  }
+
+  const handleSaveInventoryItem = async () => {
+    if (!invEditTitle.trim() || !invEditQuantity) return
+    const updatedItem: InventoryItem = {
+      id: editingInventoryItem ? editingInventoryItem.id : `inv-${Date.now()}`,
+      title: invEditTitle.trim(),
+      category: invEditCategory,
+      publisher: invEditPublisher.trim(),
+      rrp: Number(invEditRrp) || 0,
+      discount: Number(invEditDiscount) || 0,
+      quantity: Number(invEditQuantity) || 0,
+      sellingPrice: Number(invEditSellingPrice) || 0
+    }
+    if (editingInventoryItem) {
+      setInventory((current) => current.map((i) => i.id === updatedItem.id ? updatedItem : i))
+    } else {
+      setInventory((current) => [...current, updatedItem])
+    }
+    try {
+      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+    } catch (error) {
+      console.error('Save inventory item error:', error)
+    }
+    setEditingInventoryItem(null)
+    setShowAddInventoryItem(false)
+  }
+
+  const handleDeleteInventoryItem = async (item: InventoryItem) => {
+    if (!confirm(`Delete "${item.title}" from inventory?`)) return
+    setInventory((current) => current.filter((i) => i.id !== item.id))
+    try {
+      await deleteDoc(doc(db, 'inventory', item.id))
+    } catch (error) {
+      console.error('Delete inventory item error:', error)
+    }
+  }
+
   const handleClearInventory = async () => {
     if (!confirm('Are you sure you want to clear ALL inventory? This will remove every item from stock. Events and catalog will not be affected.')) return
     if (!confirm('This action cannot be undone. Type OK to confirm you want to delete all inventory items.')) return
@@ -1887,9 +1956,18 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
           <div className="flex items-center justify-between">
             <h3 className="font-display text-2xl gradient-text">Current Stock</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted">Total items:</span>
               <span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-primaryDark shadow-sm border border-primary/10">{inventory.length}</span>
+              {userRole === 'admin' && (
+                <button
+                  onClick={openAddInventoryItem}
+                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-xs font-bold text-white shadow-soft hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                  type="button"
+                >
+                  + Add Item
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1908,6 +1986,11 @@ export default function DashboardPage() {
                     </button>
                   </th>
                 ))}
+                {userRole === 'admin' && (
+                  <th className="px-6 py-4">
+                    <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
@@ -1942,6 +2025,26 @@ export default function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
+                  {userRole === 'admin' && (
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditInventoryItem(item)}
+                          className="rounded-full px-3 py-1 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                          type="button"
+                        >
+                          ✎ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteInventoryItem(item)}
+                          className="rounded-full px-3 py-1 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                          type="button"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -3756,6 +3859,133 @@ export default function DashboardPage() {
       {/* Global Modals - rendered outside page views */}
       {showCreateCatalog && renderCatalogFormModal(false)}
       {editingCatalogItem && renderCatalogFormModal(true)}
+
+      {/* Inventory Edit/Add Modal */}
+      {(editingInventoryItem || showAddInventoryItem) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">
+                  {editingInventoryItem ? 'Edit Inventory Item' : 'Add New Item'}
+                </h4>
+                <p className="mt-2 text-sm text-muted">
+                  {editingInventoryItem ? 'Update the details below' : 'Fill in the details to add a new inventory item'}
+                </p>
+              </div>
+              <button
+                onClick={() => { setEditingInventoryItem(null); setShowAddInventoryItem(false); }}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
+                <input
+                  type="text"
+                  value={invEditTitle}
+                  onChange={(e) => setInvEditTitle(e.target.value)}
+                  placeholder="e.g., ABC of Allah Loves Me"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Category *</label>
+                <select
+                  value={invEditCategory}
+                  onChange={(e) => setInvEditCategory(e.target.value as InventoryCategory)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                >
+                  {['Books', 'Activity Books', 'Cards', 'Crafts', 'Puzzles', 'Games', 'Gifts', 'Others'].map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Publisher</label>
+                <input
+                  type="text"
+                  value={invEditPublisher}
+                  onChange={(e) => setInvEditPublisher(e.target.value)}
+                  placeholder="e.g., Learning Roots"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">RRP ($)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={invEditRrp}
+                  onChange={(e) => setInvEditRrp(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Discount %</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={invEditDiscount}
+                  onChange={(e) => setInvEditDiscount(e.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Quantity *</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={invEditQuantity}
+                  onChange={(e) => setInvEditQuantity(e.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Selling Price ($) *</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={invEditSellingPrice}
+                  onChange={(e) => setInvEditSellingPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <button
+                onClick={() => { setEditingInventoryItem(null); setShowAddInventoryItem(false); }}
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveInventoryItem}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                type="button"
+                disabled={!invEditTitle.trim() || !invEditQuantity}
+              >
+                {editingInventoryItem ? '✓ Save Changes' : '+ Add Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (

@@ -4107,8 +4107,8 @@ export default function DashboardPage() {
 
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
@@ -4128,7 +4128,7 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-1">
               {cartItems.map((item) => (
                 <div key={item.itemId} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
                   <div>

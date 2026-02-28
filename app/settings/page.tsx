@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { collection, getDocs, deleteDoc, doc, getDoc, setDoc, query, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore'
@@ -22,6 +22,11 @@ export default function SettingsPage() {
   const [lastBackupId, setLastBackupId] = useState<string | null>(null)
   const [backingUp, setBackingUp] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
+  const [restoreFileData, setRestoreFileData] = useState<any>(null)
+  const [restoreFileName, setRestoreFileName] = useState('')
+  const restoreInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -229,6 +234,74 @@ export default function SettingsPage() {
       alert('❌ Failed to download backup.')
     } finally {
       setDownloadingBackup(false)
+    }
+  }
+
+  const handleRestoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string)
+        // Validate structure
+        if (!data.inventory && !data.events && !data.catalog) {
+          alert('❌ Invalid backup file. Missing expected data collections.')
+          return
+        }
+        setRestoreFileData(data)
+        setRestoreFileName(file.name)
+        setShowRestoreConfirm(true)
+      } catch {
+        alert('❌ Invalid file. Please upload a valid JSON backup file.')
+      }
+    }
+    reader.readAsText(file)
+    // Reset input so same file can be selected again
+    e.target.value = ''
+  }
+
+  const handleRestoreBackup = async () => {
+    if (!restoreFileData || !user) return
+    setRestoring(true)
+    try {
+      const collectionsToRestore: { name: string; items: any[] }[] = [
+        { name: 'inventory', items: restoreFileData.inventory || [] },
+        { name: 'events', items: restoreFileData.events || [] },
+        { name: 'generalSales', items: restoreFileData.generalSales || [] },
+        { name: 'generalOrders', items: restoreFileData.generalOrders || [] },
+        { name: 'catalog', items: restoreFileData.catalog || [] }
+      ]
+
+      // Step 1: Delete existing data in each collection
+      for (const col of collectionsToRestore) {
+        const snap = await getDocs(collection(db, col.name))
+        if (!snap.empty) {
+          const batch = writeBatch(db)
+          snap.docs.forEach(d => batch.delete(doc(db, col.name, d.id)))
+          await batch.commit()
+        }
+      }
+
+      // Step 2: Write restored data
+      for (const col of collectionsToRestore) {
+        for (const item of col.items) {
+          const { id, ...data } = item
+          const docId = id || doc(collection(db, col.name)).id
+          await setDoc(doc(db, col.name, docId), data)
+        }
+      }
+
+      alert('✅ Data restored successfully! The page will reload.')
+      setShowRestoreConfirm(false)
+      setRestoreFileData(null)
+      setRestoreFileName('')
+      window.location.reload()
+    } catch (error) {
+      console.error('Error restoring backup:', error)
+      alert('❌ Failed to restore backup. Please try again.')
+    } finally {
+      setRestoring(false)
     }
   }
 
@@ -454,6 +527,32 @@ export default function SettingsPage() {
                     )}
                   </button>
                 </div>
+
+                <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 border border-amber-200">
+                  <div>
+                    <p className="text-sm font-semibold text-primaryDark">Restore from Backup</p>
+                    <p className="text-xs text-muted">Upload a backup JSON file to restore all data</p>
+                  </div>
+                  <input
+                    ref={restoreInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => restoreInputRef.current?.click()}
+                    disabled={restoring}
+                    className="rounded-full border-2 border-amber-400 bg-white px-5 py-2.5 text-sm font-bold text-amber-700 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    type="button"
+                  >
+                    {restoring ? (
+                      <><span className="animate-spin">⏳</span> Restoring...</>
+                    ) : (
+                      <><span>📤</span> Restore</>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200">
@@ -557,6 +656,84 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+
+      {/* Restore Confirmation Modal */}
+      {showRestoreConfirm && restoreFileData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => { setShowRestoreConfirm(false); setRestoreFileData(null) }}>
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => { setShowRestoreConfirm(false); setRestoreFileData(null) }}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              type="button"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-4xl mb-4">
+                📤
+              </div>
+              <h3 className="font-display text-2xl font-bold text-amber-700 mb-2">Restore Backup?</h3>
+              <p className="text-sm text-muted">
+                This will <strong>replace all current data</strong> with the data from the backup file.
+              </p>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="p-4 rounded-xl bg-gray-50">
+                <p className="text-xs text-muted mb-1">File</p>
+                <p className="text-sm font-bold text-primaryDark truncate">{restoreFileName}</p>
+              </div>
+              {restoreFileData.exportedAt && (
+                <div className="p-4 rounded-xl bg-gray-50">
+                  <p className="text-xs text-muted mb-1">Backup Date</p>
+                  <p className="text-sm font-bold text-primaryDark">{new Date(restoreFileData.exportedAt).toLocaleString()}</p>
+                </div>
+              )}
+              <div className="p-4 rounded-xl bg-gray-50">
+                <p className="text-xs text-muted mb-2">Data Summary</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <span className="text-muted">Inventory:</span>
+                  <span className="font-bold text-primaryDark">{restoreFileData.inventory?.length || 0} items</span>
+                  <span className="text-muted">Events:</span>
+                  <span className="font-bold text-primaryDark">{restoreFileData.events?.length || 0} events</span>
+                  <span className="text-muted">General Sales:</span>
+                  <span className="font-bold text-primaryDark">{restoreFileData.generalSales?.length || 0} records</span>
+                  <span className="text-muted">Orders:</span>
+                  <span className="font-bold text-primaryDark">{restoreFileData.generalOrders?.length || 0} orders</span>
+                  <span className="text-muted">Catalog:</span>
+                  <span className="font-bold text-primaryDark">{restoreFileData.catalog?.length || 0} items</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                <p className="text-xs text-red-700 font-semibold">⚠️ Warning: This will overwrite all existing data. Create a backup first if needed.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowRestoreConfirm(false); setRestoreFileData(null) }}
+                className="flex-1 rounded-full border-2 border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                type="button"
+                disabled={restoring}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRestoreBackup}
+                disabled={restoring}
+                className="flex-1 rounded-full bg-amber-500 px-4 py-3 text-sm font-bold text-white hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+              >
+                {restoring ? '⏳ Restoring...' : '📤 Restore Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (

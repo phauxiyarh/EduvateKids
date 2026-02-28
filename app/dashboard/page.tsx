@@ -49,6 +49,8 @@ type Sale = {
   paymentType: 'Cash' | 'Card' | 'Transfer'
   total: number
   timestamp: string
+  rrp: number
+  sellingPrice: number
 }
 
 type OrderItem = {
@@ -259,7 +261,9 @@ const normalizeSale = (data: Partial<Sale>): Sale | null => {
     quantity,
     paymentType,
     total: Number.isFinite(total) ? total : 0,
-    timestamp: String(data.timestamp ?? new Date().toISOString())
+    timestamp: String(data.timestamp ?? new Date().toISOString()),
+    rrp: parseNumber((data as any).rrp),
+    sellingPrice: parseNumber((data as any).sellingPrice)
   }
 }
 
@@ -730,11 +734,12 @@ export default function DashboardPage() {
         const totalExpenses = event.expenses.reduce((s, e) => s + e.amount, 0)
         const totalCost = event.cost + totalExpenses
         const revenue = event.sales.reduce((sum, sale) => sum + sale.total, 0)
+        const markup = event.sales.reduce((sum, sale) => sum + (sale.sellingPrice - sale.rrp) * sale.quantity, 0)
         return {
           name: event.name.length > 15 ? event.name.slice(0, 15) + '…' : event.name,
           revenue,
           cost: totalCost,
-          profit: revenue - totalCost
+          profit: markup - totalExpenses
         }
       })
       .sort((a, b) => b.revenue - a.revenue)
@@ -1478,6 +1483,7 @@ export default function DashboardPage() {
       const itemSubtotal = cartItem.price * cartItem.quantity
       const itemAfterDiscount = itemSubtotal * discountRatio
       const itemTotal = Number((itemAfterDiscount * feeMultiplier).toFixed(2))
+      const inventoryItem = inventory.find((item) => item.id === cartItem.itemId)
       
       return {
         id: `sale-${Date.now()}-${cartItem.itemId}`,
@@ -1486,7 +1492,9 @@ export default function DashboardPage() {
         quantity: cartItem.quantity,
         paymentType,
         total: itemTotal,
-        timestamp
+        timestamp,
+        rrp: inventoryItem?.rrp ?? 0,
+        sellingPrice: cartItem.price
       }
     })
 
@@ -3766,8 +3774,16 @@ export default function DashboardPage() {
                     </div>
                     <div className="rounded-xl bg-white/80 p-3 border border-indigo-200/50">
                       <p className="text-[10px] uppercase tracking-wider text-muted font-bold">Net Profit</p>
-                      <p className={`text-lg font-bold ${totalSales - event.cost - event.expenses.reduce((s, e) => s + e.amount, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ${formatNumber(totalSales - event.cost - event.expenses.reduce((s, e) => s + e.amount, 0))}
+                      <p className={`text-lg font-bold ${(() => {
+                        const markup = event.sales.reduce((s, sale) => s + (sale.sellingPrice - sale.rrp) * sale.quantity, 0)
+                        const expenses = event.expenses.reduce((s, e) => s + e.amount, 0)
+                        return markup - expenses >= 0 ? 'text-green-600' : 'text-red-600'
+                      })()}`}>
+                        ${formatNumber((() => {
+                          const markup = event.sales.reduce((s, sale) => s + (sale.sellingPrice - sale.rrp) * sale.quantity, 0)
+                          const expenses = event.expenses.reduce((s, e) => s + e.amount, 0)
+                          return markup - expenses
+                        })())}
                       </p>
                     </div>
                   </div>

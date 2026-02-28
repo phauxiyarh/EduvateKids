@@ -1980,6 +1980,18 @@ export default function DashboardPage() {
               </select>
             </div>
           </div>
+          {selectedEventId && selectedEventId !== 'general' && (
+            <button
+              onClick={() => {
+                const ev = events.find((e) => e.id === selectedEventId)
+                if (ev) setViewingOrderHistory(ev)
+              }}
+              className="mt-3 w-full rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2.5 text-xs font-bold text-amber-700 border border-amber-200 hover:shadow-md transition-all"
+              type="button"
+            >
+              📋 View Order History
+            </button>
+          )}
         </div>
 
         {/* Search & Catalog Card */}

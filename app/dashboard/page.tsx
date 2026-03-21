@@ -1639,24 +1639,11 @@ export default function DashboardPage() {
       if (saveVerified) {
         setEventMessage(`✅ Sale recorded & verified (${salesToAdd.length} items).`)
       } else {
-        setEventMessage(`⚠️ Sale recorded but verification failed. Auto-downloading TXT backup…`)
-        // Auto-download backup if verification fails
-        const evName = eventRecord?.name ?? 'General Sales'
-        const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
-        downloadOrderHistoryTXT(evName, allOrders)
+        setEventMessage(`⚠️ Sale recorded but verification failed. Please download a TXT backup from Order History.`)
       }
-
-      // Auto-download TXT backup after every confirmed sale
-      const evName = eventRecord?.name ?? 'General Sales'
-      const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
-      downloadOrderHistoryTXT(evName, allOrders)
     } catch (error) {
       console.error('Record sale error:', error)
-      setEventMessage('⚠️ Sale saved locally but failed to sync to Firebase. Downloading TXT backup…')
-      // Download backup on sync failure
-      const evName = eventRecord?.name ?? 'General Sales'
-      const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
-      downloadOrderHistoryTXT(evName, allOrders)
+      setEventMessage('⚠️ Sale saved locally but failed to sync to Firebase. Please download a TXT backup from Order History.')
     } finally {
       setIsSubmittingSale(false)
     }

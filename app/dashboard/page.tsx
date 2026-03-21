@@ -677,7 +677,9 @@ export default function DashboardPage() {
       return start <= rangeEnd && end >= rangeStart
     }
 
-    return events.filter((event) => matchesType(event) && matchesDate(event))
+    return events
+      .filter((event) => matchesType(event) && matchesDate(event))
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
   }, [events, eventTypeFilter, eventDateStart, eventDateEnd])
 
   const bestEvent = useMemo(() => {
@@ -780,6 +782,59 @@ export default function DashboardPage() {
   }, [allSales, events, inventory.length, restockItems.length])
 
   const formatNumber = (value: number) => value.toLocaleString('en-US')
+
+  // Generate and download a TXT backup of all orders for an event
+  const generateOrderHistoryTXT = (eventName: string, orders: Order[]) => {
+    const lines: string[] = []
+    lines.push('=' .repeat(60))
+    lines.push(`ORDER HISTORY — ${eventName}`)
+    lines.push(`Generated: ${new Date().toLocaleString()}`)
+    lines.push(`Total Orders: ${orders.length}`)
+    lines.push(`Total Revenue: $${orders.reduce((s, o) => s + o.total, 0).toFixed(2)}`)
+    lines.push('=' .repeat(60))
+    lines.push('')
+
+    orders.forEach((order, idx) => {
+      lines.push('-'.repeat(50))
+      lines.push(`ORDER #${orders.length - idx}`)
+      lines.push(`Date: ${new Date(order.timestamp).toLocaleString()}`)
+      lines.push(`Payment: ${order.paymentType}`)
+      lines.push('')
+      lines.push('  Items:')
+      order.items.forEach((item) => {
+        lines.push(`    ${item.quantity}x ${item.title} @ $${item.price.toFixed(2)} = $${item.lineTotal.toFixed(2)}`)
+      })
+      lines.push('')
+      lines.push(`  Subtotal:  $${order.subtotal.toFixed(2)}`)
+      if (order.discount > 0) {
+        lines.push(`  Discount:  -$${order.discount.toFixed(2)} (${order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})`)
+      }
+      if (order.convenienceFee > 0) {
+        lines.push(`  Card Fee:  +$${order.convenienceFee.toFixed(2)}`)
+      }
+      lines.push(`  TOTAL:     $${order.total.toFixed(2)}`)
+      lines.push('')
+    })
+
+    lines.push('=' .repeat(60))
+    lines.push('END OF ORDER HISTORY')
+    lines.push('=' .repeat(60))
+
+    return lines.join('\n')
+  }
+
+  const downloadOrderHistoryTXT = (eventName: string, orders: Order[]) => {
+    const content = generateOrderHistoryTXT(eventName, orders)
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_orders_${new Date().toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   const handleLogout = async () => {
     try {
@@ -1561,9 +1616,47 @@ export default function DashboardPage() {
         batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
       })
       await batch.commit()
+
+      // Verify save was successful by reading back from Firebase
+      let saveVerified = false
+      try {
+        if (eventRecord) {
+          const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
+          const verifyData = verifySnap.data()
+          if (verifyData && Array.isArray(verifyData.orders) && verifyData.orders.some((o: any) => o.id === orderRecord.id)) {
+            saveVerified = true
+          }
+        } else {
+          const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
+          if (verifySnap.exists()) {
+            saveVerified = true
+          }
+        }
+      } catch (verifyErr) {
+        console.error('Save verification read failed:', verifyErr)
+      }
+
+      if (saveVerified) {
+        setEventMessage(`✅ Sale recorded & verified (${salesToAdd.length} items).`)
+      } else {
+        setEventMessage(`⚠️ Sale recorded but verification failed. Auto-downloading TXT backup…`)
+        // Auto-download backup if verification fails
+        const evName = eventRecord?.name ?? 'General Sales'
+        const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
+        downloadOrderHistoryTXT(evName, allOrders)
+      }
+
+      // Auto-download TXT backup after every confirmed sale
+      const evName = eventRecord?.name ?? 'General Sales'
+      const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
+      downloadOrderHistoryTXT(evName, allOrders)
     } catch (error) {
       console.error('Record sale error:', error)
-      setEventMessage('Sale saved locally, but failed to sync.')
+      setEventMessage('⚠️ Sale saved locally but failed to sync to Firebase. Downloading TXT backup…')
+      // Download backup on sync failure
+      const evName = eventRecord?.name ?? 'General Sales'
+      const allOrders = eventRecord ? updatedOrders : [orderRecord, ...generalOrders.filter(o => o.id !== orderRecord.id)]
+      downloadOrderHistoryTXT(evName, allOrders)
     } finally {
       setIsSubmittingSale(false)
     }
@@ -3241,13 +3334,24 @@ export default function DashboardPage() {
                   {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
                 </p>
               </div>
-              <button
-                onClick={() => setViewingOrderHistory(null)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-              >
-                ✕ Close
-              </button>
+              <div className="flex items-center gap-2">
+                {viewingOrderHistory.orders.length > 0 && (
+                  <button
+                    onClick={() => downloadOrderHistoryTXT(viewingOrderHistory.name, viewingOrderHistory.orders)}
+                    className="rounded-full border-2 border-green-200 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-50 transition-colors"
+                    type="button"
+                  >
+                    📄 Download TXT
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewingOrderHistory(null)}
+                  className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                >
+                  ✕ Close
+                </button>
+              </div>
             </div>
 
             {viewingOrderHistory.orders.length === 0 ? (

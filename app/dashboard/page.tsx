@@ -482,20 +482,46 @@ export default function DashboardPage() {
                 }
               })
 
-            // ── Recover missing orders from localStorage backup ──
-            const recoveredEvents = loadedEvents.map((event) => {
+            // ── Recover missing orders/sales from localStorage backup ──
+            const recoveredEvents: EventRecord[] = []
+            const eventsToResync: EventRecord[] = []
+            for (const event of loadedEvents) {
               try {
-                const backupRaw = localStorage.getItem(`eduvate-orders-${event.id}`)
-                if (!backupRaw) return event
-                const backupOrders = JSON.parse(backupRaw) as Order[]
-                if (backupOrders.length > event.orders.length) {
-                  console.warn(`[Recovery] Event "${event.name}": Firebase has ${event.orders.length} orders, localStorage has ${backupOrders.length}. Restoring from backup.`)
-                  return { ...event, orders: backupOrders }
+                const backupOrdersRaw = localStorage.getItem(`eduvate-orders-${event.id}`)
+                const backupSalesRaw = localStorage.getItem(`eduvate-sales-${event.id}`)
+                if (backupOrdersRaw) {
+                  const backupOrders = JSON.parse(backupOrdersRaw) as Order[]
+                  const backupSales = backupSalesRaw ? JSON.parse(backupSalesRaw) as Sale[] : null
+                  if (backupOrders.length > event.orders.length) {
+                    console.warn(`[Recovery] Event "${event.name}": Firebase has ${event.orders.length} orders, localStorage has ${backupOrders.length}. Restoring.`)
+                    const restored = {
+                      ...event,
+                      orders: backupOrders,
+                      sales: backupSales && backupSales.length > event.sales.length ? backupSales : event.sales
+                    }
+                    recoveredEvents.push(restored)
+                    eventsToResync.push(restored)
+                    continue
+                  }
                 }
-              } catch { /* ignore parse errors */ }
-              return event
-            })
+              } catch { /* ignore */ }
+              recoveredEvents.push(event)
+            }
             setEvents(recoveredEvents)
+
+            // Re-push recovered data back to Firebase so it persists
+            for (const event of eventsToResync) {
+              try {
+                await updateDoc(doc(db, 'events', event.id), {
+                  orders: event.orders,
+                  sales: event.sales,
+                  _live: true
+                })
+                console.log(`[Recovery] Re-synced "${event.name}" to Firebase (${event.orders.length} orders, ${event.sales.length} sales).`)
+              } catch (err) {
+                console.error(`[Recovery] Failed to re-sync "${event.name}":`, err)
+              }
+            }
 
             const loadedGeneralSales = generalSalesSnap.docs
               .filter((snap) => snap.data()._live === true)
@@ -802,7 +828,7 @@ export default function DashboardPage() {
   const formatNumber = (value: number) => value.toLocaleString('en-US')
 
   // ── TXT Receipt Reference File ──────────────────────────────────
-  const generateEventTxt = (eventName: string, orders: Order[]) => {
+  const generateEventTxt = (eventName: string, orders: Order[], sales?: Sale[]) => {
     const lines: string[] = []
     lines.push('═'.repeat(60))
     lines.push(`  EDUVATE KIDS — ${eventName.toUpperCase()}`)
@@ -815,11 +841,15 @@ export default function DashboardPage() {
     } else {
       orders.forEach((order, idx) => {
         lines.push(`── Order #${orders.length - idx} ${'─'.repeat(40)}`)
+        lines.push(`  Order ID  : ${order.id}`)
         lines.push(`  Date/Time : ${new Date(order.timestamp).toLocaleString()}`)
         lines.push(`  Payment   : ${order.paymentType}`)
         lines.push(`  Items:`)
         order.items.forEach((item) => {
-          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}`)
+          // Look up sale record for RRP / sellingPrice detail
+          const saleRecord = sales?.find((s) => s.itemId === item.itemId && s.timestamp === order.timestamp)
+          const rrpInfo = saleRecord ? ` [RRP: $${saleRecord.rrp.toFixed(2)}, Sell: $${saleRecord.sellingPrice.toFixed(2)}]` : ''
+          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}${rrpInfo}`)
         })
         lines.push(`  Subtotal      : $${order.subtotal.toFixed(2)}`)
         if (order.discount > 0) {
@@ -841,14 +871,25 @@ export default function DashboardPage() {
       lines.push(`  Total Revenue : $${totalRevenue.toFixed(2)}`)
       lines.push(`  Items Sold    : ${totalItems}`)
       lines.push(`  Avg. Order    : $${(orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2)}`)
+
+      // Sale-level detail section
+      if (sales && sales.length > 0) {
+        lines.push('')
+        lines.push('═'.repeat(60))
+        lines.push('  SALE RECORDS (raw data)')
+        lines.push('═'.repeat(60))
+        sales.forEach((sale) => {
+          lines.push(`  ${sale.id} | ${sale.title} | qty:${sale.quantity} | payment:${sale.paymentType} | total:$${sale.total.toFixed(2)} | rrp:$${sale.rrp.toFixed(2)} | sell:$${sale.sellingPrice.toFixed(2)} | ${sale.timestamp}`)
+        })
+      }
     }
     lines.push('')
     lines.push('═'.repeat(60))
     return lines.join('\n')
   }
 
-  const downloadEventTxt = (eventName: string, orders: Order[]) => {
-    const content = generateEventTxt(eventName, orders)
+  const downloadEventTxt = (eventName: string, orders: Order[], sales?: Sale[]) => {
+    const content = generateEventTxt(eventName, orders, sales)
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -1535,9 +1576,10 @@ export default function DashboardPage() {
   }
 
   // ── localStorage backup helpers ──────────────────────────────
-  const saveOrderBackupToLocal = (eventKey: string, orders: Order[]) => {
+  const saveOrderBackupToLocal = (eventKey: string, orders: Order[], sales?: Sale[]) => {
     try {
       localStorage.setItem(`eduvate-orders-${eventKey}`, JSON.stringify(orders))
+      if (sales) localStorage.setItem(`eduvate-sales-${eventKey}`, JSON.stringify(sales))
     } catch { /* quota exceeded — ignore */ }
   }
 
@@ -1637,9 +1679,9 @@ export default function DashboardPage() {
     // 2️⃣ Save order + TXT data to localStorage BEFORE cloud write
     const eventKey = eventRecord ? eventRecord.id : 'general'
     const eventName = eventRecord?.name ?? 'General Sales'
-    saveOrderBackupToLocal(eventKey, updatedOrders)
+    saveOrderBackupToLocal(eventKey, updatedOrders, updatedSales)
     try {
-      localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders))
+      localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders, updatedSales))
     } catch { /* ignore */ }
 
     setEventMessage(`Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
@@ -3378,7 +3420,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 {viewingOrderHistory.orders.length > 0 && (
                   <button
-                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
+                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders, viewingOrderHistory.sales)}
                     className="rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
                     type="button"
                   >

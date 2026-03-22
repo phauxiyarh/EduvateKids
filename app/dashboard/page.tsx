@@ -679,7 +679,11 @@ export default function DashboardPage() {
 
     return events
       .filter((event) => matchesType(event) && matchesDate(event))
-      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+      .sort((a, b) => {
+        const dateA = a.startDate ? new Date(a.startDate).getTime() : 0
+        const dateB = b.startDate ? new Date(b.startDate).getTime() : 0
+        return dateB - dateA
+      })
   }, [events, eventTypeFilter, eventDateStart, eventDateEnd])
 
   const bestEvent = useMemo(() => {
@@ -783,56 +787,63 @@ export default function DashboardPage() {
 
   const formatNumber = (value: number) => value.toLocaleString('en-US')
 
-  // Generate and download a TXT backup of all orders for an event
-  const generateOrderHistoryTXT = (eventName: string, orders: Order[]) => {
+  // ── TXT Receipt Reference File ──────────────────────────────────
+  const generateEventTxt = (eventName: string, orders: Order[]) => {
     const lines: string[] = []
-    lines.push('=' .repeat(60))
-    lines.push(`ORDER HISTORY — ${eventName}`)
-    lines.push(`Generated: ${new Date().toLocaleString()}`)
-    lines.push(`Total Orders: ${orders.length}`)
-    lines.push(`Total Revenue: $${orders.reduce((s, o) => s + o.total, 0).toFixed(2)}`)
-    lines.push('=' .repeat(60))
+    lines.push('═'.repeat(60))
+    lines.push(`  EDUVATE KIDS — ${eventName.toUpperCase()}`)
+    lines.push(`  Generated: ${new Date().toLocaleString()}`)
+    lines.push('═'.repeat(60))
     lines.push('')
 
-    orders.forEach((order, idx) => {
-      lines.push('-'.repeat(50))
-      lines.push(`ORDER #${orders.length - idx}`)
-      lines.push(`Date: ${new Date(order.timestamp).toLocaleString()}`)
-      lines.push(`Payment: ${order.paymentType}`)
-      lines.push('')
-      lines.push('  Items:')
-      order.items.forEach((item) => {
-        lines.push(`    ${item.quantity}x ${item.title} @ $${item.price.toFixed(2)} = $${item.lineTotal.toFixed(2)}`)
+    if (orders.length === 0) {
+      lines.push('No orders recorded.')
+    } else {
+      orders.forEach((order, idx) => {
+        lines.push(`── Order #${orders.length - idx} ${'─'.repeat(40)}`)
+        lines.push(`  Date/Time : ${new Date(order.timestamp).toLocaleString()}`)
+        lines.push(`  Payment   : ${order.paymentType}`)
+        lines.push(`  Items:`)
+        order.items.forEach((item) => {
+          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}`)
+        })
+        lines.push(`  Subtotal      : $${order.subtotal.toFixed(2)}`)
+        if (order.discount > 0) {
+          lines.push(`  Discount (${order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`}) : -$${order.discount.toFixed(2)}`)
+        }
+        if (order.convenienceFee > 0) {
+          lines.push(`  Card Fee (3%) : +$${order.convenienceFee.toFixed(2)}`)
+        }
+        lines.push(`  TOTAL         : $${order.total.toFixed(2)}`)
+        lines.push('')
       })
-      lines.push('')
-      lines.push(`  Subtotal:  $${order.subtotal.toFixed(2)}`)
-      if (order.discount > 0) {
-        lines.push(`  Discount:  -$${order.discount.toFixed(2)} (${order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})`)
-      }
-      if (order.convenienceFee > 0) {
-        lines.push(`  Card Fee:  +$${order.convenienceFee.toFixed(2)}`)
-      }
-      lines.push(`  TOTAL:     $${order.total.toFixed(2)}`)
-      lines.push('')
-    })
 
-    lines.push('=' .repeat(60))
-    lines.push('END OF ORDER HISTORY')
-    lines.push('=' .repeat(60))
-
+      lines.push('═'.repeat(60))
+      lines.push('  SUMMARY')
+      lines.push('═'.repeat(60))
+      const totalRevenue = orders.reduce((s, o) => s + o.total, 0)
+      const totalItems = orders.reduce((s, o) => s + o.items.reduce((x, i) => x + i.quantity, 0), 0)
+      lines.push(`  Total Orders  : ${orders.length}`)
+      lines.push(`  Total Revenue : $${totalRevenue.toFixed(2)}`)
+      lines.push(`  Items Sold    : ${totalItems}`)
+      lines.push(`  Avg. Order    : $${(orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2)}`)
+    }
+    lines.push('')
+    lines.push('═'.repeat(60))
     return lines.join('\n')
   }
 
-  const downloadOrderHistoryTXT = (eventName: string, orders: Order[]) => {
-    const content = generateOrderHistoryTXT(eventName, orders)
-    const blob = new Blob([content], { type: 'text/plain' })
+  const downloadEventTxt = (eventName: string, orders: Order[]) => {
+    const content = generateEventTxt(eventName, orders)
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_orders_${new Date().toISOString().slice(0, 10)}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const link = document.createElement('a')
+    link.href = url
+    const safeName = eventName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+    link.download = `eduvate-orders-${safeName}-${new Date().toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
@@ -1617,33 +1628,36 @@ export default function DashboardPage() {
       })
       await batch.commit()
 
-      // Verify save was successful by reading back from Firebase
-      let saveVerified = false
-      try {
-        if (eventRecord) {
-          const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
-          const verifyData = verifySnap.data()
-          if (verifyData && Array.isArray(verifyData.orders) && verifyData.orders.some((o: any) => o.id === orderRecord.id)) {
-            saveVerified = true
-          }
+      // ── Verify save in Firebase ─────────────────────────────────
+      if (eventRecord) {
+        const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
+        const verifyData = verifySnap.data()
+        const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
+        if (savedOrderCount < updatedOrders.length) {
+          setEventMessage('⚠️ Sale may not have saved to cloud. A backup TXT file has been downloaded.')
+          downloadEventTxt(eventRecord.name, updatedOrders)
         } else {
-          const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
-          if (verifySnap.exists()) {
-            saveVerified = true
-          }
+          // Save succeeded → auto-download TXT backup
+          downloadEventTxt(eventRecord.name, updatedOrders)
         }
-      } catch (verifyErr) {
-        console.error('Save verification read failed:', verifyErr)
-      }
-
-      if (saveVerified) {
-        setEventMessage(`✅ Sale recorded & verified (${salesToAdd.length} items).`)
       } else {
-        setEventMessage(`⚠️ Sale recorded but verification failed. Please download a TXT backup from Order History.`)
+        const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
+        if (!verifySnap.exists()) {
+          setEventMessage('⚠️ Order may not have saved to cloud. A backup TXT file has been downloaded.')
+          downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
+        } else {
+          downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
+        }
       }
     } catch (error) {
       console.error('Record sale error:', error)
-      setEventMessage('⚠️ Sale saved locally but failed to sync to Firebase. Please download a TXT backup from Order History.')
+      setEventMessage('⚠️ Sale saved locally, but failed to sync. A backup TXT has been downloaded.')
+      // Even if Firebase fails, generate backup TXT from local state
+      if (eventRecord) {
+        downloadEventTxt(eventRecord.name, updatedOrders)
+      } else {
+        downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
+      }
     } finally {
       setIsSubmittingSale(false)
     }
@@ -3324,11 +3338,11 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 {viewingOrderHistory.orders.length > 0 && (
                   <button
-                    onClick={() => downloadOrderHistoryTXT(viewingOrderHistory.name, viewingOrderHistory.orders)}
-                    className="rounded-full border-2 border-green-200 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-50 transition-colors"
+                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
+                    className="rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
                     type="button"
                   >
-                    📄 Download TXT
+                    📥 Download TXT
                   </button>
                 )}
                 <button

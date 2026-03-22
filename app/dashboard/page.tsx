@@ -1670,65 +1670,68 @@ export default function DashboardPage() {
       localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders))
     } catch { /* ignore */ }
 
-    setEventMessage(`Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
-
-    // 3️⃣ Write to Firebase with retry
-    const MAX_RETRIES = 2
-    let writeSuccess = false
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const batch = writeBatch(db)
-        if (eventRecord) {
-          batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
-        } else {
-          salesToAdd.forEach((sale) => {
-            batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
-          })
-          batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
-        }
-        nextInventory.forEach((item) => {
-          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
-        })
-        await batch.commit()
-        writeSuccess = true
-        break
-      } catch (error) {
-        console.error(`Record sale error (attempt ${attempt}/${MAX_RETRIES}):`, error)
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, 1500))
-        }
-      }
-    }
-
-    // 4️⃣ Verify the save in Firebase
-    let verified = false
-    if (writeSuccess) {
-      try {
-        if (eventRecord) {
-          const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
-          const verifyData = verifySnap.data()
-          const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
-          verified = savedOrderCount >= updatedOrders.length
-        } else {
-          const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
-          verified = verifySnap.exists()
-        }
-      } catch {
-        verified = false
-      }
-    }
-
-    // 5️⃣ Show result
-    if (verified) {
-      setEventMessage(`✅ Sale confirmed & verified in cloud (${salesToAdd.length} items).`)
-    } else if (writeSuccess) {
-      setEventMessage('⚠️ Sale written but cloud verification failed. Data is saved locally. You can download a backup from Order History.')
-    } else {
-      setEventMessage('⚠️ Cloud sync failed after retries. Data is saved locally. You can download a backup from Order History.')
-    }
-
+    // 3️⃣ Close modal & reset immediately — no waiting for Firebase
     setIsSubmittingSale(false)
+    setShowConfirmSale(false)
+    setEventMessage(`✅ Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
+
+    // 4️⃣ Write to Firebase with retry (background — no await blocking UI)
+    ;(async () => {
+      const MAX_RETRIES = 2
+      let writeSuccess = false
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const batch = writeBatch(db)
+          if (eventRecord) {
+            batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
+          } else {
+            salesToAdd.forEach((sale) => {
+              batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
+            })
+            batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
+          }
+          nextInventory.forEach((item) => {
+            batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+          })
+          await batch.commit()
+          writeSuccess = true
+          break
+        } catch (error) {
+          console.error(`Record sale error (attempt ${attempt}/${MAX_RETRIES}):`, error)
+          if (attempt < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+        }
+      }
+
+      // 5️⃣ Verify the save in Firebase
+      let verified = false
+      if (writeSuccess) {
+        try {
+          if (eventRecord) {
+            const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
+            const verifyData = verifySnap.data()
+            const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
+            verified = savedOrderCount >= updatedOrders.length
+          } else {
+            const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
+            verified = verifySnap.exists()
+          }
+        } catch {
+          verified = false
+        }
+      }
+
+      // 6️⃣ Update notification with final result
+      if (verified) {
+        setEventMessage(`✅ Sale confirmed & verified in cloud (${salesToAdd.length} items).`)
+      } else if (writeSuccess) {
+        setEventMessage('⚠️ Sale written but cloud verification failed. Data is saved locally. You can download a backup from Order History.')
+      } else {
+        setEventMessage('⚠️ Cloud sync failed after retries. Data is saved locally. You can download a backup from Order History.')
+      }
+    })()
   }
 
   const handleDeleteOrder = async (order: Order) => {
@@ -4834,10 +4837,7 @@ export default function DashboardPage() {
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  await handleRecordSale()
-                  setShowConfirmSale(false)
-                }}
+                onClick={() => handleRecordSale()}
                 className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
                 type="button"
                 disabled={isSubmittingSale}

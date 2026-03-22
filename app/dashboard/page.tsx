@@ -1772,10 +1772,13 @@ export default function DashboardPage() {
     const isGeneralOrder = order.eventId === 'general'
     if (isGeneralOrder) {
       // Remove order
-      setGeneralOrders((current) => current.filter((o) => o.id !== order.id))
+      const updatedGeneralOrders = generalOrders.filter((o) => o.id !== order.id)
+      setGeneralOrders(updatedGeneralOrders)
       // Remove matching sales (same timestamp)
       const salesToRemove = generalSales.filter((s) => s.timestamp === order.timestamp)
       setGeneralSales((current) => current.filter((s) => s.timestamp !== order.timestamp))
+      // Update localStorage backup
+      saveOrderBackupToLocal('general', updatedGeneralOrders)
       try {
         const batch = writeBatch(db)
         batch.delete(doc(db, 'generalOrders', order.id))
@@ -1806,6 +1809,8 @@ export default function DashboardPage() {
       if (viewingEventTransactions) {
         setViewingEventTransactions({ ...viewingEventTransactions, sales: updatedSales })
       }
+      // Update localStorage backup
+      saveOrderBackupToLocal(eventRecord.id, updatedOrders, updatedSales)
       try {
         const batch = writeBatch(db)
         batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, sales: updatedSales, _live: true })
@@ -1853,7 +1858,10 @@ export default function DashboardPage() {
 
     const isGeneralOrder = updatedOrder.eventId === 'general'
     if (isGeneralOrder) {
-      setGeneralOrders((current) => current.map((o) => o.id === updatedOrder.id ? updatedOrder : o))
+      const updatedGeneralOrders = generalOrders.map((o) => o.id === updatedOrder.id ? updatedOrder : o)
+      setGeneralOrders(updatedGeneralOrders)
+      // Update localStorage backup
+      saveOrderBackupToLocal('general', updatedGeneralOrders)
       try {
         await updateDoc(doc(db, 'generalOrders', updatedOrder.id), { ...updatedOrder, _live: true })
       } catch (error) {
@@ -1871,6 +1879,8 @@ export default function DashboardPage() {
       if (viewingOrderHistory) {
         setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
       }
+      // Update localStorage backup
+      saveOrderBackupToLocal(eventRecord.id, updatedOrders, eventRecord.sales)
       try {
         await updateDoc(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
       } catch (error) {

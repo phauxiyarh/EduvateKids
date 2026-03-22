@@ -332,6 +332,7 @@ export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
+  const [isSavingInventory, setIsSavingInventory] = useState(false)
   const [discount, setDiscount] = useState(0)
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage')
   const [editingEvent, setEditingEvent] = useState<EventRecord | null>(null)
@@ -2277,6 +2278,7 @@ export default function DashboardPage() {
 
   const handleSaveInventoryItem = async () => {
     if (!invEditTitle.trim() || !invEditQuantity) return
+    setIsSavingInventory(true)
     const updatedItem: InventoryItem = {
       id: editingInventoryItem ? editingInventoryItem.id : `inv-${Date.now()}`,
       title: invEditTitle.trim(),
@@ -2292,13 +2294,18 @@ export default function DashboardPage() {
     } else {
       setInventory((current) => [...current, updatedItem])
     }
+    // Close modal immediately and show confirmation
+    setEditingInventoryItem(null)
+    setShowAddInventoryItem(false)
+    setIsSavingInventory(false)
+    setUploadMessage(editingInventoryItem ? `✅ "${updatedItem.title}" updated.` : `✅ "${updatedItem.title}" added.`)
+    // Sync to Firebase in the background
     try {
       await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
     } catch (error) {
       console.error('Save inventory item error:', error)
+      setUploadMessage(`⚠️ "${updatedItem.title}" saved locally but failed to sync to cloud.`)
     }
-    setEditingInventoryItem(null)
-    setShowAddInventoryItem(false)
   }
 
   const handleDeleteInventoryItem = async (item: InventoryItem) => {
@@ -4748,9 +4755,9 @@ export default function DashboardPage() {
                 onClick={handleSaveInventoryItem}
                 className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
                 type="button"
-                disabled={!invEditTitle.trim() || !invEditQuantity}
+                disabled={!invEditTitle.trim() || !invEditQuantity || isSavingInventory}
               >
-                {editingInventoryItem ? '✓ Save Changes' : '+ Add Item'}
+                {isSavingInventory ? '⏳ Saving...' : editingInventoryItem ? '✓ Save Changes' : '+ Add Item'}
               </button>
             </div>
           </div>

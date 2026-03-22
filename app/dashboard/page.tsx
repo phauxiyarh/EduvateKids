@@ -1645,6 +1645,11 @@ export default function DashboardPage() {
         quantity: Math.max(0, item.quantity - cartItem.quantity)
       }
     })
+    // Track only items whose quantity actually changed
+    const changedInventoryItems = nextInventory.filter((item) => {
+      const original = inventory.find((i) => i.id === item.id)
+      return original && original.quantity !== item.quantity
+    })
 
     // 1️⃣ Update local state immediately (optimistic)
     if (eventRecord) {
@@ -1682,25 +1687,44 @@ export default function DashboardPage() {
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const batch = writeBatch(db)
+          // Batch 1: Save orders/sales
+          const orderBatch = writeBatch(db)
           if (eventRecord) {
-            batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
+            orderBatch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
           } else {
             salesToAdd.forEach((sale) => {
-              batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
+              orderBatch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
             })
-            batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
+            orderBatch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
           }
-          nextInventory.forEach((item) => {
-            batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
-          })
-          await batch.commit()
+          await orderBatch.commit()
           writeSuccess = true
           break
         } catch (error) {
-          console.error(`Record sale error (attempt ${attempt}/${MAX_RETRIES}):`, error)
+          console.error(`Order save error (attempt ${attempt}/${MAX_RETRIES}):`, error)
           if (attempt < MAX_RETRIES) {
             await new Promise((r) => setTimeout(r, 1500))
+          }
+        }
+      }
+
+      // Batch 2: Update inventory quantities separately
+      if (changedInventoryItems.length > 0) {
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const invBatch = writeBatch(db)
+            changedInventoryItems.forEach((item) => {
+              invBatch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+            })
+            await invBatch.commit()
+            break
+          } catch (error) {
+            console.error(`Inventory update error (attempt ${attempt}/${MAX_RETRIES}):`, error)
+            if (attempt < MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, 1500))
+            } else {
+              setEventMessage('⚠️ Orders saved but inventory failed to sync. Quantities may be stale in cloud.')
+            }
           }
         }
       }

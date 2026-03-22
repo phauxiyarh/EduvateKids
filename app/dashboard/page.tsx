@@ -481,7 +481,21 @@ export default function DashboardPage() {
                   expenses: Array.isArray(data.expenses) ? data.expenses as Expense[] : []
                 }
               })
-            setEvents(loadedEvents)
+
+            // ── Recover missing orders from localStorage backup ──
+            const recoveredEvents = loadedEvents.map((event) => {
+              try {
+                const backupRaw = localStorage.getItem(`eduvate-orders-${event.id}`)
+                if (!backupRaw) return event
+                const backupOrders = JSON.parse(backupRaw) as Order[]
+                if (backupOrders.length > event.orders.length) {
+                  console.warn(`[Recovery] Event "${event.name}": Firebase has ${event.orders.length} orders, localStorage has ${backupOrders.length}. Restoring from backup.`)
+                  return { ...event, orders: backupOrders }
+                }
+              } catch { /* ignore parse errors */ }
+              return event
+            })
+            setEvents(recoveredEvents)
 
             const loadedGeneralSales = generalSalesSnap.docs
               .filter((snap) => snap.data()._live === true)
@@ -1520,6 +1534,13 @@ export default function DashboardPage() {
     setDiscount(0)
   }
 
+  // ── localStorage backup helpers ──────────────────────────────
+  const saveOrderBackupToLocal = (eventKey: string, orders: Order[]) => {
+    try {
+      localStorage.setItem(`eduvate-orders-${eventKey}`, JSON.stringify(orders))
+    } catch { /* quota exceeded — ignore */ }
+  }
+
   const handleRecordSale = async () => {
     const isGeneralSale = selectedEventId === 'general'
     const eventRecord = events.find((event) => event.id === selectedEventId)
@@ -1535,6 +1556,7 @@ export default function DashboardPage() {
         setEventMessage(
           `Not enough stock for ${cartItem.title}. Please adjust the cart.`
         )
+        setIsSubmittingSale(false)
         return
       }
     }
@@ -1596,6 +1618,7 @@ export default function DashboardPage() {
       }
     })
 
+    // 1️⃣ Update local state immediately (optimistic)
     if (eventRecord) {
       setEvents((current) =>
         current.map((event) =>
@@ -1608,59 +1631,78 @@ export default function DashboardPage() {
     }
 
     setInventory(nextInventory)
-
     setCartItems([])
     setDiscount(0)
-    setEventMessage(`Sale recorded (${salesToAdd.length} items).`)
 
-    try {
-      const batch = writeBatch(db)
-      if (eventRecord) {
-        batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
-      } else {
-        salesToAdd.forEach((sale) => {
-          batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
+    // 2️⃣ Save order data to localStorage as crash-safe backup
+    const eventKey = eventRecord ? eventRecord.id : 'general'
+    saveOrderBackupToLocal(eventKey, updatedOrders)
+
+    setEventMessage(`Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
+
+    // 3️⃣ Write to Firebase with retry
+    const MAX_RETRIES = 2
+    let writeSuccess = false
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const batch = writeBatch(db)
+        if (eventRecord) {
+          batch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
+        } else {
+          salesToAdd.forEach((sale) => {
+            batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
+          })
+          batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
+        }
+        nextInventory.forEach((item) => {
+          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
         })
-        batch.set(doc(db, 'generalOrders', orderRecord.id), { ...orderRecord, _live: true })
-      }
-      nextInventory.forEach((item) => {
-        batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
-      })
-      await batch.commit()
-
-      // ── Verify save in Firebase ─────────────────────────────────
-      if (eventRecord) {
-        const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
-        const verifyData = verifySnap.data()
-        const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
-        if (savedOrderCount < updatedOrders.length) {
-          setEventMessage('⚠️ Sale may not have saved to cloud. A backup TXT file has been downloaded.')
-          downloadEventTxt(eventRecord.name, updatedOrders)
-        } else {
-          // Save succeeded → auto-download TXT backup
-          downloadEventTxt(eventRecord.name, updatedOrders)
-        }
-      } else {
-        const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
-        if (!verifySnap.exists()) {
-          setEventMessage('⚠️ Order may not have saved to cloud. A backup TXT file has been downloaded.')
-          downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
-        } else {
-          downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
+        await batch.commit()
+        writeSuccess = true
+        break
+      } catch (error) {
+        console.error(`Record sale error (attempt ${attempt}/${MAX_RETRIES}):`, error)
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1500))
         }
       }
-    } catch (error) {
-      console.error('Record sale error:', error)
-      setEventMessage('⚠️ Sale saved locally, but failed to sync. A backup TXT has been downloaded.')
-      // Even if Firebase fails, generate backup TXT from local state
-      if (eventRecord) {
-        downloadEventTxt(eventRecord.name, updatedOrders)
-      } else {
-        downloadEventTxt('General Sales', [orderRecord, ...generalOrders])
-      }
-    } finally {
-      setIsSubmittingSale(false)
     }
+
+    // 4️⃣ Verify the save in Firebase
+    let verified = false
+    if (writeSuccess) {
+      try {
+        if (eventRecord) {
+          const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
+          const verifyData = verifySnap.data()
+          const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
+          verified = savedOrderCount >= updatedOrders.length
+        } else {
+          const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
+          verified = verifySnap.exists()
+        }
+      } catch {
+        verified = false
+      }
+    }
+
+    // 5️⃣ Update TXT backup in localStorage & show result
+    const eventName = eventRecord?.name ?? 'General Sales'
+    const txtContent = generateEventTxt(eventName, updatedOrders)
+    try {
+      localStorage.setItem(`eduvate-txt-${eventKey}`, txtContent)
+    } catch { /* ignore */ }
+
+    if (verified) {
+      setEventMessage(`✅ Sale confirmed & verified in cloud (${salesToAdd.length} items).`)
+    } else if (writeSuccess) {
+      setEventMessage('⚠️ Sale written but cloud verification failed. Data is saved locally. You can download a backup from Order History.')
+    } else {
+      setEventMessage('⚠️ Cloud sync failed after retries. Data is saved locally. You can download a backup from Order History.')
+    }
+
+    setIsSubmittingSale(false)
   }
 
   const handleDeleteOrder = async (order: Order) => {

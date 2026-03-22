@@ -1634,9 +1634,13 @@ export default function DashboardPage() {
     setCartItems([])
     setDiscount(0)
 
-    // 2️⃣ Save order data to localStorage as crash-safe backup
+    // 2️⃣ Save order + TXT data to localStorage BEFORE cloud write
     const eventKey = eventRecord ? eventRecord.id : 'general'
+    const eventName = eventRecord?.name ?? 'General Sales'
     saveOrderBackupToLocal(eventKey, updatedOrders)
+    try {
+      localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders))
+    } catch { /* ignore */ }
 
     setEventMessage(`Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
 
@@ -1687,13 +1691,7 @@ export default function DashboardPage() {
       }
     }
 
-    // 5️⃣ Update TXT backup in localStorage & show result
-    const eventName = eventRecord?.name ?? 'General Sales'
-    const txtContent = generateEventTxt(eventName, updatedOrders)
-    try {
-      localStorage.setItem(`eduvate-txt-${eventKey}`, txtContent)
-    } catch { /* ignore */ }
-
+    // 5️⃣ Show result
     if (verified) {
       setEventMessage(`✅ Sale confirmed & verified in cloud (${salesToAdd.length} items).`)
     } else if (writeSuccess) {

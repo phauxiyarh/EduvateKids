@@ -828,7 +828,7 @@ export default function DashboardPage() {
   const formatNumber = (value: number) => value.toLocaleString('en-US')
 
   // ── TXT Receipt Reference File ──────────────────────────────────
-  const generateEventTxt = (eventName: string, orders: Order[], sales?: Sale[]) => {
+  const generateEventTxt = (eventName: string, orders: Order[]) => {
     const lines: string[] = []
     lines.push('═'.repeat(60))
     lines.push(`  EDUVATE KIDS — ${eventName.toUpperCase()}`)
@@ -841,15 +841,11 @@ export default function DashboardPage() {
     } else {
       orders.forEach((order, idx) => {
         lines.push(`── Order #${orders.length - idx} ${'─'.repeat(40)}`)
-        lines.push(`  Order ID  : ${order.id}`)
         lines.push(`  Date/Time : ${new Date(order.timestamp).toLocaleString()}`)
         lines.push(`  Payment   : ${order.paymentType}`)
         lines.push(`  Items:`)
         order.items.forEach((item) => {
-          // Look up sale record for RRP / sellingPrice detail
-          const saleRecord = sales?.find((s) => s.itemId === item.itemId && s.timestamp === order.timestamp)
-          const rrpInfo = saleRecord ? ` [RRP: $${saleRecord.rrp.toFixed(2)}, Sell: $${saleRecord.sellingPrice.toFixed(2)}]` : ''
-          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}${rrpInfo}`)
+          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}`)
         })
         lines.push(`  Subtotal      : $${order.subtotal.toFixed(2)}`)
         if (order.discount > 0) {
@@ -871,25 +867,14 @@ export default function DashboardPage() {
       lines.push(`  Total Revenue : $${totalRevenue.toFixed(2)}`)
       lines.push(`  Items Sold    : ${totalItems}`)
       lines.push(`  Avg. Order    : $${(orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2)}`)
-
-      // Sale-level detail section
-      if (sales && sales.length > 0) {
-        lines.push('')
-        lines.push('═'.repeat(60))
-        lines.push('  SALE RECORDS (raw data)')
-        lines.push('═'.repeat(60))
-        sales.forEach((sale) => {
-          lines.push(`  ${sale.id} | ${sale.title} | qty:${sale.quantity} | payment:${sale.paymentType} | total:$${sale.total.toFixed(2)} | rrp:$${sale.rrp.toFixed(2)} | sell:$${sale.sellingPrice.toFixed(2)} | ${sale.timestamp}`)
-        })
-      }
     }
     lines.push('')
     lines.push('═'.repeat(60))
     return lines.join('\n')
   }
 
-  const downloadEventTxt = (eventName: string, orders: Order[], sales?: Sale[]) => {
-    const content = generateEventTxt(eventName, orders, sales)
+  const downloadEventTxt = (eventName: string, orders: Order[]) => {
+    const content = generateEventTxt(eventName, orders)
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -1681,7 +1666,7 @@ export default function DashboardPage() {
     const eventName = eventRecord?.name ?? 'General Sales'
     saveOrderBackupToLocal(eventKey, updatedOrders, updatedSales)
     try {
-      localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders, updatedSales))
+      localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders))
     } catch { /* ignore */ }
 
     setEventMessage(`Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
@@ -3420,7 +3405,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 {viewingOrderHistory.orders.length > 0 && (
                   <button
-                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders, viewingOrderHistory.sales)}
+                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
                     className="rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
                     type="button"
                   >

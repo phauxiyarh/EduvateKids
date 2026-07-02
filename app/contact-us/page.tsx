@@ -115,25 +115,28 @@ export default function ContactUsPage() {
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {[
-              { label: 'Home', href: '/' },
-              { label: 'Our Products', href: '/catalog' },
-              { label: 'Book Event', href: '/book-event' }
+              { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10', active: false },
+              { label: 'Our Products', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', active: false },
+              { label: 'Book Event', href: '/book-event', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', active: false },
+              { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z', active: true }
             ].map((item) => (
-              <Link key={item.label} href={item.href} className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark">
-                {item.label}
-                <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-current={item.active ? 'page' : undefined}
+                className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
+                  item.active
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                    : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span>{item.label}</span>
               </Link>
             ))}
           </nav>
-          <Link
-            className="btn-shine flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-4 sm:px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(124,58,237,0.25)] transition-all duration-300 hover:-translate-y-0.5"
-            href="/auth/login"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            <span className="hidden sm:inline">Admin Login</span>
-          </Link>
         </div>
       </header>
 
@@ -411,6 +414,19 @@ export default function ContactUsPage() {
               <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
               <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>
             </div>
+          </div>
+          <div className="mb-6 flex justify-center">
+            <Link
+              href="/auth/login"
+              aria-label="Admin Login"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Admin Login</span>
+            </Link>
           </div>
           <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-white/50">
             <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>

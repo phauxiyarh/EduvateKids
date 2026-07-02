@@ -248,44 +248,33 @@ export default function HomePage() {
             </span>
           </a>
 
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-2 md:flex">
             {[
-              { label: 'About', href: '#about', external: false },
-              { label: 'Our Products', href: '/catalog', external: true },
-              { label: 'Publishers', href: '#partners', external: false }
-            ].map((item) =>
-              item.external ? (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark"
-                >
-                  {item.label}
-                  <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
-                </Link>
-              ) : (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark"
-                >
-                  {item.label}
-                  <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
-                </a>
+              { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
+              { label: 'About', href: '#about', external: false, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> },
+              { label: 'Our Products', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
+              { label: 'Publishers', href: '#partners', external: false, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 12a3 3 0 01-2.83-4" /> }
+            ].map((item) => {
+              const cls = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
+                item.active
+                  ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                  : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
+              }`
+              const inner = (
+                <>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">{item.icon}</svg>
+                  <span>{item.label}</span>
+                </>
               )
-            )}
+              return item.external ? (
+                <Link key={item.label} href={item.href} className={cls} aria-current={item.active ? 'page' : undefined}>{inner}</Link>
+              ) : (
+                <a key={item.label} href={item.href} className={cls} aria-current={item.active ? 'page' : undefined}>{inner}</a>
+              )
+            })}
           </nav>
 
           <div className="flex items-center gap-2">
-            <Link
-              className="btn-shine hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(124,58,237,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(124,58,237,0.35)]"
-              href="/auth/login"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              Admin Login
-            </Link>
             {/* Mobile menu button */}
             <button
               type="button"
@@ -306,22 +295,18 @@ export default function HomePage() {
         {mobileMenuOpen && (
           <div className="animate-slideDown md:hidden border-t border-primary/10 bg-white/95 backdrop-blur-xl shadow-lg">
             <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
-              <a className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="#about" onClick={() => setMobileMenuOpen(false)}>
+              <a className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="#about" onClick={() => setMobileMenuOpen(false)}>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 About
-                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
-              <Link className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="/catalog" onClick={() => setMobileMenuOpen(false)}>
+              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/catalog" onClick={() => setMobileMenuOpen(false)}>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 Our Products
-                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </Link>
-              <a className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="#partners" onClick={() => setMobileMenuOpen(false)}>
+              <a className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="#partners" onClick={() => setMobileMenuOpen(false)}>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 12a3 3 0 01-2.83-4" /></svg>
                 Publishers
-                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
               </a>
-              <Link className="mt-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-semibold text-white shadow-md active:scale-[0.98]" href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                Admin Login
-              </Link>
             </nav>
           </div>
         )}
@@ -1111,10 +1096,6 @@ export default function HomePage() {
                   <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
                   <span className="transition-transform duration-200 group-hover:translate-x-0.5">Digital Catalog</span>
                 </a>
-                <Link className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white" href="/auth/login">
-                  <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">Admin Login</span>
-                </Link>
               </div>
             </div>
 
@@ -1149,6 +1130,20 @@ export default function HomePage() {
           </div>
 
           <div className="mt-12 border-t border-white/10 pt-8">
+            {/* Discreet admin access — low opacity, brightens on hover */}
+            <div className="mb-6 flex justify-center">
+              <Link
+                href="/auth/login"
+                aria-label="Admin Login"
+                className="group inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+                </svg>
+                <span className="text-xs font-medium tracking-wide">Admin Login</span>
+              </Link>
+            </div>
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/50">
               <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
               <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">

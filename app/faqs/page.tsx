@@ -159,10 +159,11 @@ const faqCategories = [
 ]
 
 const navLinks = [
-  { label: 'Home', href: '/' },
-  { label: 'Our Products', href: '/products' },
-  { label: 'Book Event', href: '/book-event' },
-  { label: 'Contact', href: '/contact-us' }
+  { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
+  { label: 'Our Products', href: '/products', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+  { label: 'Book Event', href: '/book-event', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+  { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' },
+  { label: 'FAQs', href: '/faqs', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
 ]
 
 function useReveal() {
@@ -220,29 +221,29 @@ export default function FAQsPage() {
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors hover:text-primaryDark"
-                href={link.href}
-              >
-                {link.label}
-                <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const isActive = link.href === '/faqs'
+              return (
+                <Link
+                  key={link.href}
+                  className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                      : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
+                  }`}
+                  href={link.href}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+                  </svg>
+                  <span>{link.label}</span>
+                </Link>
+              )
+            })}
           </nav>
 
           <div className="flex items-center gap-2">
-            <Link
-              className="btn-shine hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-sm font-semibold text-white shadow-soft transition-transform duration-300 hover:-translate-y-0.5"
-              href="/auth/login"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              Admin Login
-            </Link>
-
             <button
               type="button"
               onClick={() => setMobileOpen((prev) => !prev)}
@@ -268,26 +269,27 @@ export default function FAQsPage() {
             className="animate-slideDown border-t border-primary/10 bg-white/95 backdrop-blur-xl md:hidden"
           >
             <nav className="mx-auto flex w-11/12 max-w-6xl flex-col gap-1 py-4">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-2xl px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-primary/5 hover:text-primaryDark"
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <Link
-                href="/auth/login"
-                onClick={() => setMobileOpen(false)}
-                className="btn-shine mt-2 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3 text-sm font-semibold text-white shadow-soft"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Admin Login
-              </Link>
+              {navLinks.map((link) => {
+                const isActive = link.href === '/faqs'
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] ${
+                      isActive
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white'
+                        : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
+                    }`}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+                    </svg>
+                    <span>{link.label}</span>
+                  </Link>
+                )
+              })}
             </nav>
           </div>
         )}
@@ -450,7 +452,20 @@ export default function FAQsPage() {
               <Link className="text-white/70 transition-colors hover:text-white" href="/faqs">Policies</Link>
             </nav>
           </div>
-          <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-white/50">
+          <div className="mt-8 mb-6 flex justify-center">
+            <Link
+              href="/auth/login"
+              aria-label="Admin Login"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Admin Login</span>
+            </Link>
+          </div>
+          <div className="border-t border-white/10 pt-6 text-center text-sm text-white/50">
             <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
           </div>
         </div>

@@ -125,8 +125,10 @@ export default function BookEventPage() {
   const [error, setError] = useState('')
 
   const typesReveal = useReveal<HTMLDivElement>()
+  const typesGridReveal = useReveal<HTMLDivElement>()
   const formReveal = useReveal<HTMLDivElement>()
   const whyReveal = useReveal<HTMLDivElement>()
+  const whyGridReveal = useReveal<HTMLDivElement>()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -244,7 +246,7 @@ export default function BookEventPage() {
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">Event Types We Support</h2>
               <p className="mt-3 text-muted">Choose the perfect format for your community</p>
             </div>
-            <div className="reveal-stagger grid gap-6 md:grid-cols-2">
+            <div ref={typesGridReveal} className="reveal-stagger grid gap-6 md:grid-cols-2">
               {eventTypes.map((event) => (
                 <div key={event.title} className="card-hover rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.14)]">
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -388,7 +390,7 @@ export default function BookEventPage() {
           <div ref={whyReveal} className="reveal mx-auto w-11/12 max-w-4xl">
             <div className="rounded-3xl bg-white p-6 sm:p-10 shadow-soft text-center">
               <h2 className="font-display text-2xl sm:text-3xl">Why Partner With Eduvate Kids?</h2>
-              <div className="reveal-stagger mt-8 grid gap-6 md:grid-cols-3 text-left">
+              <div ref={whyGridReveal} className="reveal-stagger mt-8 grid gap-6 md:grid-cols-3 text-left">
                 {whyPartner.map((item) => (
                   <div key={item.title} className="card-hover rounded-2xl bg-cream p-6 hover:-translate-y-1 hover:shadow-soft">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">

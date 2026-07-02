@@ -310,6 +310,22 @@ textarea:focus-visible,
 .reveal-stagger.is-visible > *:nth-child(9) { transition-delay: 0.61s; }
 .reveal-stagger.is-visible > *:nth-child(10) { transition-delay: 0.68s; }
 
+/* Safety net: if the IntersectionObserver never fires (element mounted late,
+   JS disabled, or no ref attached), force the content visible after a short
+   delay so it can never stay permanently hidden/black. When JS works normally
+   the .is-visible transition fires first (well under 2.5s), so this is unseen. */
+@keyframes reveal-failsafe {
+  to { opacity: 1; transform: none; }
+}
+
+.reveal:not(.is-visible) {
+  animation: reveal-failsafe 0.01s linear 2.5s forwards;
+}
+
+.reveal-stagger:not(.is-visible) > * {
+  animation: reveal-failsafe 0.01s linear 2.5s forwards;
+}
+
 /* Animated brand gradient for headings */
 @keyframes gradient-shift {
   0% { background-position: 0% 50%; }

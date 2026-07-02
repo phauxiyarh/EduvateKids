@@ -114,12 +114,15 @@ function shuffleArray<T>(array: T[]): T[] {
 
 // Reveal-on-scroll: toggles `.is-visible` once an element enters the viewport.
 // Pass the returned ref to any element carrying the `reveal`/`reveal-stagger` class.
-function useReveal<T extends HTMLElement = HTMLDivElement>() {
+// `deps` lets the observer re-attach when the element mounts later (e.g. async
+// content like the catalog grid) — otherwise the one-time effect would miss it
+// and the element would stay at opacity:0 forever.
+function useReveal<T extends HTMLElement = HTMLDivElement>(deps: unknown[] = []) {
   const ref = useRef<T | null>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    // No-op gracefully if IntersectionObserver is unavailable
+    // If it's already visible in the viewport on attach, reveal immediately.
     if (typeof IntersectionObserver === 'undefined') {
       el.classList.add('is-visible')
       return
@@ -137,7 +140,8 @@ function useReveal<T extends HTMLElement = HTMLDivElement>() {
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
   return ref
 }
 
@@ -152,8 +156,8 @@ export default function HomePage() {
 
   // Scroll-reveal refs for each major section
   const aboutReveal = useReveal<HTMLDivElement>()
-  const catalogReveal = useReveal<HTMLDivElement>()
-  const catalogGridReveal = useReveal<HTMLDivElement>()
+  const catalogReveal = useReveal<HTMLDivElement>([catalogItems.length])
+  const catalogGridReveal = useReveal<HTMLDivElement>([catalogItems.length])
   const orderReveal = useReveal<HTMLDivElement>()
   const testimonialReveal = useReveal<HTMLDivElement>()
   const partnersReveal = useReveal<HTMLDivElement>()
@@ -250,7 +254,6 @@ export default function HomePage() {
 
           <nav className="hidden items-center gap-2 md:flex">
             {[
-              { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
               { label: 'About', href: '#about', external: false, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> },
               { label: 'Our Products', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
               { label: 'Publishers', href: '#partners', external: false, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 12a3 3 0 01-2.83-4" /> }

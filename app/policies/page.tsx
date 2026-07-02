@@ -2,15 +2,83 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
 import bg2 from '../../assets/bg2.png'
 
-const policies = [
+function useReveal<T extends HTMLElement = HTMLDivElement>() {
+  const ref = useRef<T | null>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (typeof IntersectionObserver === 'undefined') {
+      el.classList.add('is-visible')
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return ref
+}
+
+type PolicyIcon = 'privacy' | 'returns' | 'shipping' | 'terms'
+
+const PolicyGlyph = ({ name, className = 'h-6 w-6 sm:h-7 sm:w-7' }: { name: PolicyIcon; className?: string }) => {
+  switch (name) {
+    case 'privacy':
+      return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9.5 12.5v-1.5a2.5 2.5 0 015 0v1.5M8.75 12.5h6.5v3.5h-6.5z" />
+        </svg>
+      )
+    case 'returns':
+      return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+        </svg>
+      )
+    case 'shipping':
+      return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z" />
+        </svg>
+      )
+    case 'terms':
+    default:
+      return (
+        <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 4h6l4 4v12a1 1 0 01-1 1H8a1 1 0 01-1-1V5a1 1 0 011-1z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14 4v4h4M9.5 13h5M9.5 16h5" />
+        </svg>
+      )
+  }
+}
+
+const policies: {
+  id: string
+  title: string
+  icon: PolicyIcon
+  sections: { heading: string; content: string }[]
+}[] = [
   {
+    id: 'privacy',
     title: 'Privacy Policy',
-    icon: '🔒',
+    icon: 'privacy',
     sections: [
       {
         heading: 'Information We Collect',
@@ -31,8 +99,9 @@ const policies = [
     ]
   },
   {
+    id: 'returns',
     title: 'Return & Refund Policy',
-    icon: '↩️',
+    icon: 'returns',
     sections: [
       {
         heading: 'Return Window',
@@ -53,8 +122,9 @@ const policies = [
     ]
   },
   {
+    id: 'shipping',
     title: 'Shipping Policy',
-    icon: '📦',
+    icon: 'shipping',
     sections: [
       {
         heading: 'Processing Time',
@@ -75,8 +145,9 @@ const policies = [
     ]
   },
   {
+    id: 'terms',
     title: 'Terms of Service',
-    icon: '📋',
+    icon: 'terms',
     sections: [
       {
         heading: 'Account Responsibilities',
@@ -99,44 +170,88 @@ const policies = [
 ]
 
 export default function PoliciesPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [openIndex, setOpenIndex] = useState<number | null>(0)
+  const sectionReveal = useReveal<HTMLDivElement>()
+
   return (
     <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-2">
-          <Link className="flex items-center gap-2 sm:gap-3 min-w-0" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} className="flex-shrink-0" />
-            <span className="flex flex-col min-w-0">
+      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)] backdrop-blur-xl">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-3">
+          <Link className="group flex items-center gap-2 sm:gap-3 min-w-0" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 transition-transform duration-500 group-hover:rotate-6" />
+            <span className="flex flex-col min-w-0 leading-tight">
               <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
+              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <Link className="hover:text-primaryDark" href="/">
-              Home
-            </Link>
-            <Link className="hover:text-primaryDark" href="/contact-us">
-              Contact
-            </Link>
+          <nav className="hidden items-center gap-1 md:flex">
+            {[
+              { label: 'Home', href: '/' },
+              { label: 'Our Products', href: '/catalog' },
+              { label: 'Contact', href: '/contact-us' }
+            ].map((item) => (
+              <Link key={item.label} href={item.href} className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark">
+                {item.label}
+                <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+              </Link>
+            ))}
           </nav>
-          <Link
-            className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
-            href="/auth/login"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Admin Login
-          </Link>
-          <Link
-            className="sm:hidden flex items-center justify-center rounded-full border border-primary/30 bg-white p-2.5 text-primaryDark"
-            href="/auth/login"
-            aria-label="Admin Login"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              className="btn-shine hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(124,58,237,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(124,58,237,0.35)]"
+              href="/auth/login"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Admin Login
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="flex md:hidden h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-white/70 text-primaryDark backdrop-blur transition hover:bg-primary/5 active:scale-95"
+              aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              )}
+            </button>
+          </div>
         </div>
+        {mobileMenuOpen && (
+          <div className="animate-slideDown md:hidden border-t border-primary/10 bg-white/95 backdrop-blur-xl shadow-lg">
+            <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
+              {[
+                { label: 'Home', href: '/' },
+                { label: 'Our Products', href: '/catalog' },
+                { label: 'Contact', href: '/contact-us' }
+              ].map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]"
+                >
+                  {item.label}
+                  <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </Link>
+              ))}
+              <Link
+                className="mt-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-semibold text-white shadow-md active:scale-[0.98]"
+                href="/auth/login"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                Admin Login
+              </Link>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main>
@@ -164,67 +279,117 @@ export default function PoliciesPage() {
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-4xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+          <div className="reveal is-visible relative z-10 mx-auto w-11/12 max-w-4xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">
               Legal Information
-            </p>
-            <h1 className="mt-4 font-display text-3xl sm:text-5xl">Policies & Terms</h1>
-            <p className="mt-4 text-base sm:text-lg text-muted">
+            </span>
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl">
+              Policies &amp; <span className="gradient-text">Terms</span>
+            </h1>
+            <p className="mt-3 text-sm font-medium text-muted/80">Last updated: June 2026</p>
+            <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
               We believe in transparency and trust. Review our policies to understand
               how we protect your privacy and ensure a great shopping experience.
             </p>
+
+            <div className="mt-8 flex flex-wrap justify-center gap-2 sm:gap-3">
+              {policies.map((policy) => (
+                <a
+                  key={`jump-${policy.id}`}
+                  href={`#${policy.id}`}
+                  className="group inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-4 py-2 text-sm font-semibold text-primaryDark shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white"
+                >
+                  <PolicyGlyph name={policy.icon} className="h-4 w-4" />
+                  {policy.title}
+                </a>
+              ))}
+            </div>
           </div>
         </section>
 
-        <section className="relative py-16">
-          <div className="mx-auto w-11/12 max-w-5xl space-y-12">
-            {policies.map((policy, policyIndex) => (
-              <div
-                key={policy.title}
-                className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10"
-              >
-                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
-                  <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-2xl sm:text-3xl flex-shrink-0">
-                    {policy.icon}
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="font-display text-2xl sm:text-3xl gradient-text">{policy.title}</h2>
-                    <div className="mt-6 space-y-6">
-                      {policy.sections.map((section, sectionIndex) => (
-                        <div key={sectionIndex}>
-                          <h3 className="text-lg font-semibold text-primaryDark">
-                            {section.heading}
-                          </h3>
-                          <p className="mt-2 text-muted leading-relaxed">
-                            {section.content}
-                          </p>
-                        </div>
-                      ))}
+        <section className="relative py-14 sm:py-16">
+          <div ref={sectionReveal} className="reveal reveal-stagger mx-auto w-11/12 max-w-5xl space-y-5 sm:space-y-6">
+            {policies.map((policy, policyIndex) => {
+              const isOpen = openIndex === policyIndex
+              const panelId = `policy-panel-${policy.id}`
+              const buttonId = `policy-button-${policy.id}`
+              return (
+                <div
+                  key={policy.title}
+                  id={policy.id}
+                  className="scroll-mt-28 overflow-hidden rounded-3xl border border-primary/10 bg-white shadow-soft transition-shadow duration-300 hover:shadow-[0_18px_44px_rgba(124,58,237,0.12)]"
+                >
+                  <button
+                    type="button"
+                    id={buttonId}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    onClick={() => setOpenIndex(isOpen ? null : policyIndex)}
+                    className="flex w-full items-center gap-3 sm:gap-4 p-5 sm:p-6 text-left transition-colors duration-200 hover:bg-primary/[0.03]"
+                  >
+                    <span className="flex h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
+                      <PolicyGlyph name={policy.icon} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-display text-xl sm:text-2xl gradient-text">{policy.title}</span>
+                      <span className="mt-0.5 block text-xs sm:text-sm text-muted">
+                        {policy.sections.length} sections
+                      </span>
+                    </span>
+                    <svg
+                      className={`h-6 w-6 flex-shrink-0 text-primaryDark transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={buttonId}
+                    className={`grid transition-all duration-500 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="space-y-6 border-t border-primary/10 px-5 sm:px-6 pb-6 pt-5">
+                        {policy.sections.map((section, sectionIndex) => (
+                          <div key={sectionIndex}>
+                            <h3 className="text-lg font-semibold text-primaryDark">
+                              {section.heading}
+                            </h3>
+                            <p className="mt-2 text-muted leading-relaxed">
+                              {section.content}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
 
-        <section className="relative py-16 bg-gradient-to-br from-emerald-50 to-blue-50">
+        <section className="relative py-16 bg-gradient-to-br from-primary/5 to-secondary/5">
           <div className="mx-auto w-11/12 max-w-4xl text-center">
             <h2 className="font-display text-2xl sm:text-3xl">Questions About Our Policies?</h2>
             <p className="mt-3 text-muted">
-              We're here to help. Reach out to our team if you need clarification
+              We&apos;re here to help. Reach out to our team if you need clarification
               on any of our policies or have specific concerns.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Link
                 href="/contact-us"
-                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 font-semibold text-white shadow-soft transition hover:-translate-y-1"
+                className="btn-shine rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 font-semibold text-white shadow-soft transition-all duration-300 hover:-translate-y-0.5"
               >
                 Contact Us
               </Link>
               <Link
                 href="/faqs"
-                className="rounded-full border border-primary px-8 py-3 font-semibold text-primaryDark transition hover:-translate-y-1"
+                className="rounded-full border border-primary px-8 py-3 font-semibold text-primaryDark transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/5"
               >
                 View FAQs
               </Link>
@@ -233,9 +398,25 @@ export default function PoliciesPage() {
         </section>
       </main>
 
-      <footer className="bg-[#1f1b2e] py-8 text-white">
-        <div className="mx-auto w-11/12 max-w-6xl text-center text-sm text-white/70">
-          <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        <div className="mx-auto w-11/12 max-w-6xl">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
+              <span className="font-display text-lg font-bold">Eduvate Kids</span>
+            </Link>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/70">
+              <Link href="/" className="transition-colors hover:text-white">Home</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
+              <Link href="/contact-us" className="transition-colors hover:text-white">Contact</Link>
+              <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
+              <Link href="/book-event" className="transition-colors hover:text-white">Book Event</Link>
+            </div>
+          </div>
+          <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-white/50">
+            <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>

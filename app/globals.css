@@ -8,9 +8,27 @@
   color-scheme: light;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem; /* offset for sticky header on anchor jumps */
+}
+
 body {
   font-family: theme('fontFamily.body');
   color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Visible keyboard focus ring across all interactive elements */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .hero-bg {
@@ -162,20 +180,34 @@ body {
   background: #ffffff;
   border-radius: 20px;
   padding: 1.5rem;
-  box-shadow: 0 24px 60px rgba(31, 41, 55, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.08);
+  box-shadow: 0 18px 40px rgba(31, 41, 55, 0.10);
   display: grid;
   place-items: center;
   min-width: 220px;
-  transition: transform 0.2s ease;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease;
 }
 
 .partner-card:hover {
-  transform: translateY(-6px);
+  transform: translateY(-8px);
+  border-color: rgba(124, 58, 237, 0.25);
+  box-shadow: 0 28px 60px rgba(124, 58, 237, 0.18);
 }
 
 .partner-logo {
   max-height: 90px;
   width: auto;
+  filter: grayscale(0.4);
+  opacity: 0.85;
+  transition: filter 0.4s ease, opacity 0.4s ease, transform 0.4s ease;
+}
+
+.partner-card:hover .partner-logo {
+  filter: grayscale(0);
+  opacity: 1;
+  transform: scale(1.04);
 }
 
 .perspective-700 {
@@ -233,4 +265,148 @@ body {
 
 .animate-slideDown {
   animation: slideDown 0.3s ease-out;
+}
+
+/* ───────────────────────────────────────────────
+   Premium polish: scroll reveal, gradient motion,
+   button shine, refined easing & interactivity
+   ─────────────────────────────────────────────── */
+
+/* Scroll-reveal: hidden until .is-visible is toggled by IntersectionObserver */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger children when a parent gets .is-visible */
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal-stagger.is-visible > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-stagger.is-visible > *:nth-child(1) { transition-delay: 0.05s; }
+.reveal-stagger.is-visible > *:nth-child(2) { transition-delay: 0.12s; }
+.reveal-stagger.is-visible > *:nth-child(3) { transition-delay: 0.19s; }
+.reveal-stagger.is-visible > *:nth-child(4) { transition-delay: 0.26s; }
+.reveal-stagger.is-visible > *:nth-child(5) { transition-delay: 0.33s; }
+.reveal-stagger.is-visible > *:nth-child(6) { transition-delay: 0.40s; }
+.reveal-stagger.is-visible > *:nth-child(7) { transition-delay: 0.47s; }
+.reveal-stagger.is-visible > *:nth-child(8) { transition-delay: 0.54s; }
+.reveal-stagger.is-visible > *:nth-child(9) { transition-delay: 0.61s; }
+.reveal-stagger.is-visible > *:nth-child(10) { transition-delay: 0.68s; }
+
+/* Animated brand gradient for headings */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-text {
+  background: linear-gradient(120deg, #7c3aed, #10b981, #f59e0b, #ec4899, #7c3aed);
+  background-size: 280% 280%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shift 9s ease infinite;
+}
+
+/* Premium gradient CTA with sweeping shine on hover */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.btn-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%) skewX(-20deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  transition: transform 0.7s ease;
+  z-index: -1;
+}
+
+.btn-shine:hover::after {
+  transform: translateX(120%) skewX(-20deg);
+}
+
+/* Soft floating glow for hero decorations */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.08); }
+}
+
+.pulse-glow {
+  animation: pulse-glow 7s ease-in-out infinite;
+}
+
+/* Animated scroll-down cue */
+@keyframes scroll-cue {
+  0% { transform: translateY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
+
+.scroll-cue-dot {
+  animation: scroll-cue 1.8s ease-in-out infinite;
+}
+
+/* Card sheen on hover */
+.card-hover {
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Pause the partner marquee when hovered */
+.partner-slider:hover .partner-track {
+  animation-play-state: paused;
+}
+
+/* Slightly fluid hero drift refinement */
+.hero-drift {
+  will-change: transform;
+}
+
+/* ── Accessibility: honor reduced-motion (skill: High severity) ── */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal,
+  .reveal-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

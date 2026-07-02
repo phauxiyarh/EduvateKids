@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import logo from '../assets/logo.png'
@@ -112,6 +112,35 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled
 }
 
+// Reveal-on-scroll: toggles `.is-visible` once an element enters the viewport.
+// Pass the returned ref to any element carrying the `reveal`/`reveal-stagger` class.
+function useReveal<T extends HTMLElement = HTMLDivElement>() {
+  const ref = useRef<T | null>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // No-op gracefully if IntersectionObserver is unavailable
+    if (typeof IntersectionObserver === 'undefined') {
+      el.classList.add('is-visible')
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return ref
+}
+
 export default function HomePage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
@@ -119,6 +148,15 @@ export default function HomePage() {
   const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
   const [expandedSlider, setExpandedSlider] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  // Scroll-reveal refs for each major section
+  const aboutReveal = useReveal<HTMLDivElement>()
+  const catalogReveal = useReveal<HTMLDivElement>()
+  const catalogGridReveal = useReveal<HTMLDivElement>()
+  const orderReveal = useReveal<HTMLDivElement>()
+  const testimonialReveal = useReveal<HTMLDivElement>()
+  const partnersReveal = useReveal<HTMLDivElement>()
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -126,6 +164,22 @@ export default function HomePage() {
     }, 4500)
     return () => clearInterval(interval)
   }, [])
+
+  // Condense the sticky header once the user scrolls past the hero top
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // Lock body scroll while the product modal is open
+  useEffect(() => {
+    document.body.style.overflow = expandedItem ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [expandedItem])
 
   useEffect(() => {
     getDocs(collection(db, 'catalog')).then((snap) => {
@@ -159,29 +213,72 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-4 py-2">
-          <a className="flex items-center gap-2 sm:gap-3 min-w-0" href="#top">
-            <Image
-              src={logo}
-              alt="Eduvate Kids logo"
-              width={32}
-              height={32}
-              className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0"
-            />
-            <span className="flex flex-col min-w-0">
+      <header
+        className={`sticky top-0 z-50 transition-all duration-500 ${
+          scrolled
+            ? 'border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.08)] backdrop-blur-xl'
+            : 'border-b border-transparent bg-white/60 backdrop-blur-md'
+        }`}
+      >
+        {/* gradient hairline accent */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div
+          className={`mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-4 transition-all duration-500 ${
+            scrolled ? 'py-2' : 'py-3'
+          }`}
+        >
+          <a className="group flex items-center gap-2 sm:gap-3 min-w-0" href="#top" aria-label="Eduvate Kids home">
+            <span className="relative flex-shrink-0">
+              <span className="absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 opacity-0 blur-md transition-opacity duration-500 group-hover:opacity-100" />
+              <Image
+                src={logo}
+                alt="Eduvate Kids logo"
+                width={36}
+                height={36}
+                className={`transition-all duration-500 group-hover:rotate-[6deg] ${
+                  scrolled ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-8 w-8 sm:h-10 sm:w-10'
+                }`}
+              />
+            </span>
+            <span className="flex flex-col min-w-0 leading-tight">
               <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
+              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">
+                Islamic Bookstore
+              </span>
             </span>
           </a>
-          <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <a className="hover:text-primaryDark" href="#about">About</a>
-            <Link className="hover:text-primaryDark" href="/catalog">Our Products</Link>
-            <a className="hover:text-primaryDark" href="#partners">Publishers</a>
+
+          <nav className="hidden items-center gap-1 md:flex">
+            {[
+              { label: 'About', href: '#about', external: false },
+              { label: 'Our Products', href: '/catalog', external: true },
+              { label: 'Publishers', href: '#partners', external: false }
+            ].map((item) =>
+              item.external ? (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark"
+                >
+                  {item.label}
+                  <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+                </Link>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark"
+                >
+                  {item.label}
+                  <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+                </a>
+              )
+            )}
           </nav>
+
           <div className="flex items-center gap-2">
             <Link
-              className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+              className="btn-shine hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(124,58,237,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(124,58,237,0.35)]"
               href="/auth/login"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,8 +290,9 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex md:hidden h-10 w-10 items-center justify-center rounded-xl hover:bg-gray-100 transition"
+              className="flex md:hidden h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-white/70 text-primaryDark backdrop-blur transition hover:bg-primary/5 active:scale-95"
               aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -206,12 +304,21 @@ export default function HomePage() {
         </div>
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-black/5 bg-white/95 backdrop-blur">
+          <div className="animate-slideDown md:hidden border-t border-primary/10 bg-white/95 backdrop-blur-xl shadow-lg">
             <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
-              <a className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="#about" onClick={() => setMobileMenuOpen(false)}>About</a>
-              <Link className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="/catalog" onClick={() => setMobileMenuOpen(false)}>Our Products</Link>
-              <a className="rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50 hover:text-primaryDark transition" href="#partners" onClick={() => setMobileMenuOpen(false)}>Publishers</a>
-              <Link className="rounded-xl px-4 py-3 text-sm font-semibold text-primaryDark hover:bg-primary/5 transition flex items-center gap-2" href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
+              <a className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="#about" onClick={() => setMobileMenuOpen(false)}>
+                About
+                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </a>
+              <Link className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="/catalog" onClick={() => setMobileMenuOpen(false)}>
+                Our Products
+                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+              <a className="flex items-center justify-between rounded-2xl px-4 py-3.5 text-sm font-semibold text-muted transition hover:bg-primary/5 hover:text-primaryDark active:scale-[0.98]" href="#partners" onClick={() => setMobileMenuOpen(false)}>
+                Publishers
+                <svg className="h-4 w-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </a>
+              <Link className="mt-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-semibold text-white shadow-md active:scale-[0.98]" href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 Admin Login
               </Link>
@@ -262,28 +369,51 @@ export default function HomePage() {
           <div className="hero-glow pointer-events-none absolute right-[-120px] top-24 z-0 h-72 w-72 rounded-full hidden sm:block" />
           <div className="hero-glow pointer-events-none absolute left-[-140px] top-52 z-0 h-80 w-80 rounded-full hidden sm:block" />
           <div className="relative z-10 mx-auto grid w-11/12 max-w-6xl items-center gap-12 md:grid-cols-2">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+            <div className="reveal is-visible">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accentThree/60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-accentThree" />
+                </span>
                 Maryland, USA
-              </p>
+              </span>
               <h1 className="mt-4 font-display text-3xl leading-tight sm:text-4xl md:text-5xl">
-                A leading Muslim bookstore for families, schools, and communities.
+                A leading Muslim bookstore for{' '}
+                <span className="gradient-text">families, schools, and communities.</span>
               </h1>
-              <p className="mt-3 text-lg font-semibold gradient-text">
+              <p className="mt-3 text-lg font-semibold text-primaryDark/80">
                 Curated stories that inspire faith, curiosity, and character.
               </p>
-              <p className="mt-4 text-base sm:text-lg text-muted">
+              <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
                 Eduvate Kids curates Islamic children&apos;s literature, crafts, and
                 learning tools with a modern retail experience. We serve families,
                 educators, and community events with thoughtful recommendations,
                 reliable inventory, and warm service.
               </p>
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/catalog"
+                  className="btn-shine inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(124,58,237,0.4)]"
+                >
+                  Explore Our Collection
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                </Link>
+                <a
+                  href="https://wa.me/c/16674377777"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white/70 px-6 py-3 text-sm font-semibold text-primaryDark backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-white"
+                >
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347" /></svg>
+                  Order via WhatsApp
+                </a>
+              </div>
               <div className="mt-6 text-sm text-muted">
-                Curated Islamic titles · Books, crafts, and puzzles · Events & school fairs
+                Curated Islamic titles · Books, crafts, and puzzles · Events &amp; school fairs
               </div>
             </div>
 
-            <div className="glass-card rounded-2xl p-5 sm:p-8 shadow-soft">
+            <div className="glass-card card-hover rounded-2xl p-5 sm:p-8 shadow-soft hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(124,58,237,0.18)]">
               <div className="flex items-center justify-between text-sm font-semibold">
                 <span>Why Reading Matters</span>
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primaryDark">
@@ -348,10 +478,10 @@ export default function HomePage() {
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+          <div ref={aboutReveal} className="reveal relative z-10 mx-auto w-11/12 max-w-6xl">
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
-                Our Story & Purpose
+                Our Story &amp; Purpose
               </p>
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">About Eduvate Kids</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
@@ -445,7 +575,7 @@ export default function HomePage() {
         {catalogItems.length > 0 && (
           <section id="catalog" className="relative py-12 sm:py-20 bg-white">
             <div className="mx-auto w-11/12 max-w-6xl">
-              <div className="text-center mb-12">
+              <div ref={catalogReveal} className="reveal text-center mb-12">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                   Our Products
                 </p>
@@ -455,12 +585,12 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="grid gap-5 sm:gap-8 grid-cols-2 lg:grid-cols-3">
+              <div ref={catalogGridReveal} className="reveal-stagger grid gap-5 sm:gap-8 grid-cols-2 lg:grid-cols-3">
                 {catalogItems.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => { setExpandedItem(item); setExpandedSlider(0) }}
-                    className="group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_8px_40px_rgba(124,58,237,0.12)] hover:-translate-y-1 transition-all duration-500 cursor-pointer"
+                    className="group card-hover flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_16px_48px_rgba(124,58,237,0.16)] hover:-translate-y-1.5 cursor-pointer"
                   >
                     {/* Image */}
                     <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
@@ -522,7 +652,9 @@ export default function HomePage() {
                           )}
                         </>
                       ) : (
-                        <div className="flex h-full items-center justify-center text-4xl opacity-30">📷</div>
+                        <div className="flex h-full items-center justify-center text-primary/25">
+                          <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        </div>
                       )}
                     </div>
 
@@ -561,10 +693,10 @@ export default function HomePage() {
               <div className="mt-10 text-center">
                 <a
                   href="/catalog"
-                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 font-display text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
+                  className="btn-shine group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3.5 font-display text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(124,58,237,0.4)]"
                 >
                   View All Products
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  <svg className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                 </a>
               </div>
             </div>
@@ -595,7 +727,7 @@ export default function HomePage() {
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+          <div ref={orderReveal} className="reveal relative z-10 mx-auto w-11/12 max-w-6xl">
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Ready to Order?
@@ -692,7 +824,7 @@ export default function HomePage() {
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+          <div ref={testimonialReveal} className="reveal relative z-10 mx-auto w-11/12 max-w-6xl">
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
                 Community Love
@@ -816,19 +948,22 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="partners" className="relative bg-white py-16">
+        <section id="partners" className="relative bg-gradient-to-b from-white to-purple-50/40 py-16 sm:py-20">
           <div
             className="hero-svg-bg absolute inset-0 opacity-5"
             style={{ backgroundImage: `url(${bg2.src})` }}
           />
-          <div className="mx-auto w-11/12 max-w-6xl">
-            <div className="text-center">
-              <h2 className="font-display text-3xl">Publishers</h2>
-              <p className="mt-2 text-muted">
-                Proud to collaborate with trusted publishers and educators.
+          <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+            <div ref={partnersReveal} className="reveal text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+                Trusted Collaborations
+              </p>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Our Publishers</h2>
+              <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
+                Proud to collaborate with trusted publishers and educators around the world.
               </p>
             </div>
-            <div className="partner-slider mt-10">
+            <div className="partner-slider mt-12 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
               <div className="partner-track">
                 {[...partners, ...partners].map((partner, index) => (
                   <a
@@ -855,39 +990,62 @@ export default function HomePage() {
 
       </main>
 
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#1a1628] via-[#1f1b2e] to-[#251f3a] py-10 sm:py-16 text-white">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-primary blur-3xl" />
-          <div className="absolute right-1/4 bottom-1/4 h-96 w-96 rounded-full bg-secondary blur-3xl" />
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] pt-12 pb-10 sm:pt-16 text-white">
+        {/* gradient top edge */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        {/* ambient glows */}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.07]">
+          <div className="pulse-glow absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-primary blur-3xl" />
+          <div className="pulse-glow absolute right-1/4 bottom-1/4 h-96 w-96 rounded-full bg-secondary blur-3xl" style={{ animationDelay: '2s' }} />
         </div>
+
         <div className="relative z-10 mx-auto w-11/12 max-w-6xl">
+          {/* Order CTA strip */}
+          <div className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-primary/20 via-secondary/15 to-primary/20 p-6 sm:p-8 backdrop-blur">
+            <div className="flex flex-col items-center gap-5 text-center md:flex-row md:justify-between md:text-left">
+              <div>
+                <h3 className="font-display text-xl sm:text-2xl font-bold">Ready to start your reading journey?</h3>
+                <p className="mt-1 text-sm text-white/70">Browse the full catalog and order in minutes via WhatsApp.</p>
+              </div>
+              <a
+                href="https://wa.me/c/16674377777"
+                target="_blank"
+                rel="noreferrer"
+                className="btn-shine inline-flex flex-shrink-0 items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-semibold text-primaryDark shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884" /></svg>
+                Order Now
+              </a>
+            </div>
+          </div>
+
           <div className="grid gap-8 sm:gap-12 grid-cols-2 lg:grid-cols-4">
             <div className="col-span-2 lg:col-span-1">
               <div className="flex items-center gap-3">
                 <Image
                   src={logo}
                   alt="Eduvate Kids logo"
-                  width={32}
-                  height={32}
+                  width={36}
+                  height={36}
                   className="drop-shadow-lg"
                 />
                 <div>
                   <h3 className="font-display text-xl font-bold">Eduvate Kids</h3>
-                  <p className="text-sm text-white/60">Islamic Bookstore</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Islamic Bookstore</p>
                 </div>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-white/70">
-                Curating Islamic children's literature and learning tools for families, educators, and communities across North America.
+                Curating Islamic children&apos;s literature and learning tools for families, educators, and communities across North America.
               </p>
               <div className="mt-6 flex gap-3">
                 <a
                   href="https://wa.me/c/16674377777"
                   target="_blank"
                   rel="noreferrer"
-                  className="group flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 backdrop-blur transition hover:bg-green-500 hover:scale-110"
+                  className="group flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-green-400/40 hover:bg-green-500"
                   aria-label="WhatsApp"
                 >
-                  <svg className="h-5 w-5 transition group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
                   </svg>
                 </a>
@@ -895,84 +1053,93 @@ export default function HomePage() {
                   href="https://www.instagram.com/eduvatekids?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw=="
                   target="_blank"
                   rel="noreferrer"
-                  className="group flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 backdrop-blur transition hover:bg-pink-500 hover:scale-110"
+                  className="group flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-pink-400/40 hover:bg-gradient-to-br hover:from-fuchsia-500 hover:to-orange-400"
                   aria-label="Instagram"
                 >
-                  <svg className="h-5 w-5 transition group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                   </svg>
                 </a>
-                <a
-                  href="#"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 backdrop-blur opacity-40 cursor-not-allowed"
+                <span
+                  className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/5 bg-white/5 backdrop-blur opacity-40"
                   aria-label="TikTok (Coming Soon)"
                   title="Coming Soon"
                 >
                   <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
                   </svg>
-                </a>
+                </span>
               </div>
             </div>
 
             <div>
-              <h4 className="font-display text-lg font-semibold">Explore</h4>
-              <div className="mt-4 space-y-3 text-sm">
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#about">
-                  About Us
-                </a>
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/catalog">
-                  Our Products
+              <h4 className="font-display text-sm font-bold uppercase tracking-[0.16em] text-white/50">Explore</h4>
+              <div className="mt-4 space-y-1 text-sm">
+                {[
+                  { label: 'About Us', href: '#about', type: 'a' as const },
+                  { label: 'Our Products', href: '/catalog', type: 'link' as const },
+                  { label: 'Publishers', href: '#partners', type: 'a' as const },
+                  { label: 'Contact Us', href: '/contact-us', type: 'link' as const }
+                ].map((l) =>
+                  l.type === 'link' ? (
+                    <Link key={l.label} href={l.href} className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white">
+                      <span className="h-1 w-1 rounded-full bg-primary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                      <span className="transition-transform duration-200 group-hover:translate-x-0.5">{l.label}</span>
+                    </Link>
+                  ) : (
+                    <a key={l.label} href={l.href} className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white">
+                      <span className="h-1 w-1 rounded-full bg-primary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                      <span className="transition-transform duration-200 group-hover:translate-x-0.5">{l.label}</span>
+                    </a>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-display text-sm font-bold uppercase tracking-[0.16em] text-white/50">Resources</h4>
+              <div className="mt-4 space-y-1 text-sm">
+                <Link className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white" href="/faqs">
+                  <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">FAQs</span>
                 </Link>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="#partners">
-                  Publishers
+                <Link className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white" href="/policies">
+                  <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">Policies &amp; Terms</span>
+                </Link>
+                <a className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white" href="https://wa.me/c/16674377777" target="_blank" rel="noreferrer">
+                  <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">Digital Catalog</span>
                 </a>
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/contact-us">
-                  Contact Us
+                <Link className="group flex items-center gap-2 rounded-lg py-1.5 text-white/70 transition-colors duration-200 hover:text-white" href="/auth/login">
+                  <span className="h-1 w-1 rounded-full bg-secondary opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">Admin Login</span>
                 </Link>
               </div>
             </div>
 
             <div>
-              <h4 className="font-display text-lg font-semibold">Resources</h4>
-              <div className="mt-4 space-y-3 text-sm">
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/faqs">
-                  FAQs
-                </Link>
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/policies">
-                  Policies & Terms
-                </Link>
-                <a className="block text-white/70 transition hover:text-white hover:translate-x-1" href="https://wa.me/c/16674377777" target="_blank" rel="noreferrer">
-                  Digital Catalog
-                </a>
-                <Link className="block text-white/70 transition hover:text-white hover:translate-x-1" href="/auth/login">
-                  Admin Login
-                </Link>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-display text-lg font-semibold">Location</h4>
+              <h4 className="font-display text-sm font-bold uppercase tracking-[0.16em] text-white/50">Location</h4>
               <div className="mt-4 space-y-3 text-sm text-white/70">
-                <p className="flex items-start gap-2">
-                  <span className="text-primary">📍</span>
+                <p className="flex items-center gap-2">
+                  <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   <span>Maryland, USA</span>
                 </p>
                 <Link
                   href="/book-event"
-                  className="group mt-4 block rounded-xl bg-gradient-to-r from-accentThree/20 to-primary/20 backdrop-blur p-5 border border-accentThree/30 transition hover:from-accentThree/30 hover:to-primary/30 hover:border-accentThree/50 hover:-translate-y-0.5"
+                  className="group mt-4 block rounded-2xl border border-accentThree/30 bg-gradient-to-r from-accentThree/20 to-primary/20 p-5 backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-accentThree/50 hover:from-accentThree/30 hover:to-primary/30"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-white flex items-center gap-2">
-                        <span className="text-lg">🎪</span>
+                      <p className="flex items-center gap-2 text-sm font-semibold text-white">
+                        <svg className="h-4 w-4 text-accentThree" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                         Book an Event
                       </p>
                       <p className="mt-1 text-xs text-white/70">
-                        School fairs, masjid events & more
+                        School fairs, masjid events &amp; more
                       </p>
                     </div>
-                    <svg className="h-5 w-5 text-white/70 group-hover:text-white group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5 flex-shrink-0 text-white/70 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -984,14 +1151,14 @@ export default function HomePage() {
           <div className="mt-12 border-t border-white/10 pt-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/50">
               <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
-              <div className="flex flex-wrap gap-6">
-                <Link href="/policies" className="hover:text-white transition">
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                <Link href="/policies" className="transition-colors duration-200 hover:text-white">
                   Privacy Policy
                 </Link>
-                <Link href="/policies" className="hover:text-white transition">
+                <Link href="/policies" className="transition-colors duration-200 hover:text-white">
                   Terms of Service
                 </Link>
-                <Link href="/faqs" className="hover:text-white transition">
+                <Link href="/faqs" className="transition-colors duration-200 hover:text-white">
                   Help Center
                 </Link>
               </div>
@@ -1070,7 +1237,9 @@ export default function HomePage() {
                   )}
                 </>
               ) : (
-                <div className="flex h-full items-center justify-center text-6xl opacity-30">📷</div>
+                <div className="flex h-full items-center justify-center text-primary/25">
+                  <svg className="h-20 w-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                </div>
               )}
             </div>
 

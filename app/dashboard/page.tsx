@@ -803,25 +803,25 @@ export default function DashboardPage() {
         value: totalSales,
         note: `${transactionCount} transactions`,
         prefix: '$',
-        icon: '💰'
+        icon: 'sales'
       },
       {
         label: 'Low Stock Items',
         value: restockItems.length,
         note: `Restock threshold: ${restockThreshold}`,
-        icon: '📦'
+        icon: 'stock'
       },
       {
         label: 'Active Events',
         value: events.filter((event) => event.status === 'active').length,
         note: `${events.length} total events`,
-        icon: '🎪'
+        icon: 'events'
       },
       {
         label: 'Catalog Size',
         value: inventory.length,
         note: 'Books & kits',
-        icon: '📚'
+        icon: 'catalog'
       }
     ]
   }, [allSales, events, inventory.length, restockItems.length])
@@ -1931,7 +1931,14 @@ export default function DashboardPage() {
               <div className="relative z-10">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">{card.label}</p>
-                  <span className="text-2xl">{card.icon}</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-secondary/15 text-primaryDark" aria-hidden="true">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                      {card.icon === 'sales' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 10v2m0-10c1.11 0 2.08.402 2.599 1M12 16c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />}
+                      {card.icon === 'stock' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
+                      {card.icon === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
+                      {card.icon === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253" />}
+                    </svg>
+                  </span>
                 </div>
                 <h2 className="mt-4 font-display text-2xl sm:text-4xl gradient-text">
                   {'prefix' in card ? card.prefix : ''}
@@ -1982,7 +1989,9 @@ export default function DashboardPage() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="text-5xl mb-3">📊</div>
+              <svg className="h-12 w-12 mb-3 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 15l4-4 3 3 5-6" />
+              </svg>
               <p className="text-sm text-muted">No sales data yet. Record a sale to see trends.</p>
             </div>
           )}
@@ -2017,7 +2026,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-5xl mb-3">📦</div>
+                <svg className="h-12 w-12 mb-3 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
                 <p className="text-sm text-muted">No inventory data yet.</p>
               </div>
             )}
@@ -2055,7 +2066,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-5xl mb-3">🏅</div>
+                <svg className="h-12 w-12 mb-3 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m7-17H5v5a7 7 0 0014 0V4zM5 8H3a2 2 0 002 2m14-2h2a2 2 0 01-2 2" />
+                </svg>
                 <p className="text-sm text-muted">No sales yet. Record a sale to see top items.</p>
               </div>
             )}
@@ -2067,7 +2080,7 @@ export default function DashboardPage() {
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-accentThree/5 p-6 shadow-xl border border-accentThree/10" style={{ animationDelay: '250ms' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">📊</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-primaryDark"><svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6M15 19V9M4 21h16M12 21V5" /></svg></span>
               <h3 className="font-display text-xl gradient-text">Event Revenue</h3>
             </div>
             <span className="text-xs font-semibold text-muted bg-accentThree/10 px-3 py-1 rounded-full">Top events</span>
@@ -2100,7 +2113,9 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="text-5xl mb-3">🎪</div>
+              <svg className="h-12 w-12 mb-3 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
+              </svg>
               <p className="text-sm text-muted">No events created yet.</p>
             </div>
           )}
@@ -2109,7 +2124,7 @@ export default function DashboardPage() {
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-pink-50/50 p-6 shadow-xl border border-secondary/10" style={{ animationDelay: '300ms' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-primary/20 text-2xl">💳</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary/20 to-primary/20 text-primaryDark"><svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg></span>
               <h3 className="font-display text-xl gradient-text">Payment Split</h3>
             </div>
             <span className="text-xs font-semibold text-muted bg-secondary/10 px-3 py-1 rounded-full">By type</span>
@@ -2137,7 +2152,9 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="text-5xl mb-3">💳</div>
+              <svg className="h-12 w-12 mb-3 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+              </svg>
               <p className="text-sm text-muted">No sales data yet.</p>
             </div>
           )}
@@ -2147,7 +2164,7 @@ export default function DashboardPage() {
       <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-accentThree/5 p-6 shadow-xl border border-accentThree/10" style={{ animationDelay: '350ms' }}>
           <div className="flex items-center gap-3 mb-4">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">🏆</span>
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-amber-500"><svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4" /></svg></span>
             <h3 className="font-display text-xl gradient-text">Best Event</h3>
           </div>
           {bestEvent ? (
@@ -2161,15 +2178,15 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-2 text-xs text-muted">
                   <div className="flex items-center gap-2">
-                    <span className="text-primary">📅</span>
+                    <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     <span>{bestEvent.startDate || 'TBD'} - {bestEvent.endDate || 'TBD'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-primary">📍</span>
+                    <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     <span>{bestEvent.location || 'Location TBD'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-primary">🎪</span>
+                    <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg>
                     <span>{bestEvent.type}</span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-black/10">
@@ -2182,7 +2199,7 @@ export default function DashboardPage() {
                   {bestEvent.expenses.length > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-2">
-                        <span className="text-primary">💸</span>
+                        <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                         {bestEvent.expenses.length} expense{bestEvent.expenses.length !== 1 ? 's' : ''}
                       </span>
                       <span>${formatNumber(bestEvent.expenses.reduce((s, e) => s + e.amount, 0))}</span>
@@ -2199,7 +2216,7 @@ export default function DashboardPage() {
         <div className="fade-up panel-card rounded-3xl bg-gradient-to-br from-white to-amber-50/50 p-6 shadow-xl border border-amber-200/50" style={{ animationDelay: '400ms' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 text-2xl">📦</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 text-amber-600"><svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></span>
               <h3 className="font-display text-xl gradient-text">Inventory Health</h3>
             </div>
             <span className="text-xs font-semibold text-muted bg-amber-100 px-3 py-1 rounded-full border border-amber-200">Restock radar</span>
@@ -2235,8 +2252,10 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <div className="text-5xl mb-3">✅</div>
+            <div className="text-center py-8 flex flex-col items-center">
+              <svg className="h-12 w-12 mb-3 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               <p className="text-sm text-muted">All items are healthy on stock.</p>
             </div>
           )}
@@ -2281,15 +2300,21 @@ export default function DashboardPage() {
     }
   }
 
-  const SortIcon = ({ col }: { col: keyof InventoryItem }) => (
-    <span className="inline-block ml-1 align-middle">
-      {inventorySortKey === col ? (
-        inventorySortDir === 'asc' ? '▲' : '▼'
-      ) : (
-        <span className="opacity-30">⇅</span>
-      )}
-    </span>
-  )
+  const SortIcon = ({ col }: { col: keyof InventoryItem }) => {
+    const isActive = inventorySortKey === col
+    const isAsc = isActive && inventorySortDir === 'asc'
+    const isDesc = isActive && inventorySortDir === 'desc'
+    return (
+      <span className="inline-flex flex-col ml-1 align-middle -space-y-1" aria-hidden="true">
+        <svg className={`h-2.5 w-2.5 ${isAsc ? 'text-primary' : 'text-primaryDark/25'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 6l6 8H6z" />
+        </svg>
+        <svg className={`h-2.5 w-2.5 ${isDesc ? 'text-primary' : 'text-primaryDark/25'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 18l-6-8h12z" />
+        </svg>
+      </span>
+    )
+  }
 
   const openEditInventoryItem = (item: InventoryItem) => {
     setEditingInventoryItem(item)
@@ -2378,8 +2403,8 @@ export default function DashboardPage() {
     <div className="fade-up space-y-6">
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-8 shadow-xl border border-purple-200/50">
         <div className="flex items-center gap-4 mb-4">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-3xl shadow-soft">
-            📦
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark shadow-soft">
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
           </span>
           <div>
             <h2 className="font-display text-2xl gradient-text">Inventory Upload</h2>
@@ -2430,7 +2455,10 @@ export default function DashboardPage() {
               type="button"
             >
               <span className="inline-flex items-center gap-2">
-                🗑 Clear Inventory
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Clear Inventory
               </span>
             </button>
           )}
@@ -2470,7 +2498,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleInventorySort(key)}
-                      className="text-xs font-bold uppercase tracking-wider text-primaryDark hover:text-primary transition-colors cursor-pointer select-none"
+                      className="inline-flex items-center text-xs font-bold uppercase tracking-wider text-primaryDark hover:text-primary transition-colors cursor-pointer select-none"
                     >
                       {label}<SortIcon col={key} />
                     </button>
@@ -2520,17 +2548,24 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEditInventoryItem(item)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
                           type="button"
+                          aria-label={`Edit ${item.title}`}
                         >
-                          ✎ Edit
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
                         </button>
                         <button
                           onClick={() => handleDeleteInventoryItem(item)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                          className="inline-flex items-center justify-center rounded-full p-2 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
                           type="button"
+                          aria-label={`Delete ${item.title}`}
                         >
-                          🗑
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       </div>
                     </td>
@@ -2551,8 +2586,8 @@ export default function DashboardPage() {
         {/* Event Selection Card */}
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100">
-              <span className="text-2xl">🎯</span>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 text-primaryDark">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5a4 4 0 100 8 4 4 0 000-8zm0 3a1 1 0 100 2 1 1 0 000-2z" /></svg>
             </div>
             <div className="flex-1">
               <label className="block text-sm font-bold text-gray-700 mb-1">Select Event</label>
@@ -2579,10 +2614,11 @@ export default function DashboardPage() {
                 const ev = events.find((e) => e.id === selectedEventId)
                 if (ev) setViewingOrderHistory(ev)
               }}
-              className="mt-3 w-full rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2.5 text-xs font-bold text-amber-700 border border-amber-200 hover:shadow-md transition-all"
+              className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2.5 text-xs font-bold text-amber-700 border border-amber-200 hover:shadow-md transition-all"
               type="button"
             >
-              📋 View Order History
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+              View Order History
             </button>
           )}
         </div>
@@ -2595,7 +2631,7 @@ export default function DashboardPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="🔍 Search products by title, publisher, or category..."
+                placeholder="Search products by title, publisher, or category..."
                 className="w-full rounded-2xl border-2 border-primary/20 px-5 py-4 pr-12 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40">
@@ -2639,10 +2675,14 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-16">
-                <div className="text-6xl mb-4">
-                  {searchQuery ? '🔍' : '📦'}
-                </div>
+              <div className="text-center py-16 flex flex-col items-center">
+                <svg className="h-14 w-14 mb-4 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                  {searchQuery ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  )}
+                </svg>
                 <p className="text-gray-500 font-medium">
                   {searchQuery ? 'No products found' : 'Start searching to browse products'}
                 </p>
@@ -2658,8 +2698,8 @@ export default function DashboardPage() {
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10 lg:sticky lg:top-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-pink-100">
-                <span className="text-xl">🛒</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 text-primaryDark">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               </div>
               <h3 className="text-lg font-bold text-gray-800">Cart</h3>
             </div>
@@ -2715,8 +2755,10 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-12">
-                <div className="text-5xl mb-3">🛒</div>
+              <div className="text-center py-12 flex flex-col items-center">
+                <svg className="h-12 w-12 mb-3 text-primary/30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
                 <p className="text-sm text-gray-400">Your cart is empty</p>
               </div>
             )}
@@ -2737,7 +2779,10 @@ export default function DashboardPage() {
                     }`}
                     type="button"
                   >
-                    💵 Cash
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      Cash
+                    </span>
                   </button>
                   <button
                     onClick={() => setPaymentType('Card')}
@@ -2748,7 +2793,10 @@ export default function DashboardPage() {
                     }`}
                     type="button"
                   >
-                    💳 Card
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>
+                      Card
+                    </span>
                   </button>
                   <button
                     onClick={() => setPaymentType('Transfer')}
@@ -2759,7 +2807,10 @@ export default function DashboardPage() {
                     }`}
                     type="button"
                   >
-                    🏦 Transfer
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M4 10h16M5 6l7-3 7 3M5 10v11m4-11v11m6-11v11m4-11v11" /></svg>
+                      Transfer
+                    </span>
                   </button>
                 </div>
               </div>
@@ -2845,7 +2896,10 @@ export default function DashboardPage() {
                   type="button"
                   disabled={!selectedEventId || cartItems.length === 0}
                 >
-                  <span className="mr-2">💰</span> Complete Sale
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Complete Sale
+                  </span>
                 </button>
                 <button
                   onClick={handleClearCart}
@@ -2873,8 +2927,8 @@ export default function DashboardPage() {
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-6 shadow-xl border border-blue-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-3xl shadow-soft">
-              🎪
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-accentThree shadow-soft">
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg>
             </span>
             <div>
               <h2 className="font-display text-2xl gradient-text">Event Management</h2>
@@ -2895,8 +2949,8 @@ export default function DashboardPage() {
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-xl">
-                📅
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </span>
               <div>
                 <h3 className="font-display text-xl gradient-text">All Events</h3>
@@ -2956,43 +3010,57 @@ export default function DashboardPage() {
                           type="button"
                           title={event.status === 'closed' ? 'Edit event to reactivate' : 'Click to close event'}
                         >
-                          {event.status === 'active' ? '● Active' : '🔒 Closed'}
+                          <span className="inline-flex items-center gap-1.5">
+                            {event.status === 'active' ? (
+                              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
+                            ) : (
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            )}
+                            {event.status === 'active' ? 'Active' : 'Closed'}
+                          </span>
                         </button>
                         <button
                           onClick={() => openEditEvent(event)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
                           type="button"
+                          aria-label={`Edit ${event.name}`}
                         >
-                          ✎ Edit
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          Edit
                         </button>
                         <button
                           onClick={() => setViewingEventTransactions(event)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                           type="button"
                         >
-                          📊 View Transactions
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6m4 6V9m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                          View Transactions
                         </button>
                         <button
                           onClick={() => setViewingOrderHistory(event)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                           type="button"
                         >
-                          📋 Order History
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                          Order History
                         </button>
                         <button
                           onClick={() => openExpenses(event)}
-                          className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 border border-teal-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 border border-teal-200 transition-all hover:scale-105"
                           type="button"
                         >
-                          💸 Expenses{event.expenses.length > 0 ? ` (${event.expenses.length})` : ''}
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                          Expenses{event.expenses.length > 0 ? ` (${event.expenses.length})` : ''}
                         </button>
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
-                            className="rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
                             type="button"
+                            aria-label={`Delete ${event.name}`}
                           >
-                            🗑 Delete
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            Delete
                           </button>
                         )}
                       </div>
@@ -3009,20 +3077,20 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-1 text-xs text-muted bg-white/50 rounded-xl p-3 border border-primary/5">
                     <div className="flex items-center gap-2">
-                      <span className="text-primary">📍</span>
+                      <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       <span>{event.location || 'Location TBD'}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-primary">📅</span>
+                      <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       <span>{event.startDate || 'TBD'} - {event.endDate || 'TBD'}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-primary">💵</span>
+                      <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                       <span>Vendor fee: ${formatNumber(event.cost)}</span>
                     </div>
                     {event.expenses.length > 0 && (
                       <div className="flex items-center gap-2">
-                        <span className="text-primary">💸</span>
+                        <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                         <span>{event.expenses.length} expense{event.expenses.length !== 1 ? 's' : ''}: ${formatNumber(event.expenses.reduce((s, e) => s + e.amount, 0))}</span>
                       </div>
                     )}
@@ -3041,28 +3109,31 @@ export default function DashboardPage() {
                       <span className="rounded-full px-3 py-1 text-[11px] font-bold bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-200">
                         No Event
                       </span>
-                      <span className="rounded-full px-3 py-1 text-xs font-bold bg-green-100 text-green-700 border border-green-200">
-                        ● Always Active
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
+                        Always Active
                       </span>
                       <button
                         onClick={() => setViewingEventTransactions({
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
                           startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
-                        className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                         type="button"
                       >
-                        📊 View Transactions
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6m4 6V9m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        View Transactions
                       </button>
                       <button
                         onClick={() => setViewingOrderHistory({
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
                           startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
-                        className="rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                         type="button"
                       >
-                        📋 Order History
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                        Order History
                       </button>
                     </div>
                   </div>
@@ -3073,11 +3144,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1 text-xs text-muted bg-white/50 rounded-xl p-3 border border-emerald-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-emerald-600">💰</span>
+                    <svg className="h-4 w-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span>Sales made outside of any specific event</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-emerald-600">📦</span>
+                    <svg className="h-4 w-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     <span>{generalOrders.length} order{generalOrders.length !== 1 ? 's' : ''} recorded</span>
                   </div>
                 </div>
@@ -3088,8 +3159,8 @@ export default function DashboardPage() {
       </div>
 
       {showCreateEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Create New Event</h4>
@@ -3099,10 +3170,12 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setShowCreateEvent(false)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕ Close
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <span>Close</span>
               </button>
             </div>
 
@@ -3192,8 +3265,8 @@ export default function DashboardPage() {
       )}
 
       {editingEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Edit Event</h4>
@@ -3203,10 +3276,12 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setEditingEvent(null)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕ Close
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <span>Close</span>
               </button>
             </div>
 
@@ -3310,8 +3385,8 @@ export default function DashboardPage() {
       )}
 
       {viewingEventTransactions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingEventTransactions.name} - Sales Record</h4>
@@ -3321,16 +3396,18 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setViewingEventTransactions(null)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕ Close
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                <span>Close</span>
               </button>
             </div>
 
             {viewingEventTransactions.sales.length === 0 ? (
-              <div className="text-center py-16 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl">
-                <div className="text-6xl mb-4">📊</div>
+              <div className="text-center py-16 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl flex flex-col items-center">
+                <svg className="h-14 w-14 mb-4 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6m4 6V9m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                 <p className="text-lg font-semibold text-gray-700">No transactions yet</p>
                 <p className="text-sm text-muted mt-2">Sales will appear here once the event goes live</p>
               </div>
@@ -3437,8 +3514,8 @@ export default function DashboardPage() {
 
       {/* Order History Modal */}
       {viewingOrderHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-scale-in my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
@@ -3450,25 +3527,28 @@ export default function DashboardPage() {
                 {viewingOrderHistory.orders.length > 0 && (
                   <button
                     onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
-                    className="rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
                     type="button"
                   >
-                    📥 Download TXT
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download TXT
                   </button>
                 )}
                 <button
                   onClick={() => setViewingOrderHistory(null)}
-                  className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                   type="button"
+                  aria-label="Close"
                 >
-                  ✕ Close
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <span>Close</span>
                 </button>
               </div>
             </div>
 
             {viewingOrderHistory.orders.length === 0 ? (
-              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl">
-                <div className="text-6xl mb-4">📋</div>
+              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl flex flex-col items-center">
+                <svg className="h-14 w-14 mb-4 text-amber-500/50" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                 <p className="text-lg font-semibold text-gray-700">No orders yet</p>
                 <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
               </div>
@@ -3481,8 +3561,9 @@ export default function DashboardPage() {
                         <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
                           Order #{viewingOrderHistory.orders.length - idx}
                         </p>
-                        <p className="text-xs text-muted">
-                          🕐 {new Date(order.timestamp).toLocaleString()}
+                        <p className="text-xs text-muted inline-flex items-center gap-1.5">
+                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {new Date(order.timestamp).toLocaleString()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -3499,17 +3580,21 @@ export default function DashboardPage() {
                           <>
                             <button
                               onClick={() => openEditOrder(order)}
-                              className="rounded-full px-3 py-1 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
                               type="button"
+                              aria-label="Edit order"
                             >
-                              ✎ Edit
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              Edit
                             </button>
                             <button
                               onClick={() => handleDeleteOrder(order)}
-                              className="rounded-full px-3 py-1 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
                               type="button"
+                              aria-label="Delete order"
                             >
-                              🗑 Delete
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              Delete
                             </button>
                           </>
                         )}
@@ -3588,8 +3673,8 @@ export default function DashboardPage() {
 
       {/* Edit Order Modal (Admin Only) */}
       {editingOrder && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-scale-in my-8">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-fadeIn my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
@@ -3599,10 +3684,13 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -3648,10 +3736,13 @@ export default function DashboardPage() {
                   <span className="font-bold text-primaryDark min-w-[70px] text-right">${formatNumber(item.quantity * item.price)}</span>
                   <button
                     onClick={() => setEditOrderItems((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="w-7 h-7 rounded-full bg-red-50 border border-red-200 text-red-600 text-sm hover:bg-red-100 transition-colors"
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-colors"
                     type="button"
+                    aria-label="Remove item"
                   >
-                    ✕
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
               ))}
@@ -3711,7 +3802,10 @@ export default function DashboardPage() {
                 type="button"
                 disabled={editOrderItems.length === 0}
               >
-                ✓ Save Changes
+                <span className="inline-flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Save Changes
+                </span>
               </button>
             </div>
           </div>
@@ -3720,8 +3814,8 @@ export default function DashboardPage() {
 
       {/* Expenses Modal */}
       {viewingExpenses && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-scale-in my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-fadeIn my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingExpenses.name} - Expenses</h4>
@@ -3739,10 +3833,12 @@ export default function DashboardPage() {
                 </button>
                 <button
                   onClick={() => { setViewingExpenses(null); resetExpenseForm(); setShowAddExpense(false) }}
-                  className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                   type="button"
+                  aria-label="Close"
                 >
-                  ✕ Close
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <span>Close</span>
                 </button>
               </div>
             </div>
@@ -3821,7 +3917,13 @@ export default function DashboardPage() {
                       className="flex-1 rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       type="button"
                     >
-                      {editingExpense ? '✓ Update' : '+ Add'}
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        {editingExpense ? (
+                          <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Update</>
+                        ) : (
+                          <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>Add</>
+                        )}
+                      </span>
                     </button>
                     <button
                       onClick={() => { setShowAddExpense(false); resetExpenseForm() }}
@@ -3860,19 +3962,21 @@ export default function DashboardPage() {
                         <span className="text-lg font-bold text-teal-700">${formatNumber(expense.amount)}</span>
                         <button
                           onClick={() => openEditExpense(expense)}
-                          className="rounded-full p-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors"
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-blue-600 hover:bg-blue-50 transition-colors"
                           type="button"
                           title="Edit"
+                          aria-label="Edit expense"
                         >
-                          ✎
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
                         <button
                           onClick={() => handleDeleteExpense(expense.id)}
-                          className="rounded-full p-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-red-600 hover:bg-red-50 transition-colors"
                           type="button"
                           title="Delete"
+                          aria-label="Delete expense"
                         >
-                          🗑
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
                     </div>
@@ -3880,8 +3984,8 @@ export default function DashboardPage() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <div className="text-5xl mb-3">💸</div>
+              <div className="text-center py-12 flex flex-col items-center">
+                <svg className="h-12 w-12 mb-3 text-teal-500/50" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                 <p className="text-sm text-muted">No expenses recorded for this event yet.</p>
                 <p className="text-xs text-muted mt-1">Click &quot;+ Add Expense&quot; to track costs.</p>
               </div>
@@ -3892,8 +3996,8 @@ export default function DashboardPage() {
 
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-indigo-50/50 p-6 shadow-xl border border-indigo-200/50">
         <div className="flex items-center gap-3 mb-6">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-2xl shadow-soft">
-            📊
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-primaryDark shadow-soft">
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6M15 19V9M4 21h16M12 21V5" /></svg>
           </span>
           <h3 className="font-display text-2xl gradient-text">Event Summaries</h3>
         </div>
@@ -3914,13 +4018,14 @@ export default function DashboardPage() {
               <div className="rounded-2xl border-2 border-emerald-200/50 p-5 bg-gradient-to-br from-white to-emerald-50/30 hover:border-emerald-300 hover:shadow-lg transition-all">
                 <div className="flex items-center justify-between mb-4">
                   <p className="font-bold text-lg text-primaryDark">💰 General Sales</p>
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
-                    ● Always Active
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
+                    Always Active
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center gap-2 text-muted">
-                    <span className="text-emerald-600">💰</span>
+                    <svg className="h-4 w-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span>Sales outside events · {generalOrders.length} orders</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-emerald-200/50">
@@ -3963,16 +4068,19 @@ export default function DashboardPage() {
                       ? 'bg-green-100 text-green-700 border border-green-200'
                       : 'bg-gray-100 text-gray-600 border border-gray-200'
                   }`}>
-                    {event.status === 'active' ? '● Active' : '○ Closed'}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`h-2 w-2 rounded-full ${event.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} aria-hidden="true" />
+                      {event.status === 'active' ? 'Active' : 'Closed'}
+                    </span>
                   </span>
                 </div>
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center gap-2 text-muted">
-                    <span className="text-primary">🎪</span>
+                    <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg>
                     <span>{event.type} · {event.location || 'Location TBD'}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted">
-                    <span className="text-primary">📅</span>
+                    <svg className="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     <span>{event.startDate || 'TBD'} - {event.endDate || 'TBD'}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 pt-3 mt-3 border-t border-indigo-200/50">
@@ -4035,8 +4143,8 @@ export default function DashboardPage() {
   }
 
   const renderCatalogFormModal = (isEdit: boolean) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h4 className="font-display text-2xl gradient-text">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
@@ -4046,10 +4154,12 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => { isEdit ? setEditingCatalogItem(null) : setShowCreateCatalog(false); resetCatalogForm() }}
-            className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
             type="button"
+            aria-label="Close"
           >
-            ✕ Close
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            <span>Close</span>
           </button>
         </div>
 
@@ -4187,9 +4297,12 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveCatalogExistingImage(index)}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove image ${index + 1}`}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shadow-md"
                     >
-                      ✕
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 ))}
@@ -4209,9 +4322,12 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveCatalogNewImage(index)}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove new image ${index + 1}`}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shadow-md"
                     >
-                      ✕
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 ))}
@@ -4311,7 +4427,8 @@ export default function DashboardPage() {
 
       {/* Catalog Grid */}
       {filteredCatalogItems.length === 0 ? (
-        <div className="panel-card rounded-3xl bg-white p-12 shadow-xl border border-primary/10 text-center">
+        <div className="panel-card rounded-3xl bg-white p-12 shadow-xl border border-primary/10 text-center flex flex-col items-center">
+          <svg className="h-14 w-14 mb-4 text-primary/40" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" /></svg>
           <p className="text-lg font-semibold text-muted">No catalog items found</p>
           <p className="mt-2 text-sm text-muted">Click &quot;+ New Item&quot; to add your first product.</p>
         </div>
@@ -4349,7 +4466,8 @@ export default function DashboardPage() {
                             const cur = catalogSliderIndex[item.id] ?? 0
                             setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
                           }}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                          aria-label="Previous image"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                         </button>
@@ -4360,25 +4478,29 @@ export default function DashboardPage() {
                             const cur = catalogSliderIndex[item.id] ?? 0
                             setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
                           }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                          aria-label="Next image"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm text-primaryDark shadow-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                         </button>
-                        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-0.5">
                           {item.images.map((_, dotIdx) => (
                             <button
                               key={dotIdx}
                               type="button"
+                              aria-label={`Go to image ${dotIdx + 1}`}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setCatalogSliderIndex((prev) => ({ ...prev, [item.id]: dotIdx }))
                               }}
-                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                              className="flex items-center justify-center h-6 w-4 group/dot"
+                            >
+                              <span className={`block h-1.5 rounded-full transition-all duration-300 ${
                                 dotIdx === (catalogSliderIndex[item.id] ?? 0)
                                   ? 'w-5 bg-white shadow-sm'
-                                  : 'w-1.5 bg-white/50 hover:bg-white/80'
-                              }`}
-                            />
+                                  : 'w-1.5 bg-white/50 group-hover/dot:bg-white/80'
+                              }`} />
+                            </button>
                           ))}
                         </div>
                       </>
@@ -4386,7 +4508,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <span className="text-5xl opacity-30">📷</span>
+                    <svg className="h-12 w-12 text-muted/30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     <span className="text-xs text-muted/60 font-medium">No images</span>
                   </div>
                 )}
@@ -4497,7 +4619,8 @@ export default function DashboardPage() {
       ))}
 
       {/* Sticky Header with Horizontal Navigation */}
-      <header className="sticky top-0 z-50 border-b border-black/5 bg-white/95 backdrop-blur-xl shadow-sm animate-fadeIn">
+      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(124,58,237,0.06)] animate-fadeIn">
+        <div className="h-[3px] w-full bg-gradient-to-r from-primary via-secondary to-accentOne" aria-hidden="true" />
         <div className="mx-auto w-full max-w-7xl px-4">
           <div className="flex items-center justify-between py-4">
             {/* Logo */}
@@ -4518,11 +4641,11 @@ export default function DashboardPage() {
             {/* Desktop Horizontal Tabs */}
             <nav className="hidden md:flex items-center gap-2">
               {[
-                { id: 'home', label: 'Home', emoji: '🏠' },
-                { id: 'inventory', label: 'Inventory', emoji: '📦' },
-                { id: 'events', label: 'Events', emoji: '🎪' },
-                { id: 'pos', label: 'POS', emoji: '💳' },
-                { id: 'catalog', label: 'Catalog', emoji: '📕' }
+                { id: 'home', label: 'Home' },
+                { id: 'inventory', label: 'Inventory' },
+                { id: 'events', label: 'Events' },
+                { id: 'pos', label: 'POS' },
+                { id: 'catalog', label: 'Catalog' }
               ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                 <button
                   key={item.id}
@@ -4533,8 +4656,15 @@ export default function DashboardPage() {
                       : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:scale-102'
                   }`}
                   type="button"
+                  aria-current={activeView === item.id ? 'page' : undefined}
                 >
-                  <span className="text-lg">{item.emoji}</span>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    {item.id === 'home' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />}
+                    {item.id === 'inventory' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
+                    {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
+                    {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
+                    {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
+                  </svg>
                   <span>{item.label}</span>
                 </button>
               ))}
@@ -4554,7 +4684,7 @@ export default function DashboardPage() {
               {userRole === 'admin' && (
                 <button
                   onClick={() => router.push('/settings')}
-                  className="rounded-full border-2 border-primary/30 bg-white p-2 hover:bg-primary/5 transition-all"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-primary/30 bg-white hover:bg-primary/5 hover:-translate-y-0.5 transition-all duration-300"
                   type="button"
                   aria-label="Settings"
                 >
@@ -4568,9 +4698,10 @@ export default function DashboardPage() {
               {/* Mobile Hamburger Menu Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden rounded-xl border-2 border-primary/30 p-2.5 text-primaryDark hover:bg-primary/5 transition-colors"
+                className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl border-2 border-primary/30 text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
                 aria-label="Toggle menu"
+                aria-expanded={mobileMenuOpen}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {mobileMenuOpen ? (
@@ -4588,11 +4719,11 @@ export default function DashboardPage() {
             <div className="md:hidden border-t border-primary/10 py-4 animate-slideDown">
               <nav className="flex flex-col gap-2">
                 {[
-                  { id: 'home', label: 'Home', emoji: '🏠' },
-                  { id: 'inventory', label: 'Inventory', emoji: '📦' },
-                  { id: 'events', label: 'Events', emoji: '🎪' },
-                  { id: 'pos', label: 'POS', emoji: '💳' },
-                  { id: 'catalog', label: 'Catalog', emoji: '📕' }
+                  { id: 'home', label: 'Home' },
+                  { id: 'inventory', label: 'Inventory' },
+                  { id: 'events', label: 'Events' },
+                  { id: 'pos', label: 'POS' },
+                  { id: 'catalog', label: 'Catalog' }
                 ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                   <button
                     key={item.id}
@@ -4606,8 +4737,15 @@ export default function DashboardPage() {
                         : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
                     }`}
                     type="button"
+                    aria-current={activeView === item.id ? 'page' : undefined}
                   >
-                    <span className="text-xl">{item.emoji}</span>
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      {item.id === 'home' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />}
+                      {item.id === 'inventory' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
+                      {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
+                      {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
+                      {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
+                    </svg>
                     <span>{item.label}</span>
                   </button>
                 ))}
@@ -4676,8 +4814,8 @@ export default function DashboardPage() {
 
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">
@@ -4689,10 +4827,13 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => { setEditingInventoryItem(null); setShowAddInventoryItem(false); }}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -4794,7 +4935,19 @@ export default function DashboardPage() {
                 type="button"
                 disabled={!invEditTitle.trim() || !invEditQuantity || isSavingInventory}
               >
-                {isSavingInventory ? '⏳ Saving...' : editingInventoryItem ? '✓ Save Changes' : '+ Add Item'}
+                <span className="inline-flex items-center justify-center gap-2">
+                  {isSavingInventory ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                      Saving...
+                    </>
+                  ) : editingInventoryItem ? (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      Save Changes
+                    </>
+                  ) : '+ Add Item'}
+                </span>
               </button>
             </div>
           </div>
@@ -4803,8 +4956,8 @@ export default function DashboardPage() {
 
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fade-in overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-scale-in my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-8">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
@@ -4817,10 +4970,13 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
+                aria-label="Close"
               >
-                ✕
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -4876,7 +5032,19 @@ export default function DashboardPage() {
                 type="button"
                 disabled={isSubmittingSale}
               >
-                {isSubmittingSale ? '⏳ Processing...' : '✓ Confirm Sale'}
+                <span className="inline-flex items-center justify-center gap-2">
+                  {isSubmittingSale ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      Confirm Sale
+                    </>
+                  )}
+                </span>
               </button>
             </div>
           </div>
@@ -4907,7 +5075,7 @@ export default function DashboardPage() {
           }
         }
 
-        .animate-fade-in {
+        .animate-fadeIn {
           animation: fade-in 0.3s ease both;
         }
 
@@ -4920,7 +5088,7 @@ export default function DashboardPage() {
           }
         }
 
-        .animate-scale-in {
+        .animate-fadeIn {
           animation: scale-in 0.3s ease both;
         }
 

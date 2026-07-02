@@ -252,7 +252,8 @@ export default function POSPage() {
   return (
     <div className="min-h-screen text-ink bg-gradient-to-br from-purple-50 via-white to-emerald-50">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
+        <div className="h-0.5 w-full bg-gradient-to-r from-primary via-secondary to-emerald-400" />
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-4 py-2">
           <Link className="flex items-center gap-2 sm:gap-3 min-w-0" href="/">
             <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0" />
@@ -262,12 +263,18 @@ export default function POSPage() {
             </span>
           </Link>
           <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <Link className="hover:text-primaryDark" href="/">Home</Link>
-            <Link className="hover:text-primaryDark" href="/contact-us">Contact</Link>
+            <Link className="group relative py-1 transition-colors hover:text-primaryDark focus-visible:text-primaryDark outline-none" href="/">
+              Home
+              <span className="absolute inset-x-0 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" />
+            </Link>
+            <Link className="group relative py-1 transition-colors hover:text-primaryDark focus-visible:text-primaryDark outline-none" href="/contact-us">
+              Contact
+              <span className="absolute inset-x-0 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" />
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link
-              className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+              className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/30 outline-none"
               href="/auth/login"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,9 +283,11 @@ export default function POSPage() {
               <span className="hidden sm:inline">Admin</span>
             </Link>
             <button
-              className="flex items-center justify-center w-10 h-10 rounded-xl border border-primary/20 bg-white md:hidden"
+              className="flex items-center justify-center w-10 h-10 rounded-xl border border-primary/20 bg-white transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/30 outline-none md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               type="button"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
@@ -287,25 +296,29 @@ export default function POSPage() {
           </div>
         </div>
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-black/10 bg-white px-6 py-4 space-y-2">
-            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50" href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
-            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted hover:bg-gray-50" href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+          <div className="md:hidden border-t border-primary/10 bg-white px-6 py-4 space-y-2 animate-slideDown">
+            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted transition-colors hover:bg-primary/5 hover:text-primaryDark focus-visible:ring-2 focus-visible:ring-primary/30 outline-none" href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted transition-colors hover:bg-primary/5 hover:text-primaryDark focus-visible:ring-2 focus-visible:ring-primary/30 outline-none" href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
           </div>
         )}
       </header>
 
       <main className="mx-auto w-11/12 max-w-6xl py-8">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex flex-col items-center justify-center gap-4 py-20" role="status" aria-live="polite">
             <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" />
+            <p className="text-sm font-semibold text-muted">Loading inventory...</p>
           </div>
         ) : (
           <div className="space-y-6">
             {/* Page Header */}
             <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50">
               <div className="flex items-center gap-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 text-3xl shadow-soft">
-                  💳
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 shadow-soft">
+                  <svg className="h-7 w-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 10h20M6 15h4" />
+                  </svg>
                 </span>
                 <div>
                   <h1 className="font-display text-2xl gradient-text">Point of Sale</h1>
@@ -319,8 +332,10 @@ export default function POSPage() {
               {/* Left Column - Catalog */}
               <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-xl">
-                    📚
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20">
+                    <svg className="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a2 2 0 012-2h6v16H6a2 2 0 00-2 2V5zM20 5a2 2 0 00-2-2h-6v16h6a2 2 0 012 2V5z" />
+                    </svg>
                   </span>
                   <div>
                     <h3 className="font-display text-xl gradient-text">Inventory Catalog</h3>
@@ -330,17 +345,26 @@ export default function POSPage() {
 
                 {/* Search & Filter */}
                 <div className="space-y-3 mb-4">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="🔍 Search by title, publisher, or category..."
-                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search products..."
+                      aria-label="Search products by title, publisher, or category"
+                      className="w-full rounded-xl border-2 border-primary/20 pl-11 pr-4 py-3 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
+                    />
+                  </div>
                   <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
-                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm font-medium hover:border-primary/40 transition-colors"
+                    aria-label="Filter by category"
+                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm font-medium hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
                   >
                     <option value="All">All Categories</option>
                     <option value="Books">📖 Books</option>
@@ -353,10 +377,18 @@ export default function POSPage() {
                 {/* Inventory List */}
                 <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                   {filteredInventory.length === 0 ? (
-                    <div className="text-center py-12">
-                      <p className="text-4xl mb-3">📦</p>
-                      <p className="text-sm text-muted">No items found.</p>
-                      <p className="text-xs text-muted mt-1">Try adjusting your search or filter.</p>
+                    <div className="flex flex-col items-center text-center py-12 animate-fadeIn">
+                      <span className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10">
+                        <svg className="h-8 w-8 text-primary/60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </span>
+                      <p className="text-sm font-semibold text-muted">
+                        {inventory.length === 0 ? 'No inventory available yet.' : 'No items found.'}
+                      </p>
+                      <p className="text-xs text-muted mt-1">
+                        {inventory.length === 0 ? 'Check back soon for new stock.' : 'Try adjusting your search or filter.'}
+                      </p>
                     </div>
                   ) : (
                     filteredInventory.map((item) => {
@@ -398,10 +430,20 @@ export default function POSPage() {
                               <button
                                 onClick={() => handleAddToCart(item.id)}
                                 disabled={availableQty <= 0}
-                                className="mt-2 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-1.5 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label={availableQty <= 0 ? `${item.title} is out of stock` : `Add ${item.title} to cart`}
+                                className="btn-shine mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-1.5 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                                 type="button"
                               >
-                                {availableQty <= 0 ? 'Out of Stock' : '+ Add'}
+                                {availableQty <= 0 ? (
+                                  'Out of Stock'
+                                ) : (
+                                  <>
+                                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14M5 12h14" />
+                                    </svg>
+                                    Add
+                                  </>
+                                )}
                               </button>
                             </div>
                           </div>
@@ -413,10 +455,12 @@ export default function POSPage() {
               </div>
 
               {/* Right Column - Cart & Checkout */}
-              <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50 h-fit lg:sticky lg:top-24">
+              <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-2xl ring-1 ring-emerald-200/60 border border-emerald-200/60 h-fit lg:sticky lg:top-24">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-green-100 text-xl">
-                    🛒
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-green-100">
+                    <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2 5h12M9 20a1 1 0 100 2 1 1 0 000-2zm8 0a1 1 0 100 2 1 1 0 000-2z" />
+                    </svg>
                   </span>
                   <div>
                     <h3 className="font-display text-xl gradient-text">Shopping Cart</h3>
@@ -427,14 +471,18 @@ export default function POSPage() {
                 {/* Cart Items */}
                 <div className="space-y-3 mb-4 max-h-[280px] overflow-y-auto">
                   {cartItems.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-3xl mb-2">🛒</p>
-                      <p className="text-xs text-muted">Cart is empty</p>
+                    <div className="flex flex-col items-center text-center py-8 animate-fadeIn">
+                      <span className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100/70 to-green-100/70">
+                        <svg className="h-7 w-7 text-emerald-500/70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2 5h12M9 20a1 1 0 100 2 1 1 0 000-2zm8 0a1 1 0 100 2 1 1 0 000-2z" />
+                        </svg>
+                      </span>
+                      <p className="text-xs font-semibold text-muted">Cart is empty</p>
                       <p className="text-[10px] text-muted mt-1">Add items from the catalog</p>
                     </div>
                   ) : (
                     cartItems.map((item) => (
-                      <div key={item.itemId} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                      <div key={item.itemId} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10 animate-fadeIn">
                         <div className="flex-1 min-w-0 mr-3">
                           <p className="font-semibold text-sm truncate">{item.title}</p>
                           <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
@@ -445,14 +493,18 @@ export default function POSPage() {
                             min={0}
                             value={item.quantity}
                             onChange={(e) => handleUpdateCartQuantity(item.itemId, Number(e.target.value))}
-                            className="w-14 rounded-lg border-2 border-primary/20 px-2 py-1 text-xs text-center font-bold"
+                            aria-label={`Quantity for ${item.title}`}
+                            className="w-16 h-10 rounded-lg border-2 border-primary/20 px-2 py-1 text-sm text-center font-bold focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
                           />
                           <button
                             onClick={() => handleRemoveFromCart(item.itemId)}
-                            className="text-xs font-bold text-red-600 hover:text-red-700 px-2"
+                            aria-label={`Remove ${item.title} from cart`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
                             type="button"
                           >
-                            ✕
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -470,14 +522,31 @@ export default function POSPage() {
                           <button
                             key={type}
                             onClick={() => setPaymentType(type)}
-                            className={`rounded-xl py-2 text-xs font-bold transition-all ${
+                            aria-label={`Pay by ${type}`}
+                            aria-pressed={paymentType === type}
+                            className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
                               paymentType === type
                                 ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                                 : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
                             }`}
                             type="button"
                           >
-                            {type === 'Cash' ? '💵' : type === 'Card' ? '💳' : '🏦'} {type}
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              {type === 'Cash' ? (
+                                <>
+                                  <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
+                                  <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
+                                </>
+                              ) : type === 'Card' ? (
+                                <>
+                                  <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 10h20" />
+                                </>
+                              ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4 4-4M3 12h11M17 8l4 4-4 4M21 12H10" />
+                              )}
+                            </svg>
+                            {type}
                           </button>
                         ))}
                       </div>
@@ -489,7 +558,8 @@ export default function POSPage() {
                       <div className="flex gap-2 mb-2">
                         <button
                           onClick={() => setDiscountType('percentage')}
-                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all ${
+                          aria-pressed={discountType === 'percentage'}
+                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
                             discountType === 'percentage'
                               ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                               : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
@@ -500,7 +570,8 @@ export default function POSPage() {
                         </button>
                         <button
                           onClick={() => setDiscountType('amount')}
-                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all ${
+                          aria-pressed={discountType === 'amount'}
+                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
                             discountType === 'amount'
                               ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                               : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
@@ -519,15 +590,19 @@ export default function POSPage() {
                           value={discount || ''}
                           onChange={(e) => setDiscount(Number(e.target.value))}
                           placeholder={discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount'}
-                          className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 transition-colors pr-10"
+                          aria-label={discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}
+                          className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition pr-10"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">
                           {discountType === 'percentage' ? '%' : '$'}
                         </span>
                       </div>
                       {discount > 0 && (
-                        <p className="text-xs text-green-600 mt-1 font-medium">
-                          💰 Discount: -${formatNumber(discountAmount)}
+                        <p className="flex items-center gap-1.5 text-xs text-green-600 mt-1 font-medium">
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8h6m-6 4h6m-3 4v-8m-6 8V6a2 2 0 012-2h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2z" />
+                          </svg>
+                          Discount: -${formatNumber(discountAmount)}
                         </p>
                       )}
                     </div>
@@ -557,8 +632,12 @@ export default function POSPage() {
                     </div>
 
                     {paymentType === 'Card' && (
-                      <p className="text-[10px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mb-4">
-                        💳 Card payments include a 3% convenience fee.
+                      <p className="flex items-center gap-1.5 text-[10px] text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mb-4">
+                        <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 10h20" />
+                        </svg>
+                        Card payments include a 3% convenience fee.
                       </p>
                     )}
 
@@ -566,14 +645,19 @@ export default function POSPage() {
                     <div className="space-y-2">
                       <button
                         onClick={() => setShowConfirmSale(true)}
-                        className="w-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 text-sm font-bold text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all"
+                        aria-label="Record sale"
+                        className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 text-sm font-bold text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-emerald-400/50 outline-none transition-all"
                         type="button"
                       >
-                        💰 Record Sale
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8h6m-6 4h6m-3 4v-8m-6 8V6a2 2 0 012-2h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2z" />
+                        </svg>
+                        Record Sale
                       </button>
                       <button
                         onClick={handleClearCart}
-                        className="w-full rounded-xl border-2 border-red-200 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                        aria-label="Clear cart"
+                        className="w-full rounded-xl border-2 border-red-200 py-2 text-xs font-bold text-red-600 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
                         type="button"
                       >
                         Clear Cart
@@ -582,24 +666,37 @@ export default function POSPage() {
                   </>
                 )}
 
-                {message && (
-                  <p className="mt-4 text-xs text-center px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-medium">
-                    {message}
-                  </p>
-                )}
               </div>
             </div>
           </div>
         )}
       </main>
 
+      {/* Toast */}
+      {message && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-[60] max-w-xs animate-slideDown"
+        >
+          <div className="flex items-start gap-2 rounded-xl bg-white/95 backdrop-blur px-4 py-3 text-xs font-medium text-blue-700 shadow-2xl ring-1 ring-blue-200 border border-blue-200">
+            <svg className="h-4 w-4 flex-shrink-0 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl border-2 border-primary/20">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn" role="dialog" aria-modal="true" aria-label="Confirm sale">
+          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-[0_25px_80px_rgba(124,58,237,0.25)] ring-1 ring-primary/10 border-2 border-primary/20 animate-fadeIn">
             <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 text-3xl mb-4">
-                💰
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 mb-4">
+                <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8h6m-6 4h6m-3 4v-8m-6 8V6a2 2 0 012-2h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2z" />
+                </svg>
               </div>
               <h3 className="font-display text-2xl gradient-text">Confirm Sale</h3>
               <p className="text-sm text-muted mt-2">
@@ -625,7 +722,8 @@ export default function POSPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmSale(false)}
-                className="flex-1 rounded-full border-2 border-primary/20 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                aria-label="Cancel sale"
+                className="flex-1 rounded-full border-2 border-primary/20 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/30 outline-none transition-colors"
                 type="button"
               >
                 Cancel
@@ -633,10 +731,26 @@ export default function POSPage() {
               <button
                 onClick={handleRecordSale}
                 disabled={isSubmittingSale}
-                className="flex-[2] rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 text-sm font-bold text-white shadow-xl hover:shadow-2xl transition-all disabled:opacity-50"
+                aria-label="Confirm sale"
+                className="btn-shine flex flex-[2] items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 py-3 text-sm font-bold text-white shadow-xl hover:shadow-2xl focus-visible:ring-2 focus-visible:ring-emerald-400/50 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 type="button"
               >
-                {isSubmittingSale ? 'Recording...' : '✓ Confirm Sale'}
+                {isSubmittingSale ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Recording...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Confirm Sale
+                  </>
+                )}
               </button>
             </div>
           </div>

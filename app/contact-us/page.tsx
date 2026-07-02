@@ -2,13 +2,45 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
 import bg1 from '../../assets/bg1.png'
+
+function useReveal<T extends HTMLElement = HTMLDivElement>() {
+  const ref = useRef<T | null>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (typeof IntersectionObserver === 'undefined') {
+      el.classList.add('is-visible')
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return ref
+}
+
+const WhatsAppIcon = ({ className = 'h-5 w-5' }: { className?: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+  </svg>
+)
 
 export default function ContactUsPage() {
   const [formData, setFormData] = useState({
@@ -19,9 +51,15 @@ export default function ContactUsPage() {
     message: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+
+  const infoReveal = useReveal<HTMLDivElement>()
+  const formReveal = useReveal<HTMLDivElement>()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setIsSubmitting(true)
 
     try {
@@ -36,8 +74,7 @@ export default function ContactUsPage() {
         createdAt: serverTimestamp()
       })
 
-      alert('Thank you for reaching out! We will get back to you within 1 business day.')
-      
+      setSubmitted(true)
       // Clear form
       setFormData({
         name: '',
@@ -48,7 +85,7 @@ export default function ContactUsPage() {
       })
     } catch (error) {
       console.error('Error submitting contact form:', error)
-      alert('There was an error sending your message. Please try again or contact us via WhatsApp.')
+      setError('There was an error sending your message. Please try again or contact us via WhatsApp.')
     } finally {
       setIsSubmitting(false)
     }
@@ -61,42 +98,41 @@ export default function ContactUsPage() {
     })
   }
 
+  const inputClass =
+    'rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
+
   return (
     <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-20 border-b border-black/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-2">
-          <Link className="flex items-center gap-2 sm:gap-3 min-w-0" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={32} height={32} className="flex-shrink-0" />
-            <span className="flex flex-col min-w-0">
+      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)] backdrop-blur-xl">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-3">
+          <Link className="group flex items-center gap-2 sm:gap-3 min-w-0" href="/">
+            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 transition-transform duration-500 group-hover:rotate-6" />
+            <span className="flex flex-col min-w-0 leading-tight">
               <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-xs sm:text-sm text-muted hidden sm:block">Islamic Bookstore</span>
+              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <Link className="hover:text-primaryDark" href="/">
-              Home
-            </Link>
-            <Link className="hover:text-primaryDark" href="/contact-us">
-              Contact
-            </Link>
+          <nav className="hidden items-center gap-1 md:flex">
+            {[
+              { label: 'Home', href: '/' },
+              { label: 'Our Products', href: '/catalog' },
+              { label: 'Book Event', href: '/book-event' }
+            ].map((item) => (
+              <Link key={item.label} href={item.href} className="group relative rounded-full px-4 py-2 text-sm font-semibold text-muted transition-colors duration-200 hover:text-primaryDark">
+                {item.label}
+                <span className="absolute inset-x-4 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100" />
+              </Link>
+            ))}
           </nav>
           <Link
-            className="hidden sm:flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition hover:-translate-y-0.5"
+            className="btn-shine flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-4 sm:px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(124,58,237,0.25)] transition-all duration-300 hover:-translate-y-0.5"
             href="/auth/login"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            Admin Login
-          </Link>
-          <Link
-            className="sm:hidden flex items-center justify-center rounded-full border border-primary/30 bg-white p-2.5 text-primaryDark"
-            href="/auth/login"
-            aria-label="Admin Login"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+            <span className="hidden sm:inline">Admin Login</span>
           </Link>
         </div>
       </header>
@@ -126,26 +162,28 @@ export default function ContactUsPage() {
               className={`hero-drift ${index % 2 === 0 ? '' : 'delay'} pointer-events-none absolute z-0 hidden md:block ${classes}`}
             />
           ))}
-          <div className="relative z-10 mx-auto w-11/12 max-w-4xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
+          <div className="reveal is-visible relative z-10 mx-auto w-11/12 max-w-4xl text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">
               Get In Touch
-            </p>
-            <h1 className="mt-4 font-display text-3xl sm:text-5xl">Contact Us</h1>
-            <p className="mt-4 text-base sm:text-lg text-muted">
-              Have questions about our books, events, or services? We'd love to hear from you.
-              Reach out and we'll get back to you within 1 business day.
+            </span>
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl">
+              Contact <span className="gradient-text">Us</span>
+            </h1>
+            <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
+              Have questions about our books, events, or services? We&apos;d love to hear from you.
+              Reach out and we&apos;ll get back to you within 1 business day.
             </p>
           </div>
         </section>
 
-        <section className="relative py-16 bg-gradient-to-br from-primary/5 to-secondary/5">
+        <section className="relative py-14 sm:py-20 bg-gradient-to-br from-primary/5 to-secondary/5">
           <div className="mx-auto w-11/12 max-w-5xl">
             <div className="grid gap-8 md:grid-cols-2">
-              <div className="space-y-6">
-                <div className="rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10">
+              <div ref={infoReveal} className="reveal space-y-6">
+                <div className="card-hover rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(124,58,237,0.12)]">
                   <div className="flex items-center gap-3 sm:gap-4 mb-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-2xl">
-                      📍
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
                     <h3 className="font-display text-xl gradient-text">Location</h3>
                   </div>
@@ -156,10 +194,10 @@ export default function ContactUsPage() {
                   </p>
                 </div>
 
-                <div className="rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10">
+                <div className="card-hover rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(124,58,237,0.12)]">
                   <div className="flex items-center gap-3 sm:gap-4 mb-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-2xl">
-                      💬
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accentThree/20 to-primary/20 text-primaryDark">
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z" /></svg>
                     </div>
                     <h3 className="font-display text-xl gradient-text">Quick Response</h3>
                   </div>
@@ -171,19 +209,17 @@ export default function ContactUsPage() {
                     href="https://wa.me/c/16674377777"
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-green-500 bg-green-50 px-6 py-3 font-semibold text-green-700 transition hover:-translate-y-1"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-green-500 bg-green-50 px-6 py-3 font-semibold text-green-700 transition-all duration-300 hover:-translate-y-1 hover:bg-green-100"
                   >
-                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
+                    <WhatsAppIcon />
                     Chat on WhatsApp
                   </a>
                 </div>
 
-                <div className="rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10">
+                <div className="card-hover rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10 hover:-translate-y-1 hover:shadow-[0_18px_44px_rgba(124,58,237,0.12)]">
                   <div className="flex items-center gap-3 sm:gap-4 mb-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-primary/20 text-2xl">
-                      📚
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-primary/20 text-primaryDark">
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                     </div>
                     <h3 className="font-display text-xl gradient-text">What We Can Help With</h3>
                   </div>
@@ -197,7 +233,7 @@ export default function ContactUsPage() {
                       'General questions about our services'
                     ].map((item) => (
                       <li key={item} className="flex items-start gap-2">
-                        <span className="text-primary">✦</span>
+                        <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                         <span className="text-muted">{item}</span>
                       </li>
                     ))}
@@ -205,15 +241,35 @@ export default function ContactUsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-center">
+              <div ref={formReveal} className="reveal flex justify-center">
                 <div className="w-full">
+                  {submitted ? (
+                    <div className="animate-fadeIn rounded-3xl bg-gradient-to-br from-emerald-50 to-green-50 p-8 sm:p-10 shadow-soft border border-emerald-200 text-center">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 text-white shadow-lg">
+                        <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                      <h3 className="mt-5 font-display text-2xl gradient-text">Message Sent!</h3>
+                      <p className="mt-3 text-muted">
+                        Thank you for reaching out. We&apos;ll get back to you within 1 business day.
+                      </p>
+                      <button type="button" onClick={() => setSubmitted(false)} className="mt-6 rounded-full border border-primary/30 bg-white px-6 py-3 text-sm font-semibold text-primaryDark transition hover:-translate-y-0.5 hover:bg-primary/5">
+                        Send another message
+                      </button>
+                    </div>
+                  ) : (
                   <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-5 sm:p-8 shadow-soft border border-primary/10">
                     <h3 className="font-display text-2xl gradient-text mb-6">Send Us a Message</h3>
                     <div className="grid gap-5">
+                      {error && (
+                        <div className="animate-slideDown flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+                          <svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                          <span>{error}</span>
+                        </div>
+                      )}
                       <label className="grid gap-2 font-semibold text-sm">
                         Name *
                         <input
-                          className="rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal"
+                          className={inputClass}
                           type="text"
                           name="name"
                           value={formData.name}
@@ -226,7 +282,7 @@ export default function ContactUsPage() {
                       <label className="grid gap-2 font-semibold text-sm">
                         Email *
                         <input
-                          className="rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal"
+                          className={inputClass}
                           type="email"
                           name="email"
                           value={formData.email}
@@ -239,7 +295,7 @@ export default function ContactUsPage() {
                       <label className="grid gap-2 font-semibold text-sm">
                         Phone (Optional)
                         <input
-                          className="rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal"
+                          className={inputClass}
                           type="tel"
                           name="phone"
                           value={formData.phone}
@@ -251,7 +307,7 @@ export default function ContactUsPage() {
                       <label className="grid gap-2 font-semibold text-sm">
                         Subject *
                         <select
-                          className="rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal"
+                          className={inputClass}
                           name="subject"
                           value={formData.subject}
                           onChange={handleChange}
@@ -270,7 +326,7 @@ export default function ContactUsPage() {
                       <label className="grid gap-2 font-semibold text-sm">
                         Message *
                         <textarea
-                          className="rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal min-h-36"
+                          className={`${inputClass} min-h-36`}
                           name="message"
                           value={formData.message}
                           onChange={handleChange}
@@ -282,9 +338,16 @@ export default function ContactUsPage() {
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 font-semibold text-white shadow-soft transition hover:-translate-y-1 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                        className="btn-shine flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 font-semibold text-white shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                       >
-                        {isSubmitting ? 'Sending...' : 'Send Message'}
+                        {isSubmitting ? (
+                          <>
+                            <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                            Sending...
+                          </>
+                        ) : (
+                          'Send Message'
+                        )}
                       </button>
 
                       <p className="text-xs text-center text-muted">
@@ -292,6 +355,7 @@ export default function ContactUsPage() {
                       </p>
                     </div>
                   </form>
+                  )}
                 </div>
               </div>
             </div>
@@ -332,9 +396,25 @@ export default function ContactUsPage() {
         </section>
       </main>
 
-      <footer className="bg-[#1f1b2e] py-8 text-white">
-        <div className="mx-auto w-11/12 max-w-6xl text-center text-sm text-white/70">
-          <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        <div className="mx-auto w-11/12 max-w-6xl">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
+              <span className="font-display text-lg font-bold">Eduvate Kids</span>
+            </Link>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/70">
+              <Link href="/" className="transition-colors hover:text-white">Home</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
+              <Link href="/book-event" className="transition-colors hover:text-white">Book Event</Link>
+              <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
+              <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>
+            </div>
+          </div>
+          <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-white/50">
+            <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>

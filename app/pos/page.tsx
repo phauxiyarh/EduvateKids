@@ -262,26 +262,25 @@ export default function POSPage() {
               <span className="text-xs sm:text-sm text-muted hidden sm:block">Point of Sale</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-5 text-sm font-semibold text-muted md:flex">
-            <Link className="group relative py-1 transition-colors hover:text-primaryDark focus-visible:text-primaryDark outline-none" href="/">
-              Home
-              <span className="absolute inset-x-0 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" />
-            </Link>
-            <Link className="group relative py-1 transition-colors hover:text-primaryDark focus-visible:text-primaryDark outline-none" href="/contact-us">
-              Contact
-              <span className="absolute inset-x-0 -bottom-0.5 h-0.5 origin-left scale-x-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-transform duration-300 group-hover:scale-x-100 group-focus-visible:scale-x-100" />
-            </Link>
+          <nav className="hidden items-center gap-2 md:flex">
+            {[
+              { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
+              { label: 'Our Products', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+              { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' }
+            ].map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span>{item.label}</span>
+              </Link>
+            ))}
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              className="flex items-center gap-2 rounded-full border border-primary/30 bg-white px-5 py-2 text-sm font-semibold text-primaryDark shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/30 outline-none"
-              href="/auth/login"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
             <button
               className="flex items-center justify-center w-10 h-10 rounded-xl border border-primary/20 bg-white transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/30 outline-none md:hidden"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -297,8 +296,23 @@ export default function POSPage() {
         </div>
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-primary/10 bg-white px-6 py-4 space-y-2 animate-slideDown">
-            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted transition-colors hover:bg-primary/5 hover:text-primaryDark focus-visible:ring-2 focus-visible:ring-primary/30 outline-none" href="/" onClick={() => setMobileMenuOpen(false)}>Home</Link>
-            <Link className="block rounded-xl px-4 py-3 text-sm font-semibold text-muted transition-colors hover:bg-primary/5 hover:text-primaryDark focus-visible:ring-2 focus-visible:ring-primary/30 outline-none" href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            {[
+              { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
+              { label: 'Our Products', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+              { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' }
+            ].map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                {item.label}
+              </Link>
+            ))}
           </div>
         )}
       </header>
@@ -758,13 +772,37 @@ export default function POSPage() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-black/10 bg-white py-8 mt-12">
-        <div className="mx-auto w-11/12 max-w-6xl text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <Image src={logo} alt="Eduvate Kids" width={24} height={24} />
-            <span className="font-display font-bold text-primaryDark">Eduvate Kids</span>
-          </Link>
-          <p className="text-xs text-muted">© {new Date().getFullYear()} Eduvate Kids. Islamic Bookstore.</p>
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 mt-12 text-white">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        <div className="mx-auto w-11/12 max-w-6xl">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
+              <span className="font-display text-lg font-bold">Eduvate Kids</span>
+            </Link>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/70">
+              <Link href="/" className="transition-colors hover:text-white">Home</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
+              <Link href="/contact-us" className="transition-colors hover:text-white">Contact</Link>
+              <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
+              <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>
+            </div>
+          </div>
+          <div className="mt-8 mb-6 flex justify-center">
+            <Link
+              href="/auth/login"
+              aria-label="Admin Login"
+              className="group inline-flex items-center justify-center rounded-full border border-white/10 p-2.5 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+              </svg>
+            </Link>
+          </div>
+          <div className="border-t border-white/10 pt-6 text-center text-sm text-white/50">
+            <p>© {new Date().getFullYear()} Eduvate Kids. Islamic Bookstore.</p>
+          </div>
         </div>
       </footer>
     </div>

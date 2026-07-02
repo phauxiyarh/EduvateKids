@@ -516,42 +516,52 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Right Column - Mission & Vision */}
-              <div className="space-y-6">
-                <div className="animate-float rounded-3xl bg-white p-5 sm:p-6 shadow-soft border-2 border-primary/10">
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-2xl">
-                      🎯
-                    </div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-                      Our Mission
+              {/* Right Column - Mission & Vision (merged) */}
+              <div className="animate-float rounded-3xl bg-white p-5 sm:p-7 shadow-soft border-2 border-primary/10">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accentThree">
+                  Mission &amp; Vision
+                </p>
+
+                {/* Mission */}
+                <div className="mt-5 flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 text-primaryDark">
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5a4 4 0 100 8 4 4 0 000-8zm0 3a1 1 0 100 2 1 1 0 000-2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Our Mission</p>
+                    <h4 className="mt-1 font-display text-lg sm:text-xl gradient-text">
+                      Inspire lifelong faith through stories and learning
+                    </h4>
+                    <p className="mt-2 text-sm text-muted leading-relaxed">
+                      We provide high-quality Islamic books, activities, and gifts that nurture
+                      identity, curiosity, and love of knowledge in children and families.
                     </p>
                   </div>
-                  <h4 className="font-display text-xl gradient-text">
-                    Inspire lifelong faith through stories and learning
-                  </h4>
-                  <p className="mt-3 text-sm text-muted leading-relaxed">
-                    We provide high-quality Islamic books, activities, and gifts that nurture
-                    identity, curiosity, and love of knowledge in children and families.
-                  </p>
                 </div>
 
-                <div className="animate-float rounded-3xl bg-white p-5 sm:p-6 shadow-soft border-2 border-secondary/10">
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/10 text-2xl">
-                      🌟
-                    </div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">
-                      Our Vision
+                {/* Divider */}
+                <div className="my-5 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent" />
+
+                {/* Vision */}
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-secondary/10 text-secondary">
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Our Vision</p>
+                    <h4 className="mt-1 font-display text-lg sm:text-xl gradient-text">
+                      A connected community of readers, learners, and leaders
+                    </h4>
+                    <p className="mt-2 text-sm text-muted leading-relaxed">
+                      We partner with schools, masajid, and families to make faith-centered
+                      learning accessible, engaging, and joyful everywhere.
                     </p>
                   </div>
-                  <h4 className="font-display text-xl gradient-text">
-                    A connected community of readers, learners, and leaders
-                  </h4>
-                  <p className="mt-3 text-sm text-muted leading-relaxed">
-                    We partner with schools, masajid, and families to make faith-centered
-                    learning accessible, engaging, and joyful everywhere.
-                  </p>
                 </div>
               </div>
             </div>
@@ -1138,22 +1148,9 @@ export default function HomePage() {
           </div>
 
           <div className="mt-12 border-t border-white/10 pt-8">
-            {/* Discreet admin access — low opacity, brightens on hover */}
-            <div className="mb-6 flex justify-center">
-              <Link
-                href="/auth/login"
-                aria-label="Admin Login"
-                className="group inline-flex items-center justify-center rounded-full border border-white/10 p-2.5 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
-                </svg>
-                </Link>
-            </div>
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/50">
               <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
                 <Link href="/policies" className="transition-colors duration-200 hover:text-white">
                   Privacy Policy
                 </Link>
@@ -1162,6 +1159,16 @@ export default function HomePage() {
                 </Link>
                 <Link href="/faqs" className="transition-colors duration-200 hover:text-white">
                   Help Center
+                </Link>
+                <Link
+                  href="/auth/login"
+                  aria-label="Admin Login"
+                  className="group inline-flex items-center justify-center rounded-full border border-white/10 p-2 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+                  </svg>
                 </Link>
               </div>
             </div>

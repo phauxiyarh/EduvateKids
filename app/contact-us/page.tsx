@@ -414,17 +414,15 @@ export default function ContactUsPage() {
               <Link href="/book-event" className="transition-colors hover:text-white">Book Event</Link>
               <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
               <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>
-              <Link
-                href="/auth/login"
-                aria-label="Admin Login"
-                className="group inline-flex items-center justify-center rounded-full border border-white/10 p-2 text-white/30 transition-all duration-300 hover:border-white/30 hover:bg-white/5 hover:text-white/80"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
-                </svg>
-              </Link>
             </div>
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Link href="/auth/login" aria-label="Admin Login" className="group inline-flex items-center justify-center rounded-full p-2 text-white/30 transition-all duration-300 hover:bg-white/5 hover:text-white/80">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+              </svg>
+            </Link>
           </div>
           <div className="mt-8 border-t border-white/10 pt-6 text-center text-sm text-white/50">
             <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>

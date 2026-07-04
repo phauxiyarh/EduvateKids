@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getFunctions } from 'firebase/functions';
 
 import { getAnalytics, isSupported } from 'firebase/analytics';
 
@@ -18,6 +19,7 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app, 'us-central1');
 
 // Initialize Analytics only in browser environment
 let analytics;
@@ -29,4 +31,4 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export { app, db, auth, analytics };
+export { app, db, auth, functions, analytics };

@@ -10,6 +10,8 @@
     "export": "next build"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^2.9.0",
+    "@stripe/stripe-js": "^4.10.0",
     "firebase": "^12.8.0",
     "firebase-admin": "^13.6.0",
     "next": "14.2.16",

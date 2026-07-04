@@ -12,7 +12,8 @@ import {
   updateDoc,
   deleteDoc,
   writeBatch,
-  getDoc
+  getDoc,
+  serverTimestamp
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import {
@@ -80,6 +81,43 @@ type CartItem = {
   title: string
   price: number
   quantity: number
+}
+
+/** Online store order (written by the Stripe webhook to the `orders` collection). */
+type OnlineOrderItem = { id: string; title: string; quantity: number; unitPrice: number; lineTotal: number }
+type OnlineOrder = {
+  id: string
+  items: OnlineOrderItem[]
+  subtotal: number
+  shippingFee: number
+  tax?: number
+  total: number
+  currency: string
+  customer: { name: string; email: string; phone?: string }
+  shippingAddress: { line1: string; line2?: string; city: string; state: string; postalCode: string; country: string }
+  paymentProvider: string
+  paymentRef: string
+  status: 'pending' | 'paid' | 'failed' | 'shipped' | 'cancelled'
+  createdAt?: { seconds: number } | null
+  paidAt?: { seconds: number } | null
+  shippedAt?: { seconds: number } | null
+}
+
+/** Summer Reading Program registration (written to the `summerReads` collection). */
+type SummerBookLog = { title: string; author?: string; rating?: number; review?: string; dateFinished?: string; dateLogged?: string }
+type SummerReader = {
+  id: string
+  code: string
+  childName: string
+  dateOfBirth?: string
+  childAge?: number
+  parentName: string
+  parentEmail: string
+  parentPhone?: string
+  booksCount: number
+  tier: 'seedling' | 'reader' | 'scholar' | 'none' | string
+  booksLogged?: SummerBookLog[]
+  createdAt?: { seconds: number } | null
 }
 
 type EventStatus = 'active' | 'closed'
@@ -301,9 +339,16 @@ export default function DashboardPage() {
     }
     return true
   })
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer'>(
     'home'
   )
+  const [orders, setOrders] = useState<OnlineOrder[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped'>('all')
+  const [expandedOrder, setExpandedOrder] = useState<OnlineOrder | null>(null)
+  const [summerReaders, setSummerReaders] = useState<SummerReader[]>([])
+  const [summerLoading, setSummerLoading] = useState(false)
+  const [expandedReader, setExpandedReader] = useState<SummerReader | null>(null)
   const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
@@ -2397,6 +2442,288 @@ export default function DashboardPage() {
       setInventory(oldInventory)
       setUploadMessage('Failed to clear inventory. Restored locally.')
     }
+  }
+
+  // ─── Online orders (Stripe) ───
+  const loadOrders = async () => {
+    setOrdersLoading(true)
+    try {
+      const snap = await getDocs(collection(db, 'orders'))
+      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OnlineOrder, 'id'>) }))
+      // Newest first by createdAt seconds (fallback: keep order).
+      rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
+      setOrders(rows)
+    } catch (error) {
+      console.error('Failed to load orders:', error)
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
+  // Fetch orders when the Orders view opens (admin only).
+  useEffect(() => {
+    if (activeView === 'orders' && userRole === 'admin') {
+      loadOrders()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, userRole])
+
+  // ─── Summer Reading Program registrations ───
+  const loadSummerReaders = async () => {
+    setSummerLoading(true)
+    try {
+      const snap = await getDocs(collection(db, 'summerReads'))
+      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SummerReader, 'id'>) }))
+      // Newest first by createdAt seconds.
+      rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
+      setSummerReaders(rows)
+    } catch (error) {
+      console.error('Failed to load summer readers:', error)
+    } finally {
+      setSummerLoading(false)
+    }
+  }
+
+  // Fetch summer readers when the Summer Reads view opens (admin only).
+  useEffect(() => {
+    if (activeView === 'summer' && userRole === 'admin') {
+      loadSummerReaders()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, userRole])
+
+  const markOrderShipped = async (order: OnlineOrder) => {
+    try {
+      await updateDoc(doc(db, 'orders', order.id), { status: 'shipped', shippedAt: serverTimestamp() })
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: 'shipped' } : o)))
+      setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status: 'shipped' } : cur))
+    } catch (error) {
+      console.error('Failed to mark order shipped:', error)
+      alert('Could not update the order. Please try again.')
+    }
+  }
+
+  const orderStatusBadge = (status: OnlineOrder['status']) => {
+    const map: Record<OnlineOrder['status'], string> = {
+      paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      shipped: 'bg-blue-100 text-blue-700 border-blue-200',
+      pending: 'bg-amber-100 text-amber-700 border-amber-200',
+      failed: 'bg-red-100 text-red-700 border-red-200',
+      cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+    }
+    return `rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${map[status]}`
+  }
+
+  const fmtDate = (ts?: { seconds: number } | null) =>
+    ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+
+  const renderOrders = () => {
+    const filtered = orders.filter((o) => (orderStatusFilter === 'all' ? true : o.status === orderStatusFilter))
+    const paidCount = orders.filter((o) => o.status === 'paid').length
+    const revenue = orders.filter((o) => o.status === 'paid' || o.status === 'shipped').reduce((s, o) => s + o.total, 0)
+    return (
+      <div className="fade-up space-y-6">
+        {/* Summary */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Total Orders', value: String(orders.length) },
+            { label: 'Awaiting Shipment', value: String(paidCount) },
+            { label: 'Revenue (paid)', value: `$${revenue.toFixed(2)}` },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl bg-white p-5 shadow-xl border border-primary/5">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">{s.label}</p>
+              <p className="mt-2 font-display text-2xl gradient-text">{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {(['all', 'paid', 'shipped'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setOrderStatusFilter(f)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold capitalize transition-all duration-300 ${
+                    orderStatusFilter === f ? 'bg-gradient-to-r from-primary to-secondary text-white shadow' : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
+                  }`}
+                >
+                  {f === 'all' ? 'All' : f}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={loadOrders}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5"
+            >
+              <svg className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Refresh
+            </button>
+          </div>
+
+          {ordersLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-muted">
+              <svg className="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Loading orders…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/40">
+                <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+              </div>
+              <p className="text-muted">No {orderStatusFilter === 'all' ? '' : orderStatusFilter} orders yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-black/5 text-xs uppercase tracking-wider text-muted">
+                    <th className="pb-3 pr-4 font-semibold">Order</th>
+                    <th className="pb-3 pr-4 font-semibold">Customer</th>
+                    <th className="pb-3 pr-4 font-semibold">Date</th>
+                    <th className="pb-3 pr-4 font-semibold">Total</th>
+                    <th className="pb-3 pr-4 font-semibold">Status</th>
+                    <th className="pb-3 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((o) => (
+                    <tr key={o.id} className="border-b border-black/5 transition hover:bg-primary/5">
+                      <td className="py-3 pr-4 font-mono text-xs text-muted">{o.id.slice(0, 8)}…</td>
+                      <td className="py-3 pr-4"><span className="font-medium text-ink">{o.customer?.name}</span><br /><span className="text-xs text-muted">{o.customer?.email}</span></td>
+                      <td className="py-3 pr-4 text-muted">{fmtDate(o.createdAt)}</td>
+                      <td className="py-3 pr-4 font-bold text-primaryDark">${o.total?.toFixed(2)}</td>
+                      <td className="py-3 pr-4"><span className={orderStatusBadge(o.status)}>{o.status}</span></td>
+                      <td className="py-3 text-right">
+                        <button type="button" onClick={() => setExpandedOrder(o)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const summerTierBadge = (tier: SummerReader['tier']) => {
+    const map: Record<string, string> = {
+      seedling: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      reader: 'bg-primary/10 text-primaryDark border-primary/20',
+      scholar: 'bg-secondary/10 text-secondary border-secondary/20',
+      none: 'bg-gray-100 text-gray-600 border-gray-200',
+    }
+    return `rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${map[tier] ?? map.none}`
+  }
+
+  const exportSummerCsv = () => {
+    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Books Logged', 'Tier']
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = summerReaders.map((r) => [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.booksCount, r.tier].map(escape).join(','))
+    const csv = [header.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `eduvate-summer-reads-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const renderSummer = () => {
+    const scholars = summerReaders.filter((r) => r.tier === 'scholar').length
+    const totalBooks = summerReaders.reduce((s, r) => s + (r.booksCount ?? 0), 0)
+    return (
+      <div className="fade-up space-y-6">
+        {/* Summary */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Total Registered', value: String(summerReaders.length) },
+            { label: 'Scholars', value: String(scholars) },
+            { label: 'Total Books Logged', value: String(totalBooks) },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl bg-white p-5 shadow-xl border border-primary/5">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">{s.label}</p>
+              <p className="mt-2 font-display text-2xl gradient-text">{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={exportSummerCsv}
+              disabled={summerReaders.length === 0}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={loadSummerReaders}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5"
+            >
+              <svg className={`h-4 w-4 ${summerLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Refresh
+            </button>
+          </div>
+
+          {summerLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-muted">
+              <svg className="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Loading registrations…
+            </div>
+          ) : summerReaders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/40">
+                <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+              </div>
+              <p className="text-muted">No registrations yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-black/5 text-xs uppercase tracking-wider text-muted">
+                    <th className="pb-3 pr-4 font-semibold">Code</th>
+                    <th className="pb-3 pr-4 font-semibold">Child</th>
+                    <th className="pb-3 pr-4 font-semibold">Parent</th>
+                    <th className="pb-3 pr-4 font-semibold">Books</th>
+                    <th className="pb-3 pr-4 font-semibold">Tier</th>
+                    <th className="pb-3 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summerReaders.map((r) => (
+                    <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
+                      <td className="py-3 pr-4 font-mono text-xs text-muted">{r.code}</td>
+                      <td className="py-3 pr-4"><span className="font-medium text-ink">{r.childName}</span>{r.childAge != null && <><br /><span className="text-xs text-muted">Age {r.childAge}</span></>}</td>
+                      <td className="py-3 pr-4"><span className="font-medium text-ink">{r.parentName}</span><br /><span className="text-xs text-muted">{r.parentEmail}</span></td>
+                      <td className="py-3 pr-4 font-bold text-primaryDark">{r.booksCount ?? 0}</td>
+                      <td className="py-3 pr-4"><span className={summerTierBadge(r.tier)}>{r.tier || 'none'}</span></td>
+                      <td className="py-3 text-right">
+                        <button type="button" onClick={() => setExpandedReader(r)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   const renderInventory = () => (
@@ -4645,7 +4972,9 @@ export default function DashboardPage() {
                 { id: 'inventory', label: 'Inventory' },
                 { id: 'events', label: 'Events' },
                 { id: 'pos', label: 'POS' },
-                { id: 'catalog', label: 'Catalog' }
+                { id: 'catalog', label: 'Catalog' },
+                { id: 'orders', label: 'Orders' },
+                { id: 'summer', label: 'Summer Reads' }
               ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                 <button
                   key={item.id}
@@ -4664,6 +4993,8 @@ export default function DashboardPage() {
                     {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
                     {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
                     {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
+                    {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
+                    {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
                   </svg>
                   <span>{item.label}</span>
                 </button>
@@ -4723,7 +5054,8 @@ export default function DashboardPage() {
                   { id: 'inventory', label: 'Inventory' },
                   { id: 'events', label: 'Events' },
                   { id: 'pos', label: 'POS' },
-                  { id: 'catalog', label: 'Catalog' }
+                  { id: 'catalog', label: 'Catalog' },
+                  { id: 'summer', label: 'Summer Reads' }
                 ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                   <button
                     key={item.id}
@@ -4745,6 +5077,8 @@ export default function DashboardPage() {
                       {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
                       {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
                       {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
+                    {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
+                    {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
                     </svg>
                     <span>{item.label}</span>
                   </button>
@@ -4784,6 +5118,10 @@ export default function DashboardPage() {
                   ? 'Catalog Management'
                   : activeView === 'pos'
                   ? 'Point of Sale'
+                  : activeView === 'orders'
+                  ? 'Online Orders'
+                  : activeView === 'summer'
+                  ? 'Summer Reads'
                   : 'Event Management'}
               </h1>
               <p className="mt-3 text-sm text-muted max-w-2xl">
@@ -4795,6 +5133,10 @@ export default function DashboardPage() {
                   ? 'Create, manage, and showcase your product catalog with images and details.'
                   : activeView === 'pos'
                   ? 'Record sales for events or general transactions. Search products, manage cart, and process payments.'
+                  : activeView === 'orders'
+                  ? 'Online store orders paid via Stripe. Review details and mark items as shipped.'
+                  : activeView === 'summer'
+                  ? 'Registrations and reading progress for the Summer Reads program.'
                   : 'Create events, manage dates and fees, and review event performance summaries.'}
               </p>
             </div>
@@ -4804,6 +5146,8 @@ export default function DashboardPage() {
             {activeView === 'events' && renderEvents()}
             {activeView === 'catalog' && renderCatalog()}
             {activeView === 'pos' && renderPOS()}
+            {activeView === 'orders' && renderOrders()}
+            {activeView === 'summer' && renderSummer()}
           </section>
         </div>
       </main>
@@ -5129,6 +5473,150 @@ export default function DashboardPage() {
           background-clip: text;
         }
       `}</style>
+
+      {/* Online order detail modal */}
+      {expandedOrder && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedOrder(null)}>
+          <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+              <div>
+                <h3 className="font-display text-lg font-bold text-primaryDark">Order Details</h3>
+                <p className="font-mono text-xs text-muted">{expandedOrder.id}</p>
+              </div>
+              <button type="button" onClick={() => setExpandedOrder(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="space-y-5 p-5">
+              <div className="flex items-center justify-between">
+                <span className={orderStatusBadge(expandedOrder.status)}>{expandedOrder.status}</span>
+                <span className="text-xs text-muted">Paid {fmtDate(expandedOrder.paidAt)}</span>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">Items</p>
+                <ul className="mt-2 space-y-2">
+                  {expandedOrder.items?.map((it, idx) => (
+                    <li key={idx} className="flex items-center justify-between text-sm">
+                      <span className="text-ink">{it.title} <span className="text-muted">× {it.quantity}</span></span>
+                      <span className="font-semibold text-primaryDark">${it.lineTotal?.toFixed(2)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 space-y-1 border-t border-black/5 pt-3 text-sm">
+                  <div className="flex justify-between text-muted"><span>Subtotal</span><span>${expandedOrder.subtotal?.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-muted"><span>Shipping</span><span>${expandedOrder.shippingFee?.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-muted"><span>Tax</span><span>${(expandedOrder.tax ?? 0).toFixed(2)}</span></div>
+                  <div className="flex justify-between pt-1 text-base font-bold text-primaryDark"><span>Total</span><span>${expandedOrder.total?.toFixed(2)}</span></div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Customer</p>
+                  <p className="mt-1 text-sm font-medium text-ink">{expandedOrder.customer?.name}</p>
+                  <p className="text-sm text-muted">{expandedOrder.customer?.email}</p>
+                  {expandedOrder.customer?.phone && <p className="text-sm text-muted">{expandedOrder.customer.phone}</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Ship To</p>
+                  <p className="mt-1 text-sm text-ink">{expandedOrder.shippingAddress?.line1}</p>
+                  {expandedOrder.shippingAddress?.line2 && <p className="text-sm text-ink">{expandedOrder.shippingAddress.line2}</p>}
+                  <p className="text-sm text-muted">{expandedOrder.shippingAddress?.city}, {expandedOrder.shippingAddress?.state} {expandedOrder.shippingAddress?.postalCode}</p>
+                  <p className="text-sm text-muted">{expandedOrder.shippingAddress?.country}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 p-3 text-xs text-muted">
+                <span className="font-semibold">Payment:</span> {expandedOrder.paymentProvider} · <span className="font-mono">{expandedOrder.paymentRef}</span>
+              </div>
+
+              {expandedOrder.status === 'paid' && (
+                <button
+                  type="button"
+                  onClick={() => markOrderShipped(expandedOrder)}
+                  className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 100-4h14a2 2 0 100 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" /></svg>
+                  Mark as Shipped
+                </button>
+              )}
+              {expandedOrder.status === 'shipped' && (
+                <div className="flex items-center justify-center gap-2 rounded-full bg-blue-50 px-6 py-3 text-sm font-semibold text-blue-700">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Shipped {fmtDate(expandedOrder.shippedAt)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {expandedReader && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedReader(null)}>
+          <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+              <div>
+                <h3 className="font-display text-lg font-bold text-primaryDark">{expandedReader.childName}</h3>
+                <p className="font-mono text-xs text-muted">{expandedReader.code}</p>
+              </div>
+              <button type="button" onClick={() => setExpandedReader(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="space-y-5 p-5">
+              <div className="flex items-center justify-between">
+                <span className={summerTierBadge(expandedReader.tier)}>{expandedReader.tier || 'none'}</span>
+                <span className="text-xs text-muted">{expandedReader.booksCount ?? 0} book{(expandedReader.booksCount ?? 0) === 1 ? '' : 's'} logged</span>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Child</p>
+                  <p className="mt-1 text-sm font-medium text-ink">{expandedReader.childName}</p>
+                  {expandedReader.childAge != null && <p className="text-sm text-muted">Age {expandedReader.childAge}</p>}
+                  {expandedReader.dateOfBirth && <p className="text-sm text-muted">DOB {expandedReader.dateOfBirth}</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Parent</p>
+                  <p className="mt-1 text-sm font-medium text-ink">{expandedReader.parentName}</p>
+                  <p className="text-sm text-muted">{expandedReader.parentEmail}</p>
+                  {expandedReader.parentPhone && <p className="text-sm text-muted">{expandedReader.parentPhone}</p>}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">Books Logged</p>
+                {expandedReader.booksLogged && expandedReader.booksLogged.length > 0 ? (
+                  <ul className="mt-2 space-y-3">
+                    {expandedReader.booksLogged.map((b, idx) => (
+                      <li key={idx} className="rounded-xl border border-black/5 bg-gray-50 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-ink">{b.title}</p>
+                            {b.author && <p className="text-xs text-muted">by {b.author}</p>}
+                          </div>
+                          {b.rating != null && (
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <svg key={n} className={`h-3.5 w-3.5 ${n <= (b.rating ?? 0) ? 'text-amber-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.176 0l-3.366 2.446c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.098 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z" /></svg>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {b.dateFinished && <p className="mt-1 text-xs text-muted">Finished {b.dateFinished}</p>}
+                        {b.review && <p className="mt-2 text-sm text-ink">{b.review}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-muted">No books logged yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

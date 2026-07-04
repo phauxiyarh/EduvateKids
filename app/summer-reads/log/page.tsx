@@ -1,0 +1,432 @@
+'use client'
+
+import Image from 'next/image'
+import Link from 'next/link'
+import { useState } from 'react'
+import { httpsCallable } from 'firebase/functions'
+import { doc, getDoc } from 'firebase/firestore'
+import { functions, db } from '../../../lib/firebase'
+import logo from '../../../assets/logo.png'
+
+const inputClass =
+  'w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
+
+type Tier = 'none' | 'seedling' | 'reader' | 'scholar'
+
+type LoggedBook = {
+  title: string
+  author?: string
+  rating?: number
+  review?: string
+  dateFinished?: string
+  dateLogged?: string
+}
+
+type ChildDoc = {
+  code: string
+  childName: string
+  dateOfBirth?: string
+  childAge?: number
+  parentName?: string
+  booksCount: number
+  tier: Tier
+  booksLogged: LoggedBook[]
+}
+
+const TIER_LABELS: Record<Tier, string> = {
+  none: 'Not started',
+  seedling: 'Seedling',
+  reader: 'Reader',
+  scholar: 'Scholar',
+}
+
+const TIER_GOAL = 10 // Scholar is the top tier
+
+function nextTierInfo(count: number): { label: string; target: number } {
+  if (count < 3) return { label: 'Seedling', target: 3 }
+  if (count < 6) return { label: 'Reader', target: 6 }
+  if (count < 10) return { label: 'Scholar', target: 10 }
+  return { label: 'Scholar', target: 10 }
+}
+
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0]
+}
+
+function Stars({ value }: { value?: number }) {
+  const n = value || 0
+  return (
+    <span className="inline-flex" aria-label={n ? `${n} out of 5 stars` : 'No rating'}>
+      {[1, 2, 3, 4, 5].map((s) => (
+        <svg key={s} className={`h-4 w-4 ${s <= n ? 'text-amber-400' : 'text-black/15'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.35 4.16a1 1 0 00.95.69h4.37c.97 0 1.37 1.24.59 1.81l-3.54 2.57a1 1 0 00-.36 1.12l1.35 4.16c.3.92-.75 1.68-1.54 1.11l-3.53-2.57a1 1 0 00-1.18 0l-3.53 2.57c-.79.57-1.84-.19-1.54-1.11l1.35-4.16a1 1 0 00-.36-1.12L1.44 9.6c-.78-.57-.38-1.81.59-1.81h4.37a1 1 0 00.95-.69L9.05 2.93z" />
+        </svg>
+      ))}
+    </span>
+  )
+}
+
+export default function SummerLogPage() {
+  // STATE 1 — code lookup
+  const [codeInput, setCodeInput] = useState('')
+  const [looking, setLooking] = useState(false)
+  const [lookupError, setLookupError] = useState('')
+
+  // STATE 2 — loaded child
+  const [child, setChild] = useState<ChildDoc | null>(null)
+  const [booksCount, setBooksCount] = useState(0)
+  const [tier, setTier] = useState<Tier>('none')
+  const [booksLogged, setBooksLogged] = useState<LoggedBook[]>([])
+
+  // Log form
+  const [title, setTitle] = useState('')
+  const [author, setAuthor] = useState('')
+  const [rating, setRating] = useState(0)
+  const [hoverRating, setHoverRating] = useState(0)
+  const [review, setReview] = useState('')
+  const [dateFinished, setDateFinished] = useState(todayStr())
+  const [parentVerified, setParentVerified] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  // Celebration
+  const [celebrateTier, setCelebrateTier] = useState<string | null>(null)
+
+  const code = child?.code || ''
+
+  const findProgress = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLookupError('')
+    const c = codeInput.trim().toUpperCase()
+    if (!c) return
+    setLooking(true)
+    try {
+      const snap = await getDoc(doc(db, 'summerReads', c))
+      if (!snap.exists()) {
+        setLookupError('Code not found. Check the code and try again.')
+        return
+      }
+      const data = snap.data() as Partial<ChildDoc>
+      const loaded: ChildDoc = {
+        code: data.code || c,
+        childName: data.childName || 'Reader',
+        dateOfBirth: data.dateOfBirth,
+        childAge: data.childAge,
+        parentName: data.parentName,
+        booksCount: data.booksCount || 0,
+        tier: (data.tier as Tier) || 'none',
+        booksLogged: Array.isArray(data.booksLogged) ? data.booksLogged : [],
+      }
+      setChild(loaded)
+      setBooksCount(loaded.booksCount)
+      setTier(loaded.tier)
+      setBooksLogged(loaded.booksLogged)
+    } catch {
+      setLookupError('Something went wrong. Please try again.')
+    } finally {
+      setLooking(false)
+    }
+  }
+
+  const resetForm = () => {
+    setTitle('')
+    setAuthor('')
+    setRating(0)
+    setHoverRating(0)
+    setReview('')
+    setDateFinished(todayStr())
+    setParentVerified(false)
+  }
+
+  const submitBook = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!title.trim() || !parentVerified || !code) return
+    setSubmitting(true)
+    try {
+      const call = httpsCallable(functions, 'logSummerBook')
+      const res = await call({
+        code,
+        title: title.trim(),
+        author: author.trim(),
+        rating,
+        review: review.trim(),
+        dateFinished,
+        parentVerified: true,
+      })
+      const result = res.data as { booksCount: number; tier: Tier; newTier?: boolean }
+
+      const newEntry: LoggedBook = {
+        title: title.trim(),
+        author: author.trim() || undefined,
+        rating: rating || undefined,
+        review: review.trim() || undefined,
+        dateFinished,
+        dateLogged: todayStr(),
+      }
+      setBooksLogged((prev) => [newEntry, ...prev])
+      setBooksCount(result.booksCount)
+      setTier(result.tier)
+      resetForm()
+
+      if (result.newTier) {
+        setCelebrateTier(TIER_LABELS[result.tier] || 'a new tier')
+        setTimeout(() => setCelebrateTier(null), 5000)
+      }
+    } catch (err) {
+      setFormError((err as { message?: string })?.message || 'Could not log the book. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Progress ring geometry
+  const R = 52
+  const CIRC = 2 * Math.PI * R
+  const progress = Math.min(booksCount / TIER_GOAL, 1)
+  const dashOffset = CIRC * (1 - progress)
+  const next = nextTierInfo(booksCount)
+  const reachedTop = booksCount >= TIER_GOAL
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50/60 via-white to-emerald-50/60 text-ink">
+      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)] backdrop-blur-xl">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between py-3">
+          <Link href="/summer-reads" className="flex items-center gap-2">
+            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9" />
+            <span className="font-display text-base sm:text-lg font-bold">Summer Reads</span>
+          </Link>
+          <Link href="/summer-reads/register" className="text-sm font-semibold text-muted transition hover:text-primaryDark">Register</Link>
+        </div>
+      </header>
+
+      <main className="mx-auto w-11/12 max-w-2xl py-10 sm:py-14">
+        {!child ? (
+          /* ---------- STATE 1: enter code ---------- */
+          <div className="mx-auto max-w-lg">
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Summer Reads 2026</p>
+              <h1 className="mt-3 font-display text-2xl sm:text-3xl">Log a Book</h1>
+              <p className="mt-2 text-sm text-muted">Enter your reading code to see your progress and log a book.</p>
+            </div>
+            <form onSubmit={findProgress} className="mt-8 rounded-3xl border border-primary/10 bg-white p-6 shadow-soft sm:p-8">
+              {lookupError && (
+                <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 animate-slideDown">
+                  <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                  <span>{lookupError}</span>
+                </div>
+              )}
+              <label className="grid gap-1.5 text-sm font-semibold" htmlFor="code">Reading Code
+                <input
+                  id="code"
+                  className={`${inputClass} text-center font-display text-lg font-bold uppercase tracking-widest`}
+                  placeholder="EK-XXXX"
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                  autoComplete="off"
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={!codeInput.trim() || looking}
+                className="btn-shine mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+              >
+                {looking ? (
+                  <><svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Finding…</>
+                ) : 'Find my progress'}
+              </button>
+              <p className="mt-4 text-center text-xs text-muted">
+                No code yet? <Link href="/summer-reads/register" className="font-semibold text-primaryDark hover:underline">Register your child</Link>.
+              </p>
+            </form>
+          </div>
+        ) : (
+          /* ---------- STATE 2: progress + log form ---------- */
+          <div className="animate-fadeIn">
+            {/* Celebration banner */}
+            {celebrateTier && (
+              <div role="status" className="animate-fadeIn mb-6 flex items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-4 text-center shadow-soft">
+                <span className="text-2xl">🎉</span>
+                <p className="font-display text-lg font-bold gradient-text">You reached {celebrateTier}!</p>
+              </div>
+            )}
+
+            {/* Progress card */}
+            <section className="rounded-3xl border border-primary/10 bg-white p-6 shadow-soft sm:p-8">
+              <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
+                <div className="relative flex h-32 w-32 flex-shrink-0 items-center justify-center">
+                  <svg className="h-32 w-32 -rotate-90" viewBox="0 0 120 120" aria-hidden="true">
+                    <circle cx="60" cy="60" r={R} fill="none" stroke="currentColor" strokeWidth="10" className="text-primary/10" />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r={R}
+                      fill="none"
+                      stroke="url(#ringGrad)"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      strokeDasharray={CIRC}
+                      strokeDashoffset={dashOffset}
+                      style={{ transition: 'stroke-dashoffset 700ms ease' }}
+                    />
+                    <defs>
+                      <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="#7c3aed" />
+                        <stop offset="100%" stopColor="#ec4899" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="font-display text-3xl font-bold text-primaryDark">{booksCount}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">books</span>
+                  </div>
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading with code {code}</p>
+                  <h1 className="mt-1 font-display text-2xl">{child.childName}</h1>
+                  <p className="mt-2 text-sm text-muted">
+                    Current tier: <span className="font-semibold text-primaryDark">{TIER_LABELS[tier]}</span>
+                  </p>
+                  <p className="mt-1 text-sm text-muted">
+                    {reachedTop
+                      ? '🏆 Top tier reached — Scholar! Keep the streak going.'
+                      : <>Read <span className="font-semibold text-primaryDark">{Math.max(next.target - booksCount, 0)}</span> more to reach <span className="font-semibold text-primaryDark">{next.label}</span>.</>}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Log form */}
+            <form onSubmit={submitBook} className="mt-8 rounded-3xl border border-primary/10 bg-white p-6 shadow-soft sm:p-8">
+              <h2 className="font-display text-xl">Log a Book</h2>
+              <p className="mt-1 text-sm text-muted">Tell us about a book {child.childName} finished.</p>
+
+              {formError && (
+                <div className="mt-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 animate-slideDown">
+                  <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <div className="mt-6 grid gap-4">
+                <label className="grid gap-1.5 text-sm font-semibold" htmlFor="title">Book Title *
+                  <input id="title" className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} required />
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold" htmlFor="author">Author
+                  <input id="author" className={inputClass} value={author} onChange={(e) => setAuthor(e.target.value)} />
+                </label>
+
+                <div className="grid gap-1.5 text-sm font-semibold">
+                  <span>Rating</span>
+                  <div className="flex items-center gap-1" role="radiogroup" aria-label="Book rating out of 5 stars">
+                    {[1, 2, 3, 4, 5].map((s) => {
+                      const active = s <= (hoverRating || rating)
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          role="radio"
+                          aria-checked={rating === s}
+                          aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                          onClick={() => setRating(s === rating ? 0 : s)}
+                          onMouseEnter={() => setHoverRating(s)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          className="rounded-full p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+                        >
+                          <svg className={`h-7 w-7 transition-colors ${active ? 'text-amber-400' : 'text-black/15'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.35 4.16a1 1 0 00.95.69h4.37c.97 0 1.37 1.24.59 1.81l-3.54 2.57a1 1 0 00-.36 1.12l1.35 4.16c.3.92-.75 1.68-1.54 1.11l-3.53-2.57a1 1 0 00-1.18 0l-3.53 2.57c-.79.57-1.84-.19-1.54-1.11l1.35-4.16a1 1 0 00-.36-1.12L1.44 9.6c-.78-.57-.38-1.81.59-1.81h4.37a1 1 0 00.95-.69L9.05 2.93z" />
+                          </svg>
+                        </button>
+                      )
+                    })}
+                    {rating > 0 && <span className="ml-2 text-xs font-normal text-muted">{rating}/5</span>}
+                  </div>
+                </div>
+
+                <label className="grid gap-1.5 text-sm font-semibold" htmlFor="review">Short Review
+                  <textarea id="review" rows={3} maxLength={500} className={`${inputClass} resize-none`} value={review} onChange={(e) => setReview(e.target.value)} placeholder="What did you think of it?" />
+                  <span className="text-right text-xs font-normal text-muted">{review.length}/500</span>
+                </label>
+
+                <label className="grid gap-1.5 text-sm font-semibold" htmlFor="dateFinished">Date Finished
+                  <input id="dateFinished" type="date" className={inputClass} value={dateFinished} max={todayStr()} onChange={(e) => setDateFinished(e.target.value)} />
+                </label>
+
+                <label className="flex items-start gap-2.5 text-sm text-muted">
+                  <input type="checkbox" checked={parentVerified} onChange={(e) => setParentVerified(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-black/20 text-primary focus:ring-primary/30" required />
+                  <span>Parent verified this book was fully read.</span>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!title.trim() || !parentVerified || submitting}
+                  className="btn-shine mt-2 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                >
+                  {submitting ? (
+                    <><svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Logging…</>
+                  ) : 'Log this book'}
+                </button>
+              </div>
+            </form>
+
+            {/* Books logged history */}
+            <section className="mt-8">
+              <h2 className="font-display text-xl">Books logged</h2>
+              {booksLogged.length === 0 ? (
+                <p className="mt-3 rounded-2xl border border-dashed border-primary/20 bg-white/60 p-6 text-center text-sm text-muted">
+                  No books logged yet. Log your first one above!
+                </p>
+              ) : (
+                <ul className="mt-4 grid gap-3">
+                  {booksLogged.map((b, i) => (
+                    <li key={`${b.title}-${b.dateLogged ?? ''}-${i}`} className="animate-fadeIn flex items-start justify-between gap-4 rounded-2xl border border-primary/10 bg-white p-4 shadow-soft">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-ink">{b.title}</p>
+                        {b.author && <p className="truncate text-sm text-muted">by {b.author}</p>}
+                        <div className="mt-1.5"><Stars value={b.rating} /></div>
+                      </div>
+                      {b.dateFinished && (
+                        <span className="flex-shrink-0 whitespace-nowrap text-xs font-medium text-muted">{b.dateFinished}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        )}
+      </main>
+
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        <div className="mx-auto w-11/12 max-w-6xl">
+          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
+              <span className="font-display text-lg font-bold">Eduvate Kids</span>
+            </Link>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/70">
+              <Link href="/" className="transition-colors hover:text-white">Home</Link>
+              <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
+              <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
+            </div>
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Link href="/auth/login" aria-label="Admin Login" className="group inline-flex items-center justify-center rounded-full p-2 text-white/30 transition-all duration-300 hover:bg-white/5 hover:text-white/80">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
+              </svg>
+            </Link>
+          </div>
+          <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-white/50">
+            <p>© 2026 Eduvate Kids. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}

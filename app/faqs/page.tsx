@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { EventNavDropdown } from '../components/EventNavDropdown'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -158,10 +159,14 @@ const faqCategories = [
   }
 ]
 
-const navLinks = [
+// Nav items before the "Event" dropdown
+const navLinksBefore = [
   { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
-  { label: 'Our Products', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
-  { label: 'Book Event', href: '/book-event', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+  { label: 'Our Products', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' }
+]
+
+// Nav items after the "Event" dropdown
+const navLinksAfter = [
   { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' },
   { label: 'FAQs', href: '/faqs', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
 ]
@@ -221,7 +226,20 @@ export default function FAQsPage() {
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
-            {navLinks.map((link) => {
+            {navLinksBefore.map((link) => (
+              <Link
+                key={link.href}
+                className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5"
+                href={link.href}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+                </svg>
+                <span>{link.label}</span>
+              </Link>
+            ))}
+            <EventNavDropdown />
+            {navLinksAfter.map((link) => {
               const isActive = link.href === '/faqs'
               return (
                 <Link
@@ -269,7 +287,29 @@ export default function FAQsPage() {
             className="animate-slideDown border-t border-primary/10 bg-white/95 backdrop-blur-xl md:hidden"
           >
             <nav className="mx-auto flex w-11/12 max-w-6xl flex-col gap-1 py-4">
-              {navLinks.map((link) => {
+              {navLinksBefore.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] bg-primary/5 text-primaryDark hover:bg-primary/10"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+                  </svg>
+                  <span>{link.label}</span>
+                </Link>
+              ))}
+              <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
+              <Link href="/summer-reads" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] bg-primary/5 text-primaryDark hover:bg-primary/10">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                <span>Summer Reads</span>
+              </Link>
+              <Link href="/book-event" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] bg-primary/5 text-primaryDark hover:bg-primary/10">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span>Book Event</span>
+              </Link>
+              {navLinksAfter.map((link) => {
                 const isActive = link.href === '/faqs'
                 return (
                   <Link

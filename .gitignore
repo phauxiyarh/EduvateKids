@@ -48,6 +48,12 @@ update-github-secrets.js
 *.tsbuildinfo
 next-env.d.ts
 
+# Cloud Functions build output, deps & env
+functions/lib
+functions/node_modules
+functions/.env*
+functions/.runtimeconfig.json
+
 # IDE
 .idea
 .vscode

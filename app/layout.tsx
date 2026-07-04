@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { ClientShell } from './components/ClientShell'
 
 export const metadata: Metadata = {
   title: 'Eduvate Kids Platform',
@@ -14,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ClientShell>{children}</ClientShell>
+      </body>
     </html>
   )
 }

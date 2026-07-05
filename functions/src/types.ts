@@ -67,5 +67,4 @@ export interface CreatePaymentInput {
   items: CartLineInput[];
   customer: CustomerInfo;
   shippingAddress: ShippingAddress;
-  demo?: boolean; // when true, run against test/sandbox only
 }

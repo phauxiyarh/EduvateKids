@@ -41,5 +41,4 @@ export interface CreatePaymentInput {
   items: CartLineInput[]
   customer: CustomerInfo
   shippingAddress: ShippingAddress
-  demo?: boolean
 }

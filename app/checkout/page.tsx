@@ -51,7 +51,6 @@ export default function CheckoutPage() {
         items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
         customer,
         shippingAddress: address,
-        demo: isTestKey,
       })
       const data = res.data as { clientSecret: string; subtotal: number; shippingFee: number; tax: number; total: number; currency: string }
       setClientSecret(data.clientSecret)
@@ -193,7 +192,7 @@ function PaymentForm({ total }: { total: number | null }) {
     if (!stripe || !elements) return
     setProcessing(true)
     setError('')
-    const { error: submitErr } = await stripe.confirmPayment({
+    const { error: submitErr, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: { return_url: `${window.location.origin}/order-confirmation` },
       redirect: 'if_required',
@@ -203,9 +202,28 @@ function PaymentForm({ total }: { total: number | null }) {
       setProcessing(false)
       return
     }
-    // No redirect needed (e.g. cards) — clear cart and go to confirmation.
-    clear()
-    window.location.href = '/order-confirmation'
+    // Inline (no redirect) result — only treat 'succeeded' as done.
+    if (paymentIntent?.status === 'succeeded') {
+      // Backstop: record the order now in case the webhook is delayed/misconfigured.
+      // Idempotent server-side, so it's safe even if the webhook already ran.
+      try {
+        const finalize = httpsCallable(functions, 'finalizeStripeOrder')
+        await finalize({ paymentIntentId: paymentIntent.id })
+      } catch {
+        /* webhook will still record it; don't block the user on this */
+      }
+      clear()
+      window.location.href = '/order-confirmation?redirect_status=succeeded'
+      return
+    }
+    if (paymentIntent?.status === 'processing') {
+      clear()
+      window.location.href = '/order-confirmation?redirect_status=processing'
+      return
+    }
+    // Any other status: surface it rather than claiming success.
+    setError('Payment could not be completed. Please try again.')
+    setProcessing(false)
   }
 
   return (

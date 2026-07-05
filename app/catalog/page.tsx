@@ -527,18 +527,19 @@ export default function CatalogPage() {
 
       {/* Footer */}
       <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
         <div className="relative mx-auto w-11/12 max-w-6xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3">
               <Image src={logo} alt="Eduvate Kids" width={40} height={40} className="w-10 h-10" />
               <span className="font-display text-xl font-bold">Eduvate Kids</span>
-            </div>
+            </Link>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
               <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
               <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Products</Link>
               <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
+              <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>
               <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
             </div>
           </div>
@@ -551,7 +552,7 @@ export default function CatalogPage() {
             </Link>
           </div>
           <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-white/50">
-            © {new Date().getFullYear()} Eduvate Kids. All rights reserved.
+            <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
           </div>
         </div>
       </footer>

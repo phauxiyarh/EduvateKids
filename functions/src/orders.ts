@@ -95,15 +95,20 @@ export async function finalizeOrder(
   }
 ): Promise<{ orderId: string; created: boolean }> {
   const ordersCol = db.collection('orders');
+  // Deterministic doc id per payment ref → the transaction locks on THIS doc,
+  // so concurrent webhook retries can't create duplicates. (Sanitize for id safety.)
+  const orderId = params.paymentRef.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 128) || ordersCol.doc().id;
+  const orderRef = ordersCol.doc(orderId);
 
   return db.runTransaction(async (tx) => {
-    // Idempotency: one order per paymentRef.
-    const existing = await tx.get(ordersCol.where('paymentRef', '==', params.paymentRef).limit(1));
-    if (!existing.empty) {
-      return { orderId: existing.docs[0].id, created: false };
+    // Idempotency: one order per paymentRef (guarded by reading the exact doc).
+    const existingDoc = await tx.get(orderRef);
+    if (existingDoc.exists) {
+      return { orderId: orderRef.id, created: false };
     }
 
-    // Decrement stock only when marking paid.
+    // Read stock docs BEFORE any writes (Firestore requires all reads first).
+    const stockReads: { ref: FirebaseFirestore.DocumentReference; field: string | null; current: number; qty: number }[] = [];
     if (params.status === 'paid') {
       for (const item of params.items) {
         const ref = db.collection('catalog').doc(item.id);
@@ -111,15 +116,14 @@ export async function finalizeOrder(
         if (snap.exists) {
           const data = snap.data() as Record<string, unknown>;
           const field = data.stock !== undefined ? 'stock' : data.quantity !== undefined ? 'quantity' : null;
-          if (field) {
-            const current = Number(data[field] ?? 0);
-            tx.update(ref, { [field]: Math.max(0, current - item.quantity) });
-          }
+          stockReads.push({ ref, field, current: Number((field && data[field]) ?? 0), qty: item.quantity });
         }
       }
     }
+    for (const s of stockReads) {
+      if (s.field) tx.update(s.ref, { [s.field]: Math.max(0, s.current - s.qty) });
+    }
 
-    const orderRef = ordersCol.doc();
     const now = admin.firestore.FieldValue.serverTimestamp();
     const order: Order = {
       items: params.items,

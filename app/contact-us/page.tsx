@@ -427,12 +427,13 @@ export default function ContactUsPage() {
               <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
               <span className="font-display text-lg font-bold">Eduvate Kids</span>
             </Link>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
-              <Link href="/" className="transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
-              <Link href="/book-event" className="transition-colors hover:text-white">Book Event</Link>
-              <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
-              <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
+              <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
+              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Products</Link>
+              <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
+              <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
+              <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>
+              <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
             </div>
           </div>
           <div className="mt-8 flex justify-center">

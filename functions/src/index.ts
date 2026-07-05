@@ -162,7 +162,7 @@ export const stripeWebhook = onRequest(
           currency: priced.currency,
           customer,
           shippingAddress,
-          live: !pi.livemode ? false : true,
+          live: pi.livemode,
         });
         logger.info('Order finalized from webhook', { orderId: result.orderId, created: result.created, pi: pi.id });
 
@@ -192,6 +192,54 @@ export const stripeWebhook = onRequest(
     }
 
     res.json({ received: true });
+  }
+);
+
+/**
+ * Client backstop: after the browser confirms payment, it calls this with the
+ * PaymentIntent id. We fetch the PI from Stripe, verify it actually succeeded,
+ * then finalize the order. Idempotent (deterministic order id) — a no-op if the
+ * webhook already recorded it. Guarantees an order even if the webhook is delayed.
+ */
+export const finalizeStripeOrder = onCall(
+  { secrets: [STRIPE_SECRET_KEY, RESEND_API_KEY], cors: true },
+  async (request) => {
+    if (!stripeConfigured()) {
+      throw new HttpsError('failed-precondition', 'Stripe is not configured.');
+    }
+    const paymentIntentId = String((request.data as { paymentIntentId?: string })?.paymentIntentId || '');
+    if (!paymentIntentId.startsWith('pi_')) {
+      throw new HttpsError('invalid-argument', 'A valid paymentIntentId is required.');
+    }
+    const stripe = new Stripe(STRIPE_SECRET_KEY.value(), { apiVersion: '2025-02-24.acacia' });
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (pi.status !== 'succeeded') {
+      return { finalized: false, status: pi.status };
+    }
+    try {
+      const md = pi.metadata || {};
+      const lines = JSON.parse(md.ek_items || '[]') as Array<{ id: string; q: number }>;
+      const customer = JSON.parse(md.ek_customer || '{}') as CustomerInfo;
+      const shippingAddress = JSON.parse(md.ek_address || '{}') as ShippingAddress;
+      const priced = await priceCart(db, lines.map((l) => ({ id: l.id, quantity: l.q })));
+      const result = await finalizeOrder(db, {
+        paymentRef: pi.id, provider: 'stripe', status: 'paid',
+        items: priced.items, subtotal: priced.subtotal, shippingFee: priced.shippingFee,
+        tax: priced.tax, total: priced.total, currency: priced.currency,
+        customer, shippingAddress, live: pi.livemode,
+      });
+      if (result.created) {
+        await sendOrderNotification({
+          orderId: result.orderId, items: priced.items, subtotal: priced.subtotal,
+          shippingFee: priced.shippingFee, tax: priced.tax, total: priced.total,
+          currency: priced.currency, customer, shippingAddress, paymentRef: pi.id, live: pi.livemode,
+        });
+      }
+      return { finalized: true, orderId: result.orderId, created: result.created };
+    } catch (err) {
+      logger.error('finalizeStripeOrder failed', err);
+      throw new HttpsError('internal', 'Could not finalize the order.');
+    }
   }
 );
 

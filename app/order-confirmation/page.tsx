@@ -3,6 +3,9 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '../../lib/firebase'
+import { useCart } from '../../lib/cart'
 import logo from '../../assets/logo.png'
 
 /**
@@ -13,6 +16,7 @@ import logo from '../../assets/logo.png'
  */
 export default function OrderConfirmationPage() {
   const [status, setStatus] = useState<'success' | 'processing' | 'failed'>('success')
+  const { clear } = useCart()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -20,6 +24,18 @@ export default function OrderConfirmationPage() {
     if (redirect === 'failed') setStatus('failed')
     else if (redirect === 'processing') setStatus('processing')
     else setStatus('success')
+
+    // Clear the cart on any non-failed arrival (covers the 3DS redirect path,
+    // where confirmPayment redirected before the checkout page could clear it).
+    if (redirect !== 'failed') clear()
+
+    // Backstop: if Stripe redirected here (3DS/bank), it appends payment_intent.
+    // Record the order now — idempotent server-side (no-op if webhook already ran).
+    const pi = params.get('payment_intent')
+    if (pi && redirect !== 'failed') {
+      httpsCallable(functions, 'finalizeStripeOrder')({ paymentIntentId: pi }).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

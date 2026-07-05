@@ -60,9 +60,12 @@ service cloud.firestore {
 
     // Orders - written ONLY by Cloud Functions (Admin SDK bypasses these rules).
     // Clients can never create/forge an order (prevents fake "paid" orders).
-    // Authenticated admins read orders and update status (e.g. mark shipped).
+    // Admins (users/{uid}.role == 'admin') read orders and update status (mark shipped);
+    // cashiers/other authed users cannot alter orders.
     match /orders/{document=**} {
-      allow read, update: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null
+                    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow create, delete: if false;
     }
 
@@ -76,12 +79,19 @@ service cloud.firestore {
     match /summerReads/{code} {
       allow get: if true;
       allow list: if request.auth != null; // admins only can enumerate
+      // Registration normally goes through the registerSummerReader Cloud Function
+      // (Admin SDK, bypasses rules). This public create is a tightly-validated
+      // fallback: it must start with no progress and no admin-only escalation.
       allow create: if request.resource.data.childName is string
                     && request.resource.data.childName.size() > 0
                     && request.resource.data.parentEmail is string
                     && request.resource.data.booksCount == 0
+                    && request.resource.data.tier == 'none'
+                    && request.resource.data.booksLogged is list
+                    && request.resource.data.booksLogged.size() == 0
                     && (!('_live' in request.resource.data) || request.resource.data._live == true);
-      allow update, delete: if request.auth != null; // client logging goes through the function
+      // Book logging + edits go through the logSummerBook function; admins can manage.
+      allow update, delete: if request.auth != null;
     }
 
     // Default deny all other requests

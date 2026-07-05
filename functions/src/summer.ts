@@ -23,22 +23,25 @@ export function tierFor(count: number): SummerTier {
 /** Unambiguous code alphabet (no 0/O/1/I) → e.g. EK-7Q4M. */
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function codeFromBytes(bytes: Uint8Array, len = 4): string {
+function codeFromBytes(bytes: Uint8Array, len = 6): string {
   let s = '';
   for (let i = 0; i < len; i++) s += ALPHABET[bytes[i] % ALPHABET.length];
   return `EK-${s}`;
 }
 
-/** Generate a unique code, retrying on the rare collision. */
+/**
+ * Generate a unique 6-char code (32^6 ≈ 1.07 billion combos → brute-forcing a
+ * valid code via repeated getDoc is impractical), retrying on the rare collision.
+ */
 export async function generateUniqueCode(db: FirebaseFirestore.Firestore): Promise<string> {
   const crypto = await import('crypto');
   for (let attempt = 0; attempt < 8; attempt++) {
-    const code = codeFromBytes(crypto.randomBytes(4));
+    const code = codeFromBytes(crypto.randomBytes(6));
     const existing = await db.collection('summerReads').doc(code).get();
     if (!existing.exists) return code;
   }
-  // Extremely unlikely; fall back to a longer code.
-  return codeFromBytes(crypto.randomBytes(6), 6);
+  // Extremely unlikely; fall back to an even longer code.
+  return codeFromBytes(crypto.randomBytes(8), 8);
 }
 
 export interface RegisterInput {

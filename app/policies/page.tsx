@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
+import { HeaderCart } from '../components/HeaderCart'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -201,7 +202,7 @@ export default function PoliciesPage() {
               <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
             {navItemsBefore.map((item) => (
               <Link
                 key={item.label}
@@ -239,6 +240,7 @@ export default function PoliciesPage() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <HeaderCart />
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from './components/EventNavDropdown'
+import { HeaderCart } from './components/HeaderCart'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import logo from '../assets/logo.png'
@@ -262,7 +263,7 @@ export default function HomePage() {
             </span>
           </a>
 
-          <nav className="hidden items-center gap-2 md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
             {[
               { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
               { label: 'Our Catalogue', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> }
@@ -297,6 +298,7 @@ export default function HomePage() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <HeaderCart />
             {/* Mobile menu button */}
             <button
               type="button"

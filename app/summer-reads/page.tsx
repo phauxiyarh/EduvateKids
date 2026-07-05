@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
+import { HeaderCart } from '../components/HeaderCart'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -165,6 +166,24 @@ export default function SummerReadsPage() {
           animation: ring-spin 4s linear infinite, tier-glow 4s ease-in-out infinite;
           opacity: 0.7;
         }
+
+        /* Summer hero decorations: gentle sun spin, floating drift, twinkling stars */
+        @keyframes sr-sun-spin { to { transform: rotate(360deg); } }
+        @keyframes sr-float-y {
+          0%, 100% { transform: translateY(0) rotate(-4deg); }
+          50% { transform: translateY(-14px) rotate(4deg); }
+        }
+        @keyframes sr-twinkle {
+          0%, 100% { opacity: 0.25; transform: scale(0.85); }
+          50% { opacity: 0.9; transform: scale(1.15); }
+        }
+        .sr-sun { animation: sr-sun-spin 26s linear infinite; }
+        .sr-float { animation: sr-float-y 7s ease-in-out infinite; }
+        .sr-float.delay { animation-delay: 1.6s; animation-duration: 9s; }
+        .sr-twinkle { animation: sr-twinkle 3.2s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .sr-sun, .sr-float, .sr-twinkle { animation: none !important; }
+        }
       `}</style>
       <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)] backdrop-blur-xl">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -176,7 +195,7 @@ export default function SummerReadsPage() {
               <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Summer Reads 2026</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-2 md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
             <Link href="/" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /></svg>
               <span>Home</span>
@@ -195,15 +214,49 @@ export default function SummerReadsPage() {
               <span>FAQs</span>
             </Link>
           </nav>
+          <div className="flex items-center gap-2">
+            <HeaderCart />
+          </div>
         </div>
       </header>
 
       <main>
         {/* Hero */}
-        <section className="relative overflow-hidden pb-12 pt-16 sm:pt-24 bg-gradient-to-br from-purple-50 via-white to-emerald-50">
+        <section className="relative overflow-hidden pb-12 pt-16 sm:pt-24 bg-gradient-to-br from-amber-50 via-white to-emerald-50">
           <div className="hero-svg-bg absolute inset-0 z-0 opacity-15" style={{ backgroundImage: `url(${bg1.src})`, backgroundSize: '70% auto', backgroundRepeat: 'repeat' }} />
           {['left-10 top-16 h-24 w-24 opacity-25', 'right-16 top-24 h-32 w-32 opacity-20', 'left-1/4 bottom-10 h-20 w-20 opacity-25'].map((c, i) => (
             <Image key={i} src={i % 2 === 0 ? design1 : design2} alt="" width={160} height={160} className={`hero-drift ${i % 2 ? 'delay' : ''} pointer-events-none absolute z-0 hidden md:block ${c}`} />
+          ))}
+
+          {/* Summer-themed animated decorations */}
+          {/* Sun: gentle rotate + glow, top-right */}
+          <div className="sr-sun pointer-events-none absolute right-6 top-10 z-0 hidden sm:block text-amber-400/70" aria-hidden="true">
+            <svg className="h-16 w-16 sm:h-20 sm:w-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+              <circle cx="12" cy="12" r="4.5" fill="currentColor" fillOpacity="0.25" />
+              <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
+            </svg>
+          </div>
+          {/* Floating open book, left */}
+          <div className="sr-float pointer-events-none absolute left-8 top-40 z-0 hidden md:block text-primary/30" aria-hidden="true">
+            <svg className="h-14 w-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.5C10.5 5.3 8.5 4.8 6 4.8c-.9 0-1.7.1-2.5.3v13c.8-.2 1.6-.3 2.5-.3 2.5 0 4.5.5 6 1.7 1.5-1.2 3.5-1.7 6-1.7.9 0 1.7.1 2.5.3v-13c-.8-.2-1.6-.3-2.5-.3-2.5 0-4.5.5-6 1.7zM12 6.5v12.3" />
+            </svg>
+          </div>
+          {/* Growing sprout (Seedling theme), bottom-left */}
+          <div className="sr-float delay pointer-events-none absolute left-1/4 bottom-8 z-0 hidden md:block text-emerald-400/40" aria-hidden="true">
+            <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 20v-6m0 0c0-3 2-5 5-5-.5 3-2 5-5 5zm0 0c0-3-2-5-5-5 .5 3 2 5 5 5z" />
+            </svg>
+          </div>
+          {/* Twinkling stars */}
+          {[
+            'right-1/4 top-28 h-6 w-6',
+            'left-1/3 top-16 h-4 w-4',
+            'right-16 bottom-16 h-5 w-5',
+          ].map((c, i) => (
+            <div key={`star-${i}`} className={`sr-twinkle pointer-events-none absolute z-0 hidden sm:block text-secondary/40 ${c}`} style={{ animationDelay: `${i * 0.8}s` }} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-full w-full"><path d="M12 2l2.2 6.6L21 9l-5 4 1.8 7L12 16.8 6.2 20 8 13 3 9l6.8-.4L12 2z" /></svg>
+            </div>
           ))}
           <div className="reveal is-visible relative z-10 mx-auto w-11/12 max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">

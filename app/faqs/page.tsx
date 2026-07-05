@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
+import { HeaderCart } from '../components/HeaderCart'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -57,7 +58,7 @@ const faqCategories = [
       },
       {
         question: 'Do you offer free shipping?',
-        answer: 'Yes! We offer free standard shipping on all orders over $50 within the continental United States. For orders under $50, standard shipping costs $5.99.'
+        answer: 'Yes! We offer free standard shipping on all orders over $80 within the continental United States. For orders under $80, a flat standard shipping fee of $5.99 applies. Applicable sales tax is calculated at checkout.'
       },
       {
         question: 'Can I track my order?',
@@ -141,11 +142,11 @@ const faqCategories = [
     faqs: [
       {
         question: 'Do I need an account to place an order?',
-        answer: 'No, you can checkout as a guest. However, creating an account allows you to track orders, save your shipping information, and receive exclusive updates about new arrivals.'
+        answer: 'No account is needed. You can check out as a guest by entering your shipping and payment details at checkout. You will receive an order confirmation by email.'
       },
       {
         question: 'What payment methods do you accept?',
-        answer: 'We accept all major credit cards (Visa, Mastercard, American Express, Discover), PayPal, and Apple Pay. All transactions are processed securely through encrypted channels.'
+        answer: 'We accept all major credit and debit cards (Visa, Mastercard, American Express, Discover) via secure Stripe checkout. Orders are shipped to the address provided once payment is confirmed. Additional payment options are being added.'
       },
       {
         question: 'Is my payment information secure?',
@@ -225,7 +226,7 @@ export default function FAQsPage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
             {navLinksBefore.map((link) => (
               <Link
                 key={link.href}
@@ -262,6 +263,7 @@ export default function FAQsPage() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <HeaderCart />
             <button
               type="button"
               onClick={() => setMobileOpen((prev) => !prev)}

@@ -7,6 +7,7 @@ import { httpsCallable } from 'firebase/functions'
 import { doc, getDoc } from 'firebase/firestore'
 import { functions, db } from '../../../lib/firebase'
 import { EventNavDropdown } from '../../components/EventNavDropdown'
+import { HeaderCart } from '../../components/HeaderCart'
 import logo from '../../../assets/logo.png'
 
 const inputClass =
@@ -286,7 +287,7 @@ export default function SummerLogPage() {
             <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9" />
             <span className="font-display text-base sm:text-lg font-bold">Summer Reads</span>
           </Link>
-          <nav className="hidden items-center gap-2 md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
             <Link href="/" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /></svg>
               <span>Home</span>
@@ -305,6 +306,9 @@ export default function SummerLogPage() {
               <span>FAQs</span>
             </Link>
           </nav>
+          <div className="flex items-center gap-2">
+            <HeaderCart />
+          </div>
         </div>
       </header>
 

@@ -24,6 +24,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import QRCode from 'qrcode'
 import { auth, db, functions } from '../../lib/firebase'
+import { uploadCatalogImage } from '../../lib/uploadImage'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
@@ -190,6 +191,7 @@ type CatalogItem = {
   publisher: string
   images: string[]
   createdAt: string
+  sku?: string
 }
 
 const defaultInventory: InventoryItem[] = [
@@ -378,6 +380,9 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
   const [uploadMessage, setUploadMessage] = useState<string>('')
+  // Inventory item that has no matching catalogue entry; prompts the admin to add images/description.
+  const [noCatalogPrompt, setNoCatalogPrompt] = useState<InventoryItem | null>(null)
+  const [catalogLinkMessage, setCatalogLinkMessage] = useState('')
   const [inventorySortKey, setInventorySortKey] = useState<keyof InventoryItem | ''>('')
   const [inventorySortDir, setInventorySortDir] = useState<'asc' | 'desc'>('asc')
   const [eventMessage, setEventMessage] = useState('')
@@ -457,6 +462,9 @@ export default function DashboardPage() {
   const [catalogAge, setCatalogAge] = useState<AgeCategory[]>(['0-5'])
   const [catalogPrice, setCatalogPrice] = useState('')
   const [catalogPublisher, setCatalogPublisher] = useState('')
+  const [catalogSku, setCatalogSku] = useState('')
+  const [catalogQty, setCatalogQty] = useState('')
+  const [catalogSellingPrice, setCatalogSellingPrice] = useState('')
   const [catalogImages, setCatalogImages] = useState<File[]>([])
   const [catalogImagePreviews, setCatalogImagePreviews] = useState<string[]>([])
   const [catalogExistingImages, setCatalogExistingImages] = useState<string[]>([])
@@ -1386,9 +1394,27 @@ export default function DashboardPage() {
     setCatalogAge(['0-5'])
     setCatalogPrice('')
     setCatalogPublisher('')
+    setCatalogSku('')
+    setCatalogQty('')
+    setCatalogSellingPrice('')
     setCatalogImages([])
     setCatalogImagePreviews([])
     setCatalogExistingImages([])
+  }
+
+  // Open the catalog create form prefilled from an inventory item that lacks a
+  // catalogue entry, so an admin can add an image and description for it.
+  const openCatalogFormFromInventory = (item: InventoryItem) => {
+    resetCatalogForm()
+    setEditingCatalogItem(null)
+    setCatalogTitle(item.title)
+    setCatalogPublisher(item.publisher)
+    setCatalogPrice(item.rrp ? String(item.rrp) : String(item.sellingPrice || ''))
+    setCatalogCategories([item.category])
+    setCatalogSku(item.sku || '')
+    setCatalogQty(String(item.quantity ?? ''))
+    setCatalogSellingPrice(item.sellingPrice ? String(item.sellingPrice) : '')
+    setShowCreateCatalog(true)
   }
 
   const handleCatalogImageSelect = (files: FileList | null) => {
@@ -1453,6 +1479,67 @@ export default function DashboardPage() {
     return results
   }
 
+  // Upload each file to Firebase Storage and return its download URL. If an
+  // upload throws (e.g. Storage not yet configured), fall back to base64 for
+  // that one file so catalog images still work.
+  const uploadCatalogFiles = async (files: File[], keyPrefix: string): Promise<string[]> => {
+    const results: string[] = []
+    for (const file of files) {
+      try {
+        const url = await uploadCatalogImage(file, keyPrefix)
+        results.push(url)
+      } catch (err) {
+        console.error('Storage upload failed, falling back to base64:', err)
+        const [b64] = await convertFilesToBase64([file])
+        if (b64) results.push(b64)
+      }
+    }
+    return results
+  }
+
+  // Upsert an inventory doc keyed by SKU from catalog form values. Updates the
+  // local inventory state and Firestore. Returns the resolved inventory id.
+  const upsertInventoryFromCatalog = async (opts: {
+    title: string
+    publisher: string
+    category: InventoryCategory
+    price: number
+    sku: string
+    quantity: number
+    sellingPrice: number
+  }): Promise<string> => {
+    const sku = opts.sku.trim()
+    const existing = inventory.find((i) => (i.sku || '').trim() && (i.sku || '').trim() === sku)
+    const invId = existing ? existing.id : `inv-${Date.now()}`
+    const invItem: InventoryItem = existing
+      ? {
+          ...existing,
+          title: opts.title,
+          publisher: opts.publisher,
+          category: opts.category,
+          sku,
+          quantity: opts.quantity,
+          sellingPrice: opts.sellingPrice || opts.price
+        }
+      : {
+          id: invId,
+          title: opts.title,
+          category: opts.category,
+          publisher: opts.publisher,
+          sku,
+          isbn: '',
+          rrp: opts.price,
+          discount: 0,
+          quantity: opts.quantity,
+          sellingPrice: opts.sellingPrice || opts.price
+        }
+    setInventory((current) =>
+      existing ? current.map((i) => (i.id === invId ? invItem : i)) : [...current, invItem]
+    )
+    await setDoc(doc(db, 'inventory', invId), { ...invItem, _live: true })
+    return invId
+  }
+
   const handleCreateCatalogItem = async () => {
     if (!catalogTitle.trim()) { setCatalogMessage('Title is required.'); return }
     if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
@@ -1465,17 +1552,20 @@ export default function DashboardPage() {
     const itemId = `catalog-${Date.now()}`
 
     try {
-      const imageUrls = await convertFilesToBase64(catalogImages)
+      const skuVal = catalogSku.trim()
+      const price = parseNumber(catalogPrice)
+      const imageUrls = await uploadCatalogFiles(catalogImages, skuVal || itemId)
       const newItem: CatalogItem = {
         id: itemId,
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
         category: catalogCategories,
         ageCategory: catalogAge,
-        price: parseNumber(catalogPrice),
+        price,
         publisher: catalogPublisher.trim(),
         images: imageUrls,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        sku: skuVal
       }
 
       setCatalogItems((prev) => [newItem, ...prev])
@@ -1483,6 +1573,23 @@ export default function DashboardPage() {
       setShowCreateCatalog(false)
 
       await setDoc(doc(db, 'catalog', itemId), newItem)
+
+      // Linked upsert: if a SKU is provided, mirror this into inventory.
+      if (skuVal) {
+        try {
+          await upsertInventoryFromCatalog({
+            title: newItem.title,
+            publisher: newItem.publisher,
+            category: catalogCategories[0] || 'Books',
+            price,
+            sku: skuVal,
+            quantity: Number(catalogQty) || 0,
+            sellingPrice: Number(catalogSellingPrice) || 0
+          })
+        } catch (invErr) {
+          console.error('Inventory upsert from catalog failed:', invErr)
+        }
+      }
     } catch (error) {
       console.error('Create catalog item error:', error)
       setCatalogMessage('Failed to create catalog item. Please try again.')
@@ -1499,6 +1606,14 @@ export default function DashboardPage() {
     setCatalogAge(item.ageCategory)
     setCatalogPrice(String(item.price))
     setCatalogPublisher(item.publisher)
+    // Prefer sku from the catalog item; else fall back to a linked inventory item by title.
+    const linkedInv = inventory.find(
+      (i) => (item.sku && (i.sku || '') === item.sku) ||
+        i.title.trim().toLowerCase() === item.title.trim().toLowerCase()
+    )
+    setCatalogSku(item.sku || linkedInv?.sku || '')
+    setCatalogQty(linkedInv ? String(linkedInv.quantity ?? '') : '')
+    setCatalogSellingPrice(linkedInv && linkedInv.sellingPrice ? String(linkedInv.sellingPrice) : '')
     setCatalogExistingImages([...item.images])
     setCatalogImages([])
     setCatalogImagePreviews([])
@@ -1518,20 +1633,23 @@ export default function DashboardPage() {
     setCatalogMessage('')
 
     try {
-      let newImageBase64: string[] = []
+      const skuVal = catalogSku.trim()
+      const price = parseNumber(catalogPrice)
+      let newImageUrls: string[] = []
       if (catalogImages.length > 0) {
-        newImageBase64 = await convertFilesToBase64(catalogImages)
+        newImageUrls = await uploadCatalogFiles(catalogImages, skuVal || editingCatalogItem.id)
       }
 
-      const allImages = [...catalogExistingImages, ...newImageBase64]
+      const allImages = [...catalogExistingImages, ...newImageUrls]
       const updatedFields = {
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
         category: catalogCategories,
         ageCategory: catalogAge,
-        price: parseNumber(catalogPrice),
+        price,
         publisher: catalogPublisher.trim(),
-        images: allImages
+        images: allImages,
+        sku: skuVal
       }
 
       setCatalogItems((prev) =>
@@ -1543,11 +1661,80 @@ export default function DashboardPage() {
       resetCatalogForm()
 
       await updateDoc(doc(db, 'catalog', editingCatalogItem.id), updatedFields)
+
+      // Linked upsert: if a SKU is provided, mirror this into inventory.
+      if (skuVal) {
+        try {
+          await upsertInventoryFromCatalog({
+            title: updatedFields.title,
+            publisher: updatedFields.publisher,
+            category: catalogCategories[0] || 'Books',
+            price,
+            sku: skuVal,
+            quantity: Number(catalogQty) || 0,
+            sellingPrice: Number(catalogSellingPrice) || 0
+          })
+        } catch (invErr) {
+          console.error('Inventory upsert from catalog failed:', invErr)
+        }
+      }
     } catch (error) {
       console.error('Edit catalog item error:', error)
       setCatalogMessage('Failed to update catalog item. Please try again.')
     } finally {
       setIsUploadingCatalog(false)
+    }
+  }
+
+  // One-time reconcile: link catalogue items to inventory items by SKU. For each
+  // catalog item without a SKU, find an inventory item with the same (trimmed,
+  // case-insensitive) title. If found, copy its SKU to the catalog item; if that
+  // inventory item also lacks a SKU, generate one and write it to BOTH. Runs only
+  // on click. Batches all writes and updates local state.
+  const [isLinkingCatalog, setIsLinkingCatalog] = useState(false)
+  const handleLinkCatalogInventory = async () => {
+    setIsLinkingCatalog(true)
+    setCatalogLinkMessage('')
+    try {
+      const batch = writeBatch(db)
+      const catalogUpdates = new Map<string, string>() // catalogId -> sku
+      const inventoryUpdates = new Map<string, string>() // inventoryId -> sku
+      const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+
+      let linked = 0
+      for (const c of catalogItems) {
+        if (c.sku && c.sku.trim()) continue
+        const match = inventory.find(
+          (i) => i.title.trim().toLowerCase() === c.title.trim().toLowerCase()
+        )
+        if (!match) continue
+        let sku = (match.sku || '').trim()
+        if (!sku) {
+          sku = `EK-${slugify(c.title) || match.id}`
+          inventoryUpdates.set(match.id, sku)
+        }
+        catalogUpdates.set(c.id, sku)
+        linked += 1
+      }
+
+      catalogUpdates.forEach((sku, id) => batch.update(doc(db, 'catalog', id), { sku }))
+      inventoryUpdates.forEach((sku, id) => batch.update(doc(db, 'inventory', id), { sku }))
+
+      if (catalogUpdates.size > 0 || inventoryUpdates.size > 0) {
+        await batch.commit()
+        setCatalogItems((prev) =>
+          prev.map((c) => (catalogUpdates.has(c.id) ? { ...c, sku: catalogUpdates.get(c.id) } : c))
+        )
+        setInventory((prev) =>
+          prev.map((i) => (inventoryUpdates.has(i.id) ? { ...i, sku: inventoryUpdates.get(i.id) as string } : i))
+        )
+      }
+      setCatalogLinkMessage(`Linked ${linked} product${linked === 1 ? '' : 's'}.`)
+    } catch (error) {
+      console.error('Link catalogue and inventory error:', error)
+      setCatalogLinkMessage('Failed to link. Please try again.')
+    } finally {
+      setIsLinkingCatalog(false)
     }
   }
 
@@ -2495,6 +2682,18 @@ export default function DashboardPage() {
     setShowAddInventoryItem(false)
     setIsSavingInventory(false)
     setUploadMessage(editingInventoryItem ? `✅ "${updatedItem.title}" updated.` : `✅ "${updatedItem.title}" added.`)
+    // Reverse link: if this item has a SKU but no catalogue entry exists for it,
+    // prompt the admin to add images and description (do not fabricate anything).
+    if (updatedItem.sku) {
+      const hasCatalog = catalogItems.some(
+        (c) =>
+          (c.sku && c.sku.trim() === updatedItem.sku.trim()) ||
+          c.title.trim().toLowerCase() === updatedItem.title.trim().toLowerCase()
+      )
+      setNoCatalogPrompt(hasCatalog ? null : updatedItem)
+    } else {
+      setNoCatalogPrompt(null)
+    }
     // Sync to Firebase in the background
     try {
       await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
@@ -3004,6 +3203,31 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {noCatalogPrompt && (
+        <div className="panel-card rounded-2xl bg-amber-50 border border-amber-200 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14A2 2 0 0021 16.7L13.7 5.3a2 2 0 00-3.4 0L3 16.7A2 2 0 004.93 19z" /></svg>
+            <span>No catalogue entry for &quot;{noCatalogPrompt.title}&quot;.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { const item = noCatalogPrompt; setNoCatalogPrompt(null); openCatalogFormFromInventory(item) }}
+              className="rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-sm font-bold text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            >
+              Add images &amp; description
+            </button>
+            <button
+              type="button"
+              onClick={() => setNoCatalogPrompt(null)}
+              className="rounded-full border-2 border-amber-300 px-4 py-2 text-sm font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
         <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
@@ -4848,6 +5072,40 @@ export default function DashboardPage() {
             </datalist>
           </div>
 
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">SKU</label>
+            <input
+              type="text"
+              value={catalogSku}
+              onChange={(e) => setCatalogSku(e.target.value)}
+              placeholder="e.g., EK-1024 (links to inventory)"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+            <p className="mt-1 text-[11px] text-muted">Shared SKU links this product to an inventory stock record.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Quantity</label>
+              <input
+                type="number"
+                value={catalogQty}
+                onChange={(e) => setCatalogQty(e.target.value)}
+                placeholder="e.g., 20"
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Selling Price ($)</label>
+              <input
+                type="number"
+                value={catalogSellingPrice}
+                onChange={(e) => setCatalogSellingPrice(e.target.value)}
+                placeholder="defaults to price"
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+              />
+            </div>
+          </div>
+
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
               Images * (min 1, max 5) - {catalogExistingImages.length + catalogImages.length}/5 selected
@@ -4953,14 +5211,30 @@ export default function DashboardPage() {
             <h2 className="font-display text-2xl gradient-text">Product Catalog</h2>
             <p className="mt-1 text-sm text-muted">{catalogItems.length} items in catalog</p>
           </div>
-          <button
-            onClick={() => { resetCatalogForm(); setShowCreateCatalog(true) }}
-            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-            type="button"
-          >
-            + New Item
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleLinkCatalogInventory}
+              disabled={isLinkingCatalog}
+              className="inline-flex items-center gap-2 rounded-full border-2 border-primary/20 px-5 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors disabled:opacity-50"
+              type="button"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.656-2.828a4 4 0 00-5.656 0l-3 3a4 4 0 000 5.656" /></svg>
+              {isLinkingCatalog ? 'Linking...' : 'Link Catalogue & Inventory'}
+            </button>
+            <button
+              onClick={() => { resetCatalogForm(); setShowCreateCatalog(true) }}
+              className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+              type="button"
+            >
+              + New Item
+            </button>
+          </div>
         </div>
+        {catalogLinkMessage && (
+          <div className="mt-3 rounded-xl bg-green-50 border border-green-200 p-3 text-xs font-medium text-green-700">
+            {catalogLinkMessage}
+          </div>
+        )}
       </div>
 
       {catalogMessage && (

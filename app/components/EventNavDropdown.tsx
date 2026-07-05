@@ -27,8 +27,8 @@ export function EventNavDropdown({ active = false }: { active?: boolean }) {
     }
   }, [open])
 
-  const pill = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
-    active ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg' : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
+  const pill = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ease-out ${
+    active ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg' : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]'
   }`
 
   return (
@@ -43,7 +43,7 @@ export function EventNavDropdown({ active = false }: { active?: boolean }) {
           this still-hoverable container. This keeps the menu open while the
           cursor travels from the pill down to the items. */}
       <div
-        className={`absolute left-0 top-full z-50 w-52 pt-2 origin-top transition-all duration-200 ${
+        className={`absolute left-0 top-full z-[100] w-52 pt-2 origin-top transition-all duration-200 ${
           open ? 'scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'
         }`}
       >

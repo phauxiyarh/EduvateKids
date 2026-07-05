@@ -400,7 +400,7 @@ export default function DashboardPage() {
   )
   const [eventDateStart, setEventDateStart] = useState('')
   const [eventDateEnd, setEventDateEnd] = useState('')
-  const [selectedEventId, setSelectedEventId] = useState('')
+  const [selectedEventId, setSelectedEventId] = useState('general')
   const [searchQuery, setSearchQuery] = useState('')
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addQuantity, setAddQuantity] = useState(1)

@@ -64,9 +64,11 @@ service cloud.firestore {
     // cashiers/other authed users cannot alter orders.
     match /orders/{document=**} {
       allow read: if request.auth != null;
-      allow update: if request.auth != null
+      // Admins may edit and delete orders (fulfillment corrections); creation is
+      // functions-only (clients can never forge an order).
+      allow update, delete: if request.auth != null
                     && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      allow create, delete: if false;
+      allow create: if false;
     }
 
     // Summer Reads registrations.

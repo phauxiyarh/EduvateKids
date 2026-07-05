@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../../lib/firebase'
 import logo from '../../../assets/logo.png'
+import { COUNTRIES, US_STATES, US_COUNTRY } from '../../../lib/geo'
 
 const inputClass =
   'w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
@@ -22,14 +23,15 @@ function computeAge(dob: string): number | null {
 }
 
 export default function SummerRegisterPage() {
-  const [form, setForm] = useState({ childName: '', dateOfBirth: '', parentName: '', parentEmail: '', parentPhone: '', consent: false })
+  const [form, setForm] = useState({ childName: '', dateOfBirth: '', parentName: '', parentEmail: '', parentPhone: '', country: '', state: '', city: '', consent: false })
   const childAge = computeAge(form.dateOfBirth)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [code, setCode] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const canSubmit = form.childName.trim() && form.dateOfBirth && form.parentName.trim() && form.parentEmail.trim() && form.consent
+  const isUS = form.country === US_COUNTRY
+  const canSubmit = form.childName.trim() && form.dateOfBirth && form.parentName.trim() && form.parentEmail.trim() && form.country && (!isUS || form.state) && form.consent
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,7 +77,7 @@ export default function SummerRegisterPage() {
               <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             </div>
             <h1 className="mt-5 font-display text-2xl gradient-text">You&apos;re registered!</h1>
-            <p className="mt-2 text-sm text-muted">Save this code — you&apos;ll need it every time you log a book.</p>
+            <p className="mt-2 text-sm text-muted">Save this code. You&apos;ll need it every time you log a book.</p>
             <div className="mt-6 flex items-center justify-center gap-3">
               <span className="rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 px-6 py-3 font-display text-2xl font-bold tracking-widest text-primaryDark">{code}</span>
               <button type="button" onClick={copyCode} aria-label="Copy code" className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 text-primaryDark transition hover:bg-primary/5">
@@ -97,7 +99,7 @@ export default function SummerRegisterPage() {
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Summer Reads 2026</p>
               <h1 className="mt-3 font-display text-2xl sm:text-3xl">Register Your Child</h1>
-              <p className="mt-2 text-sm text-muted">One minute to sign up — you&apos;ll get a unique reading code.</p>
+              <p className="mt-2 text-sm text-muted">One minute to sign up and you&apos;ll get a unique reading code.</p>
             </div>
             <form onSubmit={submit} className="mt-8 rounded-3xl bg-white p-6 sm:p-8 shadow-soft border border-primary/10">
               {error && (
@@ -122,6 +124,41 @@ export default function SummerRegisterPage() {
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Parent Phone
                   <input type="tel" className={inputClass} value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold">Country *
+                  <select
+                    className={inputClass}
+                    value={form.country}
+                    onChange={(e) => setForm({ ...form, country: e.target.value, state: '' })}
+                    required
+                  >
+                    <option value="">Select a country</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                {isUS ? (
+                  <label className="grid gap-1.5 text-sm font-semibold">State *
+                    <select
+                      className={inputClass}
+                      value={form.state}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      required
+                    >
+                      <option value="">Select a state</option>
+                      {US_STATES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label className="grid gap-1.5 text-sm font-semibold">State / Province
+                    <input className={inputClass} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+                  </label>
+                )}
+                <label className="grid gap-1.5 text-sm font-semibold">City
+                  <input className={inputClass} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                 </label>
                 <label className="flex items-start gap-2.5 text-sm text-muted">
                   <input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-black/20 text-primary focus:ring-primary/30" required />

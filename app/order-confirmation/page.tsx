@@ -12,7 +12,7 @@ import logo from '../../assets/logo.png'
  * Order confirmation / success page.
  * Reached after Stripe confirms payment (redirect or client-side). The order
  * itself is written by the Stripe webhook (source of truth), so this page is a
- * friendly confirmation — it reads the redirect status if present.
+ * friendly confirmation - it reads the redirect status if present.
  */
 export default function OrderConfirmationPage() {
   const [status, setStatus] = useState<'success' | 'processing' | 'failed'>('success')
@@ -30,7 +30,7 @@ export default function OrderConfirmationPage() {
     if (redirect !== 'failed') clear()
 
     // Backstop: if Stripe redirected here (3DS/bank), it appends payment_intent.
-    // Record the order now — idempotent server-side (no-op if webhook already ran).
+    // Record the order now - idempotent server-side (no-op if webhook already ran).
     const pi = params.get('payment_intent')
     if (pi && redirect !== 'failed') {
       httpsCallable(functions, 'finalizeStripeOrder')({ paymentIntentId: pi }).catch(() => {})

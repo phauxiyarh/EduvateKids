@@ -179,7 +179,7 @@ export default function POSPage() {
       return
     }
     if (titleMatches.length > 1) {
-      // Ambiguous — drop the scanner and pre-fill search so the cashier picks.
+      // Ambiguous - drop the scanner and pre-fill search so the cashier picks.
       setSearchQuery(raw.trim())
       setScannerOpen(false)
       setMessage(`Multiple matches for "${raw.trim()}". Showing search results.`)

@@ -67,12 +67,12 @@ function Stars({ value }: { value?: number }) {
 }
 
 export default function SummerLogPage() {
-  // STATE 1 — code lookup
+  // STATE 1: code lookup
   const [codeInput, setCodeInput] = useState('')
   const [looking, setLooking] = useState(false)
   const [lookupError, setLookupError] = useState('')
 
-  // STATE 2 — loaded child
+  // STATE 2: loaded child
   const [child, setChild] = useState<ChildDoc | null>(null)
   const [booksCount, setBooksCount] = useState(0)
   const [tier, setTier] = useState<Tier>('none')
@@ -92,7 +92,95 @@ export default function SummerLogPage() {
   // Celebration
   const [celebrateTier, setCelebrateTier] = useState<string | null>(null)
 
+  // Edit / delete state
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editAuthor, setEditAuthor] = useState('')
+  const [editRating, setEditRating] = useState(0)
+  const [editHoverRating, setEditHoverRating] = useState(0)
+  const [editReview, setEditReview] = useState('')
+  const [editDateFinished, setEditDateFinished] = useState(todayStr())
+  const [editError, setEditError] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null)
+
   const code = child?.code || ''
+
+  const startEdit = (i: number, b: LoggedBook) => {
+    setConfirmDeleteIndex(null)
+    setEditError('')
+    setEditingIndex(i)
+    setEditTitle(b.title)
+    setEditAuthor(b.author || '')
+    setEditRating(b.rating || 0)
+    setEditHoverRating(0)
+    setEditReview(b.review || '')
+    setEditDateFinished(b.dateFinished || todayStr())
+  }
+
+  const cancelEdit = () => {
+    setEditingIndex(null)
+    setEditError('')
+  }
+
+  const saveEdit = async (index: number) => {
+    setEditError('')
+    if (!editTitle.trim() || !code) return
+    setSavingEdit(true)
+    try {
+      const call = httpsCallable(functions, 'editSummerBook')
+      const res = await call({
+        code,
+        index,
+        title: editTitle.trim(),
+        author: editAuthor.trim(),
+        rating: editRating,
+        review: editReview.trim(),
+        dateFinished: editDateFinished,
+      })
+      const result = res.data as { booksCount: number; tier: Tier }
+      setBooksLogged((prev) => prev.map((b, i) => (
+        i === index
+          ? {
+              ...b,
+              title: editTitle.trim(),
+              author: editAuthor.trim() || undefined,
+              rating: editRating || undefined,
+              review: editReview.trim() || undefined,
+              dateFinished: editDateFinished,
+            }
+          : b
+      )))
+      setBooksCount(result.booksCount)
+      setTier(result.tier)
+      setEditingIndex(null)
+    } catch (err) {
+      setEditError((err as { message?: string })?.message || 'Could not save changes. Please try again.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const deleteBook = async (index: number) => {
+    setEditError('')
+    if (!code) return
+    setDeletingIndex(index)
+    try {
+      const call = httpsCallable(functions, 'deleteSummerBook')
+      const res = await call({ code, index })
+      const result = res.data as { booksCount: number; tier: Tier }
+      setBooksLogged((prev) => prev.filter((_, i) => i !== index))
+      setBooksCount(result.booksCount)
+      setTier(result.tier)
+      setConfirmDeleteIndex(null)
+      if (editingIndex === index) setEditingIndex(null)
+    } catch (err) {
+      setEditError((err as { message?: string })?.message || 'Could not delete the book. Please try again.')
+    } finally {
+      setDeletingIndex(null)
+    }
+  }
 
   const findProgress = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -245,10 +333,15 @@ export default function SummerLogPage() {
         ) : (
           /* ---------- STATE 2: progress + log form ---------- */
           <div className="animate-fadeIn">
+            <style>{`@keyframes srCelebrate{0%{opacity:0;transform:scale(0.9)}60%{transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}.sr-celebrate{animation:srCelebrate 500ms cubic-bezier(0.22,1,0.36,1)}`}</style>
             {/* Celebration banner */}
             {celebrateTier && (
-              <div role="status" className="animate-fadeIn mb-6 flex items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-4 text-center shadow-soft">
-                <span className="text-2xl">🎉</span>
+              <div role="status" className="sr-celebrate mb-6 flex items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-4 text-center shadow-soft">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-pink-500 text-white shadow-md">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4zM7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3" />
+                  </svg>
+                </span>
                 <p className="font-display text-lg font-bold gradient-text">You reached {celebrateTier}!</p>
               </div>
             )}
@@ -256,8 +349,9 @@ export default function SummerLogPage() {
             {/* Progress card */}
             <section className="rounded-3xl border border-primary/10 bg-white p-6 shadow-soft sm:p-8">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-                <div className="relative flex h-32 w-32 flex-shrink-0 items-center justify-center">
-                  <svg className="h-32 w-32 -rotate-90" viewBox="0 0 120 120" aria-hidden="true">
+                <div className="relative flex h-36 w-36 flex-shrink-0 items-center justify-center">
+                  <div className="pointer-events-none absolute inset-2 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 blur-xl" aria-hidden="true" />
+                  <svg className="relative h-36 w-36 -rotate-90" viewBox="0 0 120 120" aria-hidden="true">
                     <circle cx="60" cy="60" r={R} fill="none" stroke="currentColor" strokeWidth="10" className="text-primary/10" />
                     <circle
                       cx="60"
@@ -269,17 +363,26 @@ export default function SummerLogPage() {
                       strokeLinecap="round"
                       strokeDasharray={CIRC}
                       strokeDashoffset={dashOffset}
-                      style={{ transition: 'stroke-dashoffset 700ms ease' }}
+                      filter="url(#ringGlow)"
+                      style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
                     />
                     <defs>
                       <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
                         <stop offset="0%" stopColor="#7c3aed" />
-                        <stop offset="100%" stopColor="#ec4899" />
+                        <stop offset="55%" stopColor="#ec4899" />
+                        <stop offset="100%" stopColor="#f59e0b" />
                       </linearGradient>
+                      <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
+                        <feGaussianBlur stdDeviation="2.4" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
                     </defs>
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="font-display text-3xl font-bold text-primaryDark">{booksCount}</span>
+                    <span key={booksCount} className="animate-fadeIn font-display text-4xl font-bold text-primaryDark">{booksCount}</span>
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">books</span>
                   </div>
                 </div>
@@ -291,7 +394,7 @@ export default function SummerLogPage() {
                   </p>
                   <p className="mt-1 text-sm text-muted">
                     {reachedTop
-                      ? '🏆 Top tier reached — Scholar! Keep the streak going.'
+                      ? 'Top tier reached, Scholar! Keep the streak going.'
                       : <>Read <span className="font-semibold text-primaryDark">{Math.max(next.target - booksCount, 0)}</span> more to reach <span className="font-semibold text-primaryDark">{next.label}</span>.</>}
                   </p>
                 </div>
@@ -371,27 +474,175 @@ export default function SummerLogPage() {
               </div>
             </form>
 
-            {/* Books logged history */}
+            {/* Books logged history - book shelf */}
             <section className="mt-8">
-              <h2 className="font-display text-xl">Books logged</h2>
+              <div className="flex items-baseline justify-between">
+                <h2 className="font-display text-xl">Your bookshelf</h2>
+                {booksLogged.length > 0 && (
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">{booksLogged.length} on the shelf</span>
+                )}
+              </div>
+
+              {editError && editingIndex === null && (
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 animate-slideDown">
+                  <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                  <span>{editError}</span>
+                </div>
+              )}
+
               {booksLogged.length === 0 ? (
                 <p className="mt-3 rounded-2xl border border-dashed border-primary/20 bg-white/60 p-6 text-center text-sm text-muted">
                   No books logged yet. Log your first one above!
                 </p>
               ) : (
                 <ul className="mt-4 grid gap-3">
-                  {booksLogged.map((b, i) => (
-                    <li key={`${b.title}-${b.dateLogged ?? ''}-${i}`} className="animate-fadeIn flex items-start justify-between gap-4 rounded-2xl border border-primary/10 bg-white p-4 shadow-soft">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-ink">{b.title}</p>
-                        {b.author && <p className="truncate text-sm text-muted">by {b.author}</p>}
-                        <div className="mt-1.5"><Stars value={b.rating} /></div>
-                      </div>
-                      {b.dateFinished && (
-                        <span className="flex-shrink-0 whitespace-nowrap text-xs font-medium text-muted">{b.dateFinished}</span>
-                      )}
-                    </li>
-                  ))}
+                  {booksLogged.map((b, i) => {
+                    const isEditing = editingIndex === i
+                    const isDeleting = deletingIndex === i
+                    const isConfirming = confirmDeleteIndex === i
+                    return (
+                      <li
+                        key={`${b.title}-${b.dateLogged ?? ''}-${i}`}
+                        className="animate-fadeIn group relative overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+                      >
+                        {/* book-spine accent */}
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-primary via-secondary to-accentThree" aria-hidden="true" />
+
+                        {isEditing ? (
+                          <div className="p-4 pl-5">
+                            {editError && (
+                              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 animate-slideDown">
+                                <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
+                                <span>{editError}</span>
+                              </div>
+                            )}
+                            <div className="grid gap-3">
+                              <label className="grid gap-1.5 text-sm font-semibold">Book Title *
+                                <input className={inputClass} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+                              </label>
+                              <label className="grid gap-1.5 text-sm font-semibold">Author
+                                <input className={inputClass} value={editAuthor} onChange={(e) => setEditAuthor(e.target.value)} />
+                              </label>
+                              <div className="grid gap-1.5 text-sm font-semibold">
+                                <span>Rating</span>
+                                <div className="flex items-center gap-1" role="radiogroup" aria-label="Book rating out of 5 stars">
+                                  {[1, 2, 3, 4, 5].map((s) => {
+                                    const active = s <= (editHoverRating || editRating)
+                                    return (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={editRating === s}
+                                        aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                                        onClick={() => setEditRating(s === editRating ? 0 : s)}
+                                        onMouseEnter={() => setEditHoverRating(s)}
+                                        onMouseLeave={() => setEditHoverRating(0)}
+                                        className="rounded-full p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+                                      >
+                                        <svg className={`h-6 w-6 transition-colors ${active ? 'text-amber-400' : 'text-black/15'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                          <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.35 4.16a1 1 0 00.95.69h4.37c.97 0 1.37 1.24.59 1.81l-3.54 2.57a1 1 0 00-.36 1.12l1.35 4.16c.3.92-.75 1.68-1.54 1.11l-3.53-2.57a1 1 0 00-1.18 0l-3.53 2.57c-.79.57-1.84-.19-1.54-1.11l1.35-4.16a1 1 0 00-.36-1.12L1.44 9.6c-.78-.57-.38-1.81.59-1.81h4.37a1 1 0 00.95-.69L9.05 2.93z" />
+                                        </svg>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              <label className="grid gap-1.5 text-sm font-semibold">Short Review
+                                <textarea rows={3} maxLength={500} className={`${inputClass} resize-none`} value={editReview} onChange={(e) => setEditReview(e.target.value)} />
+                              </label>
+                              <label className="grid gap-1.5 text-sm font-semibold">Date Finished
+                                <input type="date" className={inputClass} value={editDateFinished} max={todayStr()} onChange={(e) => setEditDateFinished(e.target.value)} />
+                              </label>
+                              <div className="mt-1 flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => saveEdit(i)}
+                                  disabled={!editTitle.trim() || savingEdit}
+                                  className="btn-shine flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                                >
+                                  {savingEdit ? (
+                                    <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Saving...</>
+                                  ) : 'Save changes'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEdit}
+                                  disabled={savingEdit}
+                                  className="rounded-full border border-primary/25 bg-white px-5 py-2.5 text-sm font-semibold text-primaryDark transition hover:border-primary/40 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-3 p-4 pl-5">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-ink">{b.title}</p>
+                              {b.author && <p className="truncate text-sm text-muted">by {b.author}</p>}
+                              <div className="mt-1.5"><Stars value={b.rating} /></div>
+                              {b.review && <p className="mt-2 line-clamp-3 text-sm text-muted">{b.review}</p>}
+                              {b.dateFinished && (
+                                <p className="mt-2 text-xs font-medium text-muted">Finished {b.dateFinished}</p>
+                              )}
+                            </div>
+                            <div className="flex flex-shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                aria-label={`Edit ${b.title}`}
+                                onClick={() => startEdit(i, b)}
+                                disabled={isDeleting}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
+                              >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Delete ${b.title}`}
+                                onClick={() => setConfirmDeleteIndex(i)}
+                                disabled={isDeleting}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 text-red-500 transition hover:bg-red-50 disabled:opacity-50"
+                              >
+                                {isDeleting ? (
+                                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                ) : (
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* inline delete confirm */}
+                        {isConfirming && !isEditing && (
+                          <div className="animate-slideDown flex flex-wrap items-center justify-between gap-3 border-t border-red-100 bg-red-50/70 px-4 py-3 pl-5">
+                            <span className="text-sm font-medium text-red-700">Delete this book from the shelf?</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => deleteBook(i)}
+                                disabled={isDeleting}
+                                className="flex items-center justify-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-60"
+                              >
+                                {isDeleting ? (
+                                  <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Deleting...</>
+                                ) : 'Delete'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteIndex(null)}
+                                disabled={isDeleting}
+                                className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-black/5 disabled:opacity-60"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </section>

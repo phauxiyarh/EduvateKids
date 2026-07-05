@@ -21,7 +21,9 @@ import {
   PieChart, Pie, Cell, Legend,
   AreaChart, Area, CartesianGrid
 } from 'recharts'
-import { auth, db } from '../../lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import QRCode from 'qrcode'
+import { auth, db, functions } from '../../lib/firebase'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
@@ -155,6 +157,16 @@ const AGE_CATEGORIES: Record<AgeCategory, { range: string; title: string }> = {
   '10+': { range: '10+ years', title: 'Young Scholars' },
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
+
+// Simple lower-bound "N+" label for an age category (public catalogue style).
+const AGE_SHORT_LABEL: Record<AgeCategory, string> = {
+  '0-5': '3+',
+  '6-9': '6+',
+  '10+': '10+',
+  'Adult': 'Adult'
+}
+const ageShortLabel = (age: string): string =>
+  AGE_SHORT_LABEL[age as AgeCategory] || age
 
 // Migration map for old age categories to new ones
 const MIGRATE_AGE_CATEGORY = (oldCategory: string): AgeCategory => {
@@ -421,6 +433,10 @@ export default function DashboardPage() {
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null)
   const [showAddInventoryItem, setShowAddInventoryItem] = useState(false)
   const [inventoryScannerOpen, setInventoryScannerOpen] = useState(false)
+  // QR bind + label workflow (inventory)
+  const [bindTargetItem, setBindTargetItem] = useState<InventoryItem | null>(null)
+  const [qrModalItem, setQrModalItem] = useState<InventoryItem | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState('')
   const [invEditTitle, setInvEditTitle] = useState('')
   const [invEditCategory, setInvEditCategory] = useState<InventoryCategory>('Books')
   const [invEditPublisher, setInvEditPublisher] = useState('')
@@ -854,17 +870,33 @@ export default function DashboardPage() {
       .slice(0, 6)
   }, [events])
 
+  // Online store orders (Stripe) revenue + count. Paid or shipped orders count as revenue.
+  const onlineOrderStats = useMemo(() => {
+    const countable = orders.filter((o) => o.status === 'paid' || o.status === 'shipped')
+    const revenue = countable.reduce((sum, o) => sum + (o.total || 0), 0)
+    return { count: orders.length, revenue }
+  }, [orders])
+
   const summaryCards = useMemo(() => {
-    const totalSales = allSales.reduce((sum, sale) => sum + sale.total, 0)
+    const posEventSales = allSales.reduce((sum, sale) => sum + sale.total, 0)
     const transactionCount = allSales.length
+    // Combined sales: POS/event sales plus online store order revenue.
+    const totalSales = posEventSales + onlineOrderStats.revenue
 
     return [
       {
         label: 'Total Sales',
         value: totalSales,
-        note: `${transactionCount} transactions`,
+        note: `${transactionCount} POS/event + ${onlineOrderStats.count} online`,
         prefix: '$',
         icon: 'sales'
+      },
+      {
+        label: 'Online Orders',
+        value: onlineOrderStats.revenue,
+        note: `${onlineOrderStats.count} orders placed`,
+        prefix: '$',
+        icon: 'orders'
       },
       {
         label: 'Low Stock Items',
@@ -885,7 +917,7 @@ export default function DashboardPage() {
         icon: 'catalog'
       }
     ]
-  }, [allSales, events, inventory.length, restockItems.length])
+  }, [allSales, events, inventory.length, restockItems.length, onlineOrderStats])
 
   const formatNumber = (value: number) => value.toLocaleString('en-US')
 
@@ -893,7 +925,7 @@ export default function DashboardPage() {
   const generateEventTxt = (eventName: string, orders: Order[]) => {
     const lines: string[] = []
     lines.push('═'.repeat(60))
-    lines.push(`  EDUVATE KIDS — ${eventName.toUpperCase()}`)
+    lines.push(`  EDUVATE KIDS - ${eventName.toUpperCase()}`)
     lines.push(`  Generated: ${new Date().toLocaleString()}`)
     lines.push('═'.repeat(60))
     lines.push('')
@@ -907,7 +939,7 @@ export default function DashboardPage() {
         lines.push(`  Payment   : ${order.paymentType}`)
         lines.push(`  Items:`)
         order.items.forEach((item) => {
-          lines.push(`    ${item.quantity}× ${item.title}  —  $${item.lineTotal.toFixed(2)}`)
+          lines.push(`    ${item.quantity}× ${item.title}  -  $${item.lineTotal.toFixed(2)}`)
         })
         lines.push(`  Subtotal      : $${order.subtotal.toFixed(2)}`)
         if (order.discount > 0) {
@@ -1629,7 +1661,7 @@ export default function DashboardPage() {
     try {
       localStorage.setItem(`eduvate-orders-${eventKey}`, JSON.stringify(orders))
       if (sales) localStorage.setItem(`eduvate-sales-${eventKey}`, JSON.stringify(sales))
-    } catch { /* quota exceeded — ignore */ }
+    } catch { /* quota exceeded - ignore */ }
   }
 
   const handleRecordSale = async () => {
@@ -1738,12 +1770,12 @@ export default function DashboardPage() {
       localStorage.setItem(`eduvate-txt-${eventKey}`, generateEventTxt(eventName, updatedOrders))
     } catch { /* ignore */ }
 
-    // 3️⃣ Close modal & reset immediately — no waiting for Firebase
+    // 3️⃣ Close modal & reset immediately - no waiting for Firebase
     setIsSubmittingSale(false)
     setShowConfirmSale(false)
     setEventMessage(`✅ Sale recorded (${salesToAdd.length} items). Syncing to cloud…`)
 
-    // 4️⃣ Write to Firebase with retry (background — no await blocking UI)
+    // 4️⃣ Write to Firebase with retry (background - no await blocking UI)
     ;(async () => {
       const MAX_RETRIES = 2
       let writeSuccess = false
@@ -1983,7 +2015,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        <div className="relative z-10 mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="relative z-10 mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {summaryCards.map((card, index) => (
             <div
               key={card.label}
@@ -2000,6 +2032,7 @@ export default function DashboardPage() {
                       {card.icon === 'stock' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
                       {card.icon === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
                       {card.icon === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5s3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18s-3.332.477-4.5 1.253" />}
+                      {card.icon === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />}
                     </svg>
                   </span>
                 </div>
@@ -2481,6 +2514,39 @@ export default function DashboardPage() {
     }
   }
 
+  // Bind a scanned/typed code to an existing inventory item.
+  // 13 digits -> isbn, otherwise -> sku. Persists via the same setDoc path used when editing.
+  const handleBindCode = async (item: InventoryItem, rawValue: string) => {
+    const value = rawValue.trim()
+    if (!value) return
+    const isIsbn = /^\d{13}$/.test(value)
+    const updatedItem: InventoryItem = isIsbn
+      ? { ...item, isbn: value }
+      : { ...item, sku: value }
+    setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+    setBindTargetItem(null)
+    setUploadMessage(`Bound ${isIsbn ? 'ISBN' : 'SKU'} "${value}" to "${item.title}".`)
+    try {
+      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+    } catch (error) {
+      console.error('Bind code error:', error)
+      setUploadMessage(`"${item.title}" bound locally but failed to sync to cloud.`)
+    }
+  }
+
+  // Generate a QR image for an item's sku (or id if no sku) and open the label modal.
+  const openQrLabel = async (item: InventoryItem) => {
+    const value = (item.sku || item.id).trim()
+    setQrModalItem(item)
+    setQrDataUrl('')
+    try {
+      const url = await QRCode.toDataURL(value, { width: 320, margin: 2 })
+      setQrDataUrl(url)
+    } catch (error) {
+      console.error('QR generation error:', error)
+    }
+  }
+
   const handleClearInventory = async () => {
     if (!confirm('Are you sure you want to clear ALL inventory? This will remove every item from stock. Events and catalog will not be affected.')) return
     if (!confirm('This action cannot be undone. Type OK to confirm you want to delete all inventory items.')) return
@@ -2516,9 +2582,10 @@ export default function DashboardPage() {
     }
   }
 
-  // Fetch orders when the Orders view opens (admin only).
+  // Fetch orders when the Orders or Home view opens (admin only).
+  // Home reuses the same `orders` state so its summary reflects online orders.
   useEffect(() => {
-    if (activeView === 'orders' && userRole === 'admin') {
+    if ((activeView === 'orders' || activeView === 'home') && userRole === 'admin') {
       loadOrders()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2559,6 +2626,79 @@ export default function DashboardPage() {
     }
   }
 
+  const deleteOnlineOrder = async (order: OnlineOrder) => {
+    if (!confirm(`Delete order ${order.id}? This cannot be undone.`)) return
+    try {
+      await deleteDoc(doc(db, 'orders', order.id))
+      setOrders((prev) => prev.filter((o) => o.id !== order.id))
+      setExpandedOrder(null)
+    } catch (error) {
+      console.error('Failed to delete order:', error)
+      alert('Could not delete the order. Please try again.')
+    }
+  }
+
+  const updateOnlineOrderStatus = async (order: OnlineOrder, status: OnlineOrder['status']) => {
+    if (status === order.status) return
+    try {
+      await updateDoc(doc(db, 'orders', order.id), { status })
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status } : o)))
+      setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status } : cur))
+    } catch (error) {
+      console.error('Failed to update order status:', error)
+      alert('Could not update the order status. Please try again.')
+    }
+  }
+
+  const deleteReaderRegistration = async (reader: SummerReader) => {
+    if (!confirm(`Delete registration for ${reader.childName}? This cannot be undone.`)) return
+    try {
+      await deleteDoc(doc(db, 'summerReads', reader.id))
+      setSummerReaders((prev) => prev.filter((r) => r.id !== reader.id))
+      setExpandedReader(null)
+    } catch (error) {
+      console.error('Failed to delete registration:', error)
+      alert('Could not delete the registration. Please try again.')
+    }
+  }
+
+  const deleteReaderBook = async (reader: SummerReader, index: number) => {
+    if (!confirm('Delete this logged book?')) return
+    try {
+      const callable = httpsCallable<
+        { code: string; index: number },
+        { booksLogged?: SummerBookLog[]; booksCount?: number; tier?: string }
+      >(functions, 'deleteSummerBook')
+      const res = await callable({ code: reader.code, index })
+      const data = res.data || {}
+      setSummerReaders((prev) =>
+        prev.map((r) =>
+          r.id === reader.id
+            ? {
+                ...r,
+                booksLogged: data.booksLogged ?? r.booksLogged,
+                booksCount: data.booksCount ?? r.booksCount,
+                tier: data.tier ?? r.tier
+              }
+            : r
+        )
+      )
+      setExpandedReader((cur) =>
+        cur && cur.id === reader.id
+          ? {
+              ...cur,
+              booksLogged: data.booksLogged ?? cur.booksLogged,
+              booksCount: data.booksCount ?? cur.booksCount,
+              tier: data.tier ?? cur.tier
+            }
+          : cur
+      )
+    } catch (error) {
+      console.error('Failed to delete logged book:', error)
+      alert('Could not delete the book. Please try again.')
+    }
+  }
+
   const orderStatusBadge = (status: OnlineOrder['status']) => {
     const map: Record<OnlineOrder['status'], string> = {
       paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -2571,7 +2711,7 @@ export default function DashboardPage() {
   }
 
   const fmtDate = (ts?: { seconds: number } | null) =>
-    ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+    ts?.seconds ? new Date(ts.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'
 
   const renderOrders = () => {
     const filtered = orders.filter((o) => (orderStatusFilter === 'all' ? true : o.status === orderStatusFilter))
@@ -2909,7 +3049,19 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-black/5">
               {sortedInventory.map((item, index) => (
                 <tr key={item.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">{item.title}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">
+                    <span className="block">{item.title}</span>
+                    {item.isbn || item.sku ? (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+                        {item.isbn ? `ISBN ${item.isbn}` : `SKU ${item.sku}`}
+                      </span>
+                    ) : (
+                      <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 border border-gray-200">
+                        No code
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
                     <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark border border-primary/20">
                       {item.category}
@@ -2940,7 +3092,7 @@ export default function DashboardPage() {
                   <td className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
                   {userRole === 'admin' && (
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => openEditInventoryItem(item)}
                           className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
@@ -2951,6 +3103,28 @@ export default function DashboardPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           Edit
+                        </button>
+                        <button
+                          onClick={() => setBindTargetItem(item)}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-purple-50 text-primaryDark border border-primary/30 hover:scale-105 transition-all"
+                          type="button"
+                          aria-label={`Bind a code to ${item.title}`}
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
+                          </svg>
+                          Bind QR
+                        </button>
+                        <button
+                          onClick={() => openQrLabel(item)}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-pink-50 text-secondary border border-secondary/30 hover:scale-105 transition-all"
+                          type="button"
+                          aria-label={`Print QR label for ${item.title}`}
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v3" />
+                          </svg>
+                          QR Label
                         </button>
                         <button
                           onClick={() => handleDeleteInventoryItem(item)}
@@ -4643,7 +4817,7 @@ export default function DashboardPage() {
                     className="h-4 w-4 rounded border-primary/30 text-primary focus:ring-primary/50"
                   />
                   <span className="text-xs font-semibold text-primaryDark">
-                    {AGE_CATEGORIES[age].title}
+                    {ageShortLabel(age)} <span className="font-normal text-muted">({AGE_CATEGORIES[age].title})</span>
                   </span>
                 </label>
               ))}
@@ -4676,7 +4850,7 @@ export default function DashboardPage() {
 
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
-              Images * (min 1, max 5) — {catalogExistingImages.length + catalogImages.length}/5 selected
+              Images * (min 1, max 5) - {catalogExistingImages.length + catalogImages.length}/5 selected
             </label>
 
             {/* Existing images (edit mode) */}
@@ -4828,14 +5002,14 @@ export default function DashboardPage() {
           <p className="mt-2 text-sm text-muted">Click &quot;+ New Item&quot; to add your first product.</p>
         </div>
       ) : (
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {filteredCatalogItems.map((item) => (
             <div
               key={item.id}
-              className="group relative flex flex-col rounded-[2rem] bg-white shadow-[0_4px_32px_rgba(124,58,237,0.08)] border border-primary/5 overflow-hidden hover:shadow-[0_8px_48px_rgba(124,58,237,0.16)] hover:-translate-y-1.5 transition-all duration-500"
+              className="group relative flex flex-col rounded-2xl bg-white shadow-[0_4px_24px_rgba(124,58,237,0.08)] border border-primary/5 overflow-hidden hover:shadow-[0_8px_40px_rgba(124,58,237,0.16)] hover:-translate-y-1 transition-all duration-500"
             >
-              {/* Image Slider — clean, no overlays */}
-              <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
+              {/* Image Slider - book covers show fully (object-contain, no cropping) */}
+              <div className="relative aspect-[3/4] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
                 {item.images.length > 0 ? (
                   <>
                     <div className="relative h-full w-full">
@@ -4844,7 +5018,7 @@ export default function DashboardPage() {
                           key={imgIdx}
                           src={img}
                           alt={`${item.title} ${imgIdx + 1}`}
-                          className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out ${
+                          className={`absolute inset-0 h-full w-full object-contain p-2 transition-all duration-700 ease-out ${
                             imgIdx === (catalogSliderIndex[item.id] ?? 0)
                               ? 'opacity-100 scale-100'
                               : 'opacity-0 scale-110'
@@ -4910,43 +5084,43 @@ export default function DashboardPage() {
               </div>
 
               {/* Content */}
-              <div className="flex flex-1 flex-col p-5">
+              <div className="flex flex-1 flex-col p-3.5">
                 {/* Badges row */}
-                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                <div className="flex flex-wrap items-center gap-1 mb-2">
                   {(Array.isArray(item.category) ? item.category : [item.category]).map((cat) => (
-                    <span key={cat} className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[cat] || catalogCategoryBadgeClasses.Others}`}>
+                    <span key={cat} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${catalogCategoryBadgeClasses[cat] || catalogCategoryBadgeClasses.Others}`}>
                       {cat}
                     </span>
                   ))}
                   {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory]).map((age) => (
-                    <span 
+                    <span
                       key={age}
-                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catalogAgeBadgeClasses[age]}`}
-                      title={AGE_CATEGORIES[age]?.range || age}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${catalogAgeBadgeClasses[age as AgeCategory]}`}
+                      title={AGE_CATEGORIES[age as AgeCategory]?.range || age}
                     >
-                      {AGE_CATEGORIES[age]?.title || age}
+                      {ageShortLabel(age)}
                     </span>
                   ))}
                 </div>
 
-                <h3 className="font-display text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
-                <p className="mt-1.5 text-[13px] text-muted leading-relaxed line-clamp-2">{item.description}</p>
+                <h3 className="font-display text-sm font-bold text-primaryDark leading-snug line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
+                <p className="mt-1 text-xs text-muted leading-relaxed line-clamp-2 min-h-[2rem]">{item.description}</p>
 
-                <div className="mt-auto pt-4 space-y-3">
+                <div className="mt-auto pt-3 space-y-2.5">
                   {/* Price and publisher row */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl font-extrabold gradient-text">${formatNumber(item.price)}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200/60 px-2.5 py-0.5">
-                      <svg className="h-3 w-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
-                      <span className="text-[11px] font-semibold text-purple-700 max-w-[100px] truncate">{item.publisher}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-lg font-extrabold gradient-text">${formatNumber(item.price)}</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200/60 px-2 py-0.5 min-w-0">
+                      <svg className="h-3 w-3 shrink-0 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
+                      <span className="text-[11px] font-semibold text-purple-700 max-w-[80px] truncate">{item.publisher}</span>
                     </span>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <button
                       onClick={() => openEditCatalogItem(item)}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 active:scale-95"
+                      className="flex-1 flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 active:scale-95"
                       type="button"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -4954,7 +5128,7 @@ export default function DashboardPage() {
                     </button>
                     <button
                       onClick={() => { if (confirm('Delete this item? This cannot be undone.')) handleDeleteCatalogItem(item.id) }}
-                      className="flex items-center justify-center rounded-xl px-3 py-2 text-xs font-bold text-red-500 border border-red-200 transition-all duration-300 hover:bg-red-50 hover:-translate-y-0.5 active:scale-95"
+                      className="flex items-center justify-center rounded-lg px-2 py-1.5 text-xs font-bold text-red-500 border border-red-200 transition-all duration-300 hover:bg-red-50 hover:-translate-y-0.5 active:scale-95"
                       type="button"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -5232,6 +5406,55 @@ export default function DashboardPage() {
         title="Scan to add / find stock"
         hint="Scan a book barcode or QR code to find it in inventory or add it as new."
       />
+
+      {/* Bind-mode scanner: attach a scanned/typed code to a specific inventory item */}
+      <BarcodeScanner
+        open={bindTargetItem !== null}
+        onClose={() => setBindTargetItem(null)}
+        onDetected={(value) => { if (bindTargetItem) handleBindCode(bindTargetItem, value) }}
+        title={bindTargetItem ? `Bind a code to "${bindTargetItem.title}"` : 'Bind a code'}
+        hint="Scan or type a barcode/QR. A 13-digit value is saved as ISBN, anything else as SKU."
+      />
+
+      {/* QR label modal: generate + print a QR for an item's SKU (or id) */}
+      {qrModalItem && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn print:static print:bg-white print:p-0" onClick={() => { setQrModalItem(null); setQrDataUrl('') }}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20 print:border-0 print:shadow-none" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4 print:hidden">
+              <div>
+                <h4 className="font-display text-xl gradient-text">QR Label</h4>
+                <p className="mt-1 text-xs text-muted">Print or screenshot to attach to the book.</p>
+              </div>
+              <button
+                onClick={() => { setQrModalItem(null); setQrDataUrl('') }}
+                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              {qrDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrDataUrl} alt={`QR code for ${qrModalItem.title}`} className="h-56 w-56 rounded-xl border border-black/5" />
+              ) : (
+                <div className="flex h-56 w-56 items-center justify-center rounded-xl border border-dashed border-primary/30 text-sm text-muted">Generating…</div>
+              )}
+              <p className="mt-4 font-display text-base font-bold text-primaryDark">{qrModalItem.title}</p>
+              <p className="mt-1 font-mono text-xs text-muted">{qrModalItem.sku || qrModalItem.id}</p>
+            </div>
+            <button
+              onClick={() => window.print()}
+              className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 print:hidden"
+              type="button"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-12 0v4h12v-4m-12 0h12" /></svg>
+              Print QR
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
@@ -5644,6 +5867,28 @@ export default function DashboardPage() {
                   Shipped {fmtDate(expandedOrder.shippedAt)}
                 </div>
               )}
+
+              {/* Admin controls: change status + delete */}
+              <div className="flex flex-col gap-3 border-t border-black/5 pt-4">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted">Update Status</label>
+                <select
+                  value={expandedOrder.status}
+                  onChange={(e) => updateOnlineOrderStatus(expandedOrder, e.target.value as OnlineOrder['status'])}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                >
+                  <option value="paid">Paid</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => deleteOnlineOrder(expandedOrder)}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-red-200 bg-white px-6 py-3 text-sm font-semibold text-red-700 transition-all hover:bg-red-50 hover:-translate-y-0.5"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  Delete order
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -5693,13 +5938,23 @@ export default function DashboardPage() {
                             <p className="text-sm font-medium text-ink">{b.title}</p>
                             {b.author && <p className="text-xs text-muted">by {b.author}</p>}
                           </div>
-                          {b.rating != null && (
-                            <div className="flex shrink-0 items-center gap-0.5">
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <svg key={n} className={`h-3.5 w-3.5 ${n <= (b.rating ?? 0) ? 'text-amber-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.176 0l-3.366 2.446c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.098 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z" /></svg>
-                              ))}
-                            </div>
-                          )}
+                          <div className="flex shrink-0 items-center gap-2">
+                            {b.rating != null && (
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((n) => (
+                                  <svg key={n} className={`h-3.5 w-3.5 ${n <= (b.rating ?? 0) ? 'text-amber-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.176 0l-3.366 2.446c-.784.57-1.838-.197-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.098 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z" /></svg>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deleteReaderBook(expandedReader, idx)}
+                              className="flex h-7 w-7 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 transition hover:bg-red-50"
+                              aria-label={`Delete logged book ${b.title}`}
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
                         </div>
                         {b.dateFinished && <p className="mt-1 text-xs text-muted">Finished {b.dateFinished}</p>}
                         {b.review && <p className="mt-2 text-sm text-ink">{b.review}</p>}
@@ -5709,6 +5964,17 @@ export default function DashboardPage() {
                 ) : (
                   <p className="mt-2 text-sm text-muted">No books logged yet.</p>
                 )}
+              </div>
+
+              <div className="border-t border-black/5 pt-4">
+                <button
+                  type="button"
+                  onClick={() => deleteReaderRegistration(expandedReader)}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-red-200 bg-white px-6 py-3 text-sm font-semibold text-red-700 transition-all hover:bg-red-50 hover:-translate-y-0.5"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  Delete registration
+                </button>
               </div>
             </div>
           </div>

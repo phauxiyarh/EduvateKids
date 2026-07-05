@@ -86,7 +86,7 @@ export default function CheckoutPage() {
         {isTestKey && (
           <div className="mb-6 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            Test mode — no real charges. Use card 4242 4242 4242 4242.
+            Test mode - no real charges. Use card 4242 4242 4242 4242.
           </div>
         )}
 
@@ -202,7 +202,7 @@ function PaymentForm({ total }: { total: number | null }) {
       setProcessing(false)
       return
     }
-    // Inline (no redirect) result — only treat 'succeeded' as done.
+    // Inline (no redirect) result - only treat 'succeeded' as done.
     if (paymentIntent?.status === 'succeeded') {
       // Backstop: record the order now in case the webhook is delayed/misconfigured.
       // Idempotent server-side, so it's safe even if the webhook already ran.

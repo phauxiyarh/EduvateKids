@@ -24,7 +24,7 @@ import {
 } from './config';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification } from './email';
-import { registerReader, logBook, type RegisterInput, type LogBookInput } from './summer';
+import { registerReader, logBook, editBook, deleteBook, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
 admin.initializeApp();
@@ -273,6 +273,33 @@ export const logSummerBook = onCall({ cors: true }, async (request) => {
   } catch (err) {
     const msg = (err as Error)?.message || 'Could not log the book.';
     // Surface "code not found" cleanly; treat the rest as internal.
+    throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+  }
+});
+
+/** Edit a logged book at an index. */
+export const editSummerBook = onCall({ cors: true }, async (request) => {
+  const d = request.data as EditBookInput;
+  if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
+  if (!d?.title?.trim()) throw new HttpsError('invalid-argument', 'A book title is required.');
+  try {
+    return await editBook(db, d);
+  } catch (err) {
+    const msg = (err as Error)?.message || 'Could not edit the book.';
+    throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+  }
+});
+
+/** Delete a logged book at an index; recomputes count + tier. */
+export const deleteSummerBook = onCall({ cors: true }, async (request) => {
+  const d = request.data as { code?: string; index?: number };
+  if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
+  try {
+    return await deleteBook(db, d.code, d.index);
+  } catch (err) {
+    const msg = (err as Error)?.message || 'Could not delete the book.';
     throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
   }
 });

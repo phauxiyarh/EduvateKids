@@ -137,3 +137,63 @@ export async function logBook(
     return { booksCount, tier, newTier: tier !== prevTier && tier !== 'none' };
   });
 }
+
+export interface EditBookInput {
+  code: string;
+  index: number;
+  title: string;
+  author?: string;
+  rating?: number;
+  review?: string;
+  dateFinished?: string;
+}
+
+/** Edit a previously-logged book at a given index. Count/tier are unchanged (still 1 book). */
+export async function editBook(
+  db: FirebaseFirestore.Firestore,
+  input: EditBookInput
+): Promise<{ booksCount: number; tier: SummerTier }> {
+  const ref = db.collection('summerReads').doc(input.code.trim().toUpperCase());
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Code not found.');
+    const data = snap.data() as { booksLogged?: Record<string, unknown>[] };
+    const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
+    if (input.index < 0 || input.index >= logged.length) throw new Error('Book entry not found.');
+    const rating = Math.max(0, Math.min(5, Math.round(Number(input.rating) || 0)));
+    logged[input.index] = {
+      ...logged[input.index],
+      title: input.title.trim(),
+      author: (input.author || '').trim(),
+      rating,
+      review: (input.review || '').trim().slice(0, 500),
+      dateFinished: (input.dateFinished || '').trim() || (logged[input.index].dateFinished as string) || new Date().toISOString().split('T')[0],
+      parentVerified: true,
+    };
+    const booksCount = logged.length;
+    const tier = tierFor(booksCount);
+    tx.update(ref, { booksLogged: logged, booksCount, tier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { booksCount, tier };
+  });
+}
+
+/** Delete a logged book at a given index; recompute count + tier (tier can drop). */
+export async function deleteBook(
+  db: FirebaseFirestore.Firestore,
+  code: string,
+  index: number
+): Promise<{ booksCount: number; tier: SummerTier }> {
+  const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Code not found.');
+    const data = snap.data() as { booksLogged?: unknown[] };
+    const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
+    if (index < 0 || index >= logged.length) throw new Error('Book entry not found.');
+    logged.splice(index, 1);
+    const booksCount = logged.length;
+    const tier = tierFor(booksCount);
+    tx.update(ref, { booksLogged: logged, booksCount, tier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { booksCount, tier };
+  });
+}

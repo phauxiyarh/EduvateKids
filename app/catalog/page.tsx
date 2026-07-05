@@ -27,6 +27,26 @@ const AGE_CATEGORIES: Record<string, { range: string; title: string }> = {
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
 
+// Map an age category value to a simple lower-bound "N+" style label.
+// Known keys map directly; a raw numeric/range value is reduced to its lower bound.
+const AGE_TAG_MAP: Record<string, string> = {
+  '0-5': '3+',
+  '6-9': '6+',
+  '10+': '10+',
+  'Adult': 'Adult'
+}
+
+function ageTagLabel(age: string): string {
+  const raw = (age ?? '').trim()
+  if (!raw) return ''
+  if (AGE_TAG_MAP[raw]) return AGE_TAG_MAP[raw]
+  if (/^adult$/i.test(raw)) return 'Adult'
+  // Pull the first number from a range/numeric value and show its lower bound.
+  const match = raw.match(/\d+/)
+  if (match) return `${match[0]}+`
+  return raw
+}
+
 // Scroll-reveal hook: adds the 'is-visible' class when the element enters the
 // viewport. Guards against environments where IntersectionObserver is missing
 // so the content stays visible.
@@ -71,6 +91,7 @@ export default function CatalogPage() {
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [catalogFilter, setCatalogFilter] = useState<string>('All')
+  const [searchQuery, setSearchQuery] = useState('')
   const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
   const [expandedSlider, setExpandedSlider] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -119,8 +140,11 @@ export default function CatalogPage() {
   }, [expandedItem])
 
   const allCategories = ['All', ...new Set(catalogItems.flatMap((i) => i.category))]
+  const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredItems = catalogItems.filter((item) => {
-    return catalogFilter === 'All' || item.category.includes(catalogFilter)
+    const matchesCategory = catalogFilter === 'All' || item.category.includes(catalogFilter)
+    const matchesSearch = normalizedQuery === '' || item.title.toLowerCase().includes(normalizedQuery)
+    return matchesCategory && matchesSearch
   })
 
   return (
@@ -149,7 +173,7 @@ export default function CatalogPage() {
             </Link>
             <Link href="/catalog" aria-current="page" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 bg-gradient-to-r from-primary to-secondary text-white shadow-lg">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              <span>Our Products</span>
+              <span>Our Catalogue</span>
             </Link>
             <EventNavDropdown />
             <Link href="/contact-us" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5">
@@ -190,7 +214,7 @@ export default function CatalogPage() {
               </Link>
               <Link href="/catalog" onClick={() => setMobileMenuOpen(false)} aria-current="page" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-bold text-white transition active:scale-[0.98]">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                <span>Our Products</span>
+                <span>Our Catalogue</span>
               </Link>
               <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
               <Link href="/summer-reads" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]">
@@ -222,10 +246,41 @@ export default function CatalogPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Full Collection
             </p>
-            <h1 className="mt-4 font-display text-3xl sm:text-5xl gradient-text">Our Products</h1>
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl gradient-text">Our Catalogue</h1>
             <p className="mt-4 text-lg text-muted max-w-2xl mx-auto">
               Browse our complete collection of Islamic books, crafts, puzzles, games, and gifts for children of all ages.
             </p>
+          </div>
+
+          {/* Search bar */}
+          <div className="mx-auto mb-8 max-w-2xl">
+            <div className="group relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-5 text-muted transition-colors duration-300 group-focus-within:text-primary">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by book title..."
+                aria-label="Search catalogue by book title"
+                className="w-full rounded-full border border-primary/15 bg-white/90 py-4 pl-14 pr-12 text-base text-ink shadow-[0_8px_30px_rgba(124,58,237,0.08)] backdrop-blur-sm transition-all duration-300 placeholder:text-muted/70 hover:border-primary/30 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 flex items-center pr-5 text-muted transition-colors duration-300 hover:text-primary"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Category filter */}
@@ -250,10 +305,11 @@ export default function CatalogPage() {
           <p className="text-center text-muted mb-8">
             Showing {filteredItems.length} {filteredItems.length === 1 ? 'product' : 'products'}
             {catalogFilter !== 'All' && ` in ${catalogFilter}`}
+            {normalizedQuery !== '' && ` matching "${searchQuery.trim()}"`}
           </p>
 
           {/* Product Grid */}
-          <div ref={gridReveal} className="reveal reveal-stagger grid gap-5 sm:gap-8 grid-cols-2 lg:grid-cols-3">
+          <div ref={gridReveal} className="reveal reveal-stagger grid gap-4 sm:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
             {filteredItems.map((item) => (
               <div
                 key={item.id}
@@ -261,7 +317,7 @@ export default function CatalogPage() {
                 className="card-hover group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:-translate-y-1.5 hover:shadow-[0_16px_48px_rgba(124,58,237,0.16)] cursor-pointer"
               >
                 {/* Image */}
-                <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
+                <div className="relative aspect-[3/4] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
                   {item.images.length > 0 ? (
                     <>
                       <div className="relative h-full w-full">
@@ -270,10 +326,10 @@ export default function CatalogPage() {
                             key={imgIdx}
                             src={img}
                             alt={`${item.title} ${imgIdx + 1}`}
-                            className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out ${
+                            className={`absolute inset-0 h-full w-full object-contain p-3 transition-all duration-700 ease-out ${
                               imgIdx === (catalogSlider[item.id] ?? 0)
                                 ? 'opacity-100 scale-100'
-                                : 'opacity-0 scale-110'
+                                : 'opacity-0 scale-105'
                             }`}
                           />
                         ))}
@@ -337,18 +393,20 @@ export default function CatalogPage() {
                         {cat}
                       </span>
                     ))}
-                    {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory]).map((age) => (
+                    {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory])
+                      .filter((age) => ageTagLabel(age))
+                      .map((age) => (
                       <span
                         key={age}
                         className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-blue-700"
                         title={AGE_CATEGORIES[age]?.range || age}
                       >
-                        {AGE_CATEGORIES[age]?.title || `Ages ${age}`}
+                        {ageTagLabel(age)}
                       </span>
                     ))}
                   </div>
-                  <h3 className="font-display text-sm sm:text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
-                  <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 hidden sm:block">{item.description}</p>
+                  <h3 className="font-display text-sm sm:text-base font-bold text-primaryDark leading-snug line-clamp-2 min-h-[2.5rem] sm:min-h-[3rem]">{item.title}</h3>
+                  <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">{item.description}</p>
                   <div className="mt-auto pt-2 sm:pt-4 flex items-center justify-between gap-1">
                     <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
                     <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
@@ -382,10 +440,10 @@ export default function CatalogPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 6.5C10.5 5.5 8 5 5 5.5v12C8 17 10.5 17.5 12 18.5m0-12c1.5-1 4-1.5 7-1v12c-3-.5-5.5 0-7 1m0-12v12" />
                 </svg>
               </div>
-              <p className="text-lg text-muted">No products found in this category.</p>
+              <p className="text-lg text-muted">No products found for your search.</p>
               <button
                 type="button"
-                onClick={() => setCatalogFilter('All')}
+                onClick={() => { setCatalogFilter('All'); setSearchQuery('') }}
                 className="mt-4 text-primary font-semibold hover:underline"
               >
                 View all products
@@ -435,7 +493,7 @@ export default function CatalogPage() {
                         key={idx}
                         src={img}
                         alt={`${expandedItem.title} ${idx + 1}`}
-                        className={`absolute inset-0 h-full w-full object-cover transition-all duration-500 ${
+                        className={`absolute inset-0 h-full w-full object-contain p-4 transition-all duration-500 ${
                           idx === expandedSlider ? 'opacity-100' : 'opacity-0'
                         }`}
                       />
@@ -489,13 +547,15 @@ export default function CatalogPage() {
                       {cat}
                     </span>
                   ))}
-                  {(Array.isArray(expandedItem.ageCategory) ? expandedItem.ageCategory : [expandedItem.ageCategory]).map((age) => (
+                  {(Array.isArray(expandedItem.ageCategory) ? expandedItem.ageCategory : [expandedItem.ageCategory])
+                    .filter((age) => ageTagLabel(age))
+                    .map((age) => (
                     <span
                       key={age}
                       className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-3 py-1 text-xs font-bold text-blue-700"
                       title={AGE_CATEGORIES[age]?.range || age}
                     >
-                      {AGE_CATEGORIES[age]?.title || `Ages ${age}`}
+                      {ageTagLabel(age)}
                     </span>
                   ))}
                 </div>

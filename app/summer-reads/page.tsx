@@ -32,9 +32,96 @@ const steps = [
 ]
 
 const tiers = [
-  { name: 'Seedling', books: 3, color: 'from-emerald-400 to-green-500', ring: 'text-emerald-500' },
-  { name: 'Reader', books: 6, color: 'from-primary to-accentThree', ring: 'text-primary' },
-  { name: 'Scholar', books: 10, color: 'from-secondary to-primary', ring: 'text-secondary' },
+  { name: 'Seedling', books: 3, color: 'from-emerald-400 to-green-500', ring: 'from-emerald-300 via-emerald-500 to-green-600' },
+  { name: 'Reader', books: 6, color: 'from-primary to-accentThree', ring: 'from-violet-400 via-primary to-fuchsia-500' },
+  { name: 'Scholar', books: 10, color: 'from-secondary to-primary', ring: 'from-pink-400 via-secondary to-primary' },
+]
+
+const prizes = [
+  {
+    text: 'Grand Prize: a special Eduvate Kids gift bundle',
+    tile: 'from-amber-400 to-orange-500',
+    icon: (
+      // Trophy
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 4h10v5a5 5 0 01-10 0V4z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 6H4.5A1.5 1.5 0 003 7.5V8a4 4 0 004 4M17 6h2.5A1.5 1.5 0 0121 7.5V8a4 4 0 01-4 4" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v3m-3 3h6m-5 0a1 1 0 011-1h2a1 1 0 011 1" />
+      </svg>
+    ),
+  },
+  {
+    text: 'Two runner-up prizes',
+    tile: 'from-secondary to-pink-600',
+    icon: (
+      // Medal with ribbon
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 3l2.5 5M16 3l-2.5 5" />
+        <circle cx="12" cy="15" r="5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 13l.9 1.8 2 .3-1.45 1.4.34 2L12 17.6l-1.79.9.34-2L9.1 15.1l2-.3.9-1.8z" />
+      </svg>
+    ),
+  },
+  {
+    text: 'A certificate for every milestone reached',
+    tile: 'from-primary to-violet-600',
+    icon: (
+      // Certificate / scroll with award seal
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h9l3 3v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v3h3M7 8h6M7 11h4" />
+        <circle cx="15" cy="17" r="2.6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.4 19l-.9 2.4 2.5-1.2 2.5 1.2-.9-2.4" />
+      </svg>
+    ),
+  },
+]
+
+const eligibleBooks = [
+  {
+    text: 'Islamic stories & picture books',
+    tile: 'from-primary to-violet-600',
+    icon: (
+      // Open book
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.5C10.6 5.5 8.7 5 7 5c-1.3 0-2.6.3-3.7.8v11.4C4.4 16.7 5.7 16.5 7 16.5c1.7 0 3.6.5 5 1.5 1.4-1 3.3-1.5 5-1.5 1.3 0 2.6.2 3.7.7V5.8C19.6 5.3 18.3 5 17 5c-1.7 0-3.6.5-5 1.5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.5V18" />
+      </svg>
+    ),
+  },
+  {
+    text: 'Prophets & Companions',
+    tile: 'from-emerald-400 to-green-600',
+    icon: (
+      // Mosque
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c1.8 1.6 3 3.3 3 5 0 1.7-1.3 2.7-3 2.7S9 9.7 9 8c0-1.7 1.2-3.4 3-5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 21v-6a2 2 0 012-2h10a2 2 0 012 2v6M5 21h14M4 21V11m16 10V11M4 11c.8-.6 1.3-1.4 1.3-2.3M20 11c-.8-.6-1.3-1.4-1.3-2.3M10 21v-2.5a2 2 0 014 0V21" />
+      </svg>
+    ),
+  },
+  {
+    text: "Qur'an & Tafsir for children",
+    tile: 'from-amber-400 to-orange-500',
+    icon: (
+      // Scroll
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 5a2 2 0 012-2h9a2 2 0 012 2v11a3 3 0 01-3 3H8" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 19a3 3 0 01-3-3V5M6 5a2 2 0 00-2 2 2 2 0 002 2h2V5M9 8h6M9 11h6" />
+      </svg>
+    ),
+  },
+  {
+    text: 'Arabic readers & Islamic history',
+    tile: 'from-secondary to-pink-600',
+    icon: (
+      // Scholar cap / globe
+      <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4l9 4-9 4-9-4 9-4z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 8v5M7 10.2V15c0 1.1 2.2 2.5 5 2.5s5-1.4 5-2.5v-4.8" />
+      </svg>
+    ),
+  },
 ]
 
 export default function SummerReadsPage() {
@@ -44,6 +131,40 @@ export default function SummerReadsPage() {
 
   return (
     <div className="min-h-screen text-ink">
+      <style jsx global>{`
+        @keyframes ring-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes tier-glow {
+          0%, 100% { opacity: 0.75; filter: blur(6px); }
+          50% { opacity: 1; filter: blur(10px); }
+        }
+        .tier-ring::before,
+        .tier-ring::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 9999px;
+          background: conic-gradient(
+            from 0deg,
+            rgba(255, 255, 255, 0) 0deg,
+            rgba(255, 255, 255, 0.95) 70deg,
+            rgba(255, 255, 255, 0) 150deg,
+            rgba(255, 255, 255, 0) 360deg
+          );
+          animation: ring-spin 4s linear infinite;
+        }
+        /* Mask the spinning highlight into a thin ring shape */
+        .tier-ring::before {
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+        }
+        /* Soft outer glow that pulses in sync */
+        .tier-ring::after {
+          animation: ring-spin 4s linear infinite, tier-glow 4s ease-in-out infinite;
+          opacity: 0.7;
+        }
+      `}</style>
       <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)] backdrop-blur-xl">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 py-3">
@@ -71,13 +192,13 @@ export default function SummerReadsPage() {
           ))}
           <div className="reveal is-visible relative z-10 mx-auto w-11/12 max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">
-              June 15 – August 31, 2026
+              June 15 - August 31, 2026
             </span>
             <h1 className="mt-4 font-display text-3xl sm:text-5xl leading-tight">
               Eduvate Kids <span className="gradient-text">Summer Reads</span>
             </h1>
             <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
-              A joyful summer reading challenge for ages 5–14. Read Islamic and Arabic books,
+              A joyful summer reading challenge for ages 5-14. Read Islamic and Arabic books,
               log your progress, and earn certificates as you climb from Seedling to Scholar.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
@@ -130,8 +251,16 @@ export default function SummerReadsPage() {
             <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-3">
               {tiers.map((t) => (
                 <div key={t.name} className="card-hover rounded-3xl bg-white p-6 text-center shadow-soft border border-primary/10 hover:-translate-y-1.5">
-                  <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-white shadow-lg`}>
-                    <span className="font-display text-2xl font-bold">{t.books}</span>
+                  {/* Animated glowing conic-gradient ring wrapping a 3D coin */}
+                  <div className="relative mx-auto h-24 w-24">
+                    <div className={`tier-ring absolute inset-0 rounded-full bg-gradient-to-br ${t.ring}`} aria-hidden="true" />
+                    <div className={`tier-coin absolute inset-[6px] flex items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)]`}>
+                      {/* Top highlight to read as a 3D sphere */}
+                      <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(120%_90%_at_30%_22%,rgba(255,255,255,0.6),rgba(255,255,255,0)_55%)]" aria-hidden="true" />
+                      {/* Bottom inner shading */}
+                      <span className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_0_-8px_16px_rgba(0,0,0,0.22),inset_0_6px_10px_rgba(255,255,255,0.28)]" aria-hidden="true" />
+                      <span className="relative font-display text-2xl font-bold drop-shadow-sm">{t.books}</span>
+                    </div>
                   </div>
                   <h3 className="mt-4 font-display text-xl gradient-text">{t.name}</h3>
                   <p className="mt-1 text-sm text-muted">Read {t.books} books</p>
@@ -147,10 +276,12 @@ export default function SummerReadsPage() {
             <div className="rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 p-6 sm:p-8 shadow-soft border border-amber-200/60">
               <h3 className="font-display text-2xl gradient-text">Prizes</h3>
               <ul className="mt-4 space-y-3 text-sm">
-                {['Grand Prize: a special Eduvate Kids gift bundle', 'Two runner-up prizes', 'A certificate for every milestone reached'].map((p) => (
-                  <li key={p} className="flex items-start gap-2">
-                    <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    <span className="text-muted">{p}</span>
+                {prizes.map((p) => (
+                  <li key={p.text} className="flex items-start gap-3">
+                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.tile} shadow-sm`}>
+                      {p.icon}
+                    </span>
+                    <span className="pt-1.5 text-muted">{p.text}</span>
                   </li>
                 ))}
               </ul>
@@ -159,10 +290,12 @@ export default function SummerReadsPage() {
             <div className="rounded-3xl bg-gradient-to-br from-purple-50 to-pink-50 p-6 sm:p-8 shadow-soft border border-primary/10">
               <h3 className="font-display text-2xl gradient-text">Eligible Books</h3>
               <ul className="mt-4 space-y-3 text-sm">
-                {['Islamic stories & picture books', 'Prophets & Companions', "Qur'an & Tafsir for children", 'Arabic readers & Islamic history'].map((b) => (
-                  <li key={b} className="flex items-start gap-2">
-                    <span className="text-primary">✦</span>
-                    <span className="text-muted">{b}</span>
+                {eligibleBooks.map((b) => (
+                  <li key={b.text} className="flex items-start gap-3">
+                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${b.tile} shadow-sm`}>
+                      {b.icon}
+                    </span>
+                    <span className="pt-1.5 text-muted">{b.text}</span>
                   </li>
                 ))}
               </ul>

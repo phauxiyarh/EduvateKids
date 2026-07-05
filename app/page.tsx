@@ -116,7 +116,7 @@ function shuffleArray<T>(array: T[]): T[] {
 // Reveal-on-scroll: toggles `.is-visible` once an element enters the viewport.
 // Pass the returned ref to any element carrying the `reveal`/`reveal-stagger` class.
 // `deps` lets the observer re-attach when the element mounts later (e.g. async
-// content like the catalog grid) — otherwise the one-time effect would miss it
+// content like the catalog grid) - otherwise the one-time effect would miss it
 // and the element would stay at opacity:0 forever.
 function useReveal<T extends HTMLElement = HTMLDivElement>(deps: unknown[] = []) {
   const ref = useRef<T | null>(null)

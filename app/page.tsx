@@ -103,6 +103,15 @@ const AGE_CATEGORIES: Record<string, { range: string; title: string }> = {
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
 
+// Short "N+" age label (matches the catalogue page): 0-5 -> 3+, 6-9 -> 6+, 10+ -> 10+, Adult -> Adult.
+function ageTagLabel(age: string): string {
+  if (!age) return ''
+  const map: Record<string, string> = { '0-5': '3+', '6-9': '6+', '10+': '10+', 'Adult': 'Adult' }
+  if (map[age]) return map[age]
+  const lower = String(age).match(/\d+/)
+  return lower ? `${lower[0]}+` : age
+}
+
 // Shuffle array helper
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
@@ -606,15 +615,15 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div ref={catalogGridReveal} className="reveal-stagger grid gap-5 sm:gap-8 grid-cols-2 lg:grid-cols-3">
+              <div ref={catalogGridReveal} className="reveal-stagger grid gap-4 sm:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                 {catalogItems.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => { setExpandedItem(item); setExpandedSlider(0) }}
-                    className="group card-hover flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_16px_48px_rgba(124,58,237,0.16)] hover:-translate-y-1.5 cursor-pointer"
+                    className="group card-hover flex flex-col rounded-2xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:shadow-[0_16px_48px_rgba(124,58,237,0.16)] hover:-translate-y-1.5 cursor-pointer"
                   >
-                    {/* Image */}
-                    <div className="relative aspect-[4/3] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
+                    {/* Image (full cover, uncropped) */}
+                    <div className="relative aspect-[3/4] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden">
                       {item.images.length > 0 ? (
                         <>
                           <div className="relative h-full w-full">
@@ -623,10 +632,10 @@ export default function HomePage() {
                                 key={imgIdx}
                                 src={img}
                                 alt={`${item.title} ${imgIdx + 1}`}
-                                className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ease-out ${
+                                className={`absolute inset-0 h-full w-full object-contain p-2 transition-all duration-700 ease-out ${
                                   imgIdx === (catalogSlider[item.id] ?? 0)
                                     ? 'opacity-100 scale-100'
-                                    : 'opacity-0 scale-110'
+                                    : 'opacity-0 scale-105'
                                 }`}
                               />
                             ))}
@@ -690,18 +699,18 @@ export default function HomePage() {
                             {cat}
                           </span>
                         ))}
-                        {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory]).map((age) => (
+                        {(Array.isArray(item.ageCategory) ? item.ageCategory : [item.ageCategory]).filter(Boolean).map((age) => (
                           <span
                             key={age}
                             className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-1.5 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-blue-700"
                             title={AGE_CATEGORIES[age]?.range || age}
                           >
-                            {AGE_CATEGORIES[age]?.title || `Ages ${age}`}
+                            {ageTagLabel(age)}
                           </span>
                         ))}
                       </div>
-                      <h3 className="font-display text-sm sm:text-base font-bold text-primaryDark leading-snug line-clamp-2">{item.title}</h3>
-                      <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 hidden sm:block">{item.description}</p>
+                      <h3 className="font-display text-sm sm:text-base font-bold text-primaryDark leading-snug line-clamp-2 min-h-[2.5rem]">{item.title}</h3>
+                      <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 min-h-[2rem]">{item.description}</p>
                       <div className="mt-auto pt-2 sm:pt-4 flex items-center justify-between gap-1">
                         <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
                         <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">

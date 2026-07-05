@@ -418,6 +418,10 @@ export default function DashboardPage() {
   // POS "Scan to cart": camera scanner + a confirmation for the matched bound book.
   const [posScannerOpen, setPosScannerOpen] = useState(false)
   const [scanCartConfirm, setScanCartConfirm] = useState<InventoryItem | null>(null)
+  // Inventory "scan to restock": a matched bound book is confirmed with a
+  // quantity to add to its stock (rather than opening the full edit form).
+  const [scanStockConfirm, setScanStockConfirm] = useState<InventoryItem | null>(null)
+  const [scanStockQty, setScanStockQty] = useState(1)
   const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
@@ -2698,14 +2702,17 @@ export default function DashboardPage() {
         i.id.toLowerCase() === code
     )
     if (exact) {
-      openEditInventoryItem(exact)
+      // Matched a bound book → confirm how many to add to its stock.
       setInventoryScannerOpen(false)
+      setScanStockQty(1)
+      setScanStockConfirm(exact)
       return
     }
     const titleMatches = inventory.filter((i) => i.title.toLowerCase().includes(code))
     if (titleMatches.length === 1) {
-      openEditInventoryItem(titleMatches[0])
       setInventoryScannerOpen(false)
+      setScanStockQty(1)
+      setScanStockConfirm(titleMatches[0])
       return
     }
     // No or ambiguous match → open the Add form pre-filled with the scanned code.
@@ -2718,6 +2725,23 @@ export default function DashboardPage() {
     }
     setUploadMessage(`No item matched "${raw.trim()}". Add it as a new item.`)
     setInventoryScannerOpen(false)
+  }
+
+  // Confirm a scanned book → add the chosen quantity to its stock and persist.
+  const confirmScanToInventory = async () => {
+    const item = scanStockConfirm
+    const addQty = Math.max(1, Math.round(scanStockQty))
+    setScanStockConfirm(null)
+    if (!item) return
+    const updatedItem: InventoryItem = { ...item, quantity: item.quantity + addQty }
+    setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+    setUploadMessage(`Added ${addQty} to "${item.title}" (now ${updatedItem.quantity} in stock).`)
+    try {
+      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+    } catch (error) {
+      console.error('Scan restock error:', error)
+      setUploadMessage(`"${item.title}" updated locally but failed to sync to cloud.`)
+    }
   }
 
   const handleSaveInventoryItem = async () => {
@@ -3474,17 +3498,19 @@ export default function DashboardPage() {
                           </svg>
                           Edit
                         </button>
-                        <button
-                          onClick={() => setBindTargetItem(item)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-purple-50 text-primaryDark border border-primary/30 hover:scale-105 transition-all"
-                          type="button"
-                          aria-label={`Bind a code to ${item.title}`}
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
-                          </svg>
-                          Bind QR
-                        </button>
+                        {!(item.sku || item.isbn) && (
+                          <button
+                            onClick={() => setBindTargetItem(item)}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-purple-50 text-primaryDark border border-primary/30 hover:scale-105 transition-all"
+                            type="button"
+                            aria-label={`Bind a code to ${item.title}`}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
+                            </svg>
+                            Bind QR
+                          </button>
+                        )}
                         <button
                           onClick={() => openQrLabel(item)}
                           className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-pink-50 text-secondary border border-secondary/30 hover:scale-105 transition-all"
@@ -5930,6 +5956,76 @@ export default function DashboardPage() {
           </div>
         )
       })()}
+
+      {/* Scan-to-inventory confirmation: add a chosen quantity to a matched book's stock */}
+      {scanStockConfirm && (
+        <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setScanStockConfirm(null)}>
+          <div className="w-full sm:max-w-sm max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+              </span>
+              <div className="min-w-0">
+                <h4 className="font-display text-lg font-bold text-primaryDark">Add to inventory?</h4>
+                <p className="mt-1 text-sm text-muted">This book is already in stock. Choose how many to add.</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-2xl bg-gray-50 border border-black/5 p-4">
+              <p className="font-semibold text-ink">{scanStockConfirm.title}</p>
+              <p className="mt-1 font-mono text-xs text-muted">{scanStockConfirm.isbn ? `ISBN ${scanStockConfirm.isbn}` : scanStockConfirm.sku ? `SKU ${scanStockConfirm.sku}` : scanStockConfirm.id}</p>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-muted">Current stock</span>
+                <span className="font-semibold text-ink">{scanStockConfirm.quantity}</span>
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Quantity to add</label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  onClick={() => setScanStockQty((q) => Math.max(1, q - 1))}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-primary/20 text-primaryDark transition hover:bg-primary/5"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={scanStockQty}
+                  onChange={(e) => setScanStockQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-center text-lg font-bold text-primaryDark focus:border-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={() => setScanStockQty((q) => q + 1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-primary/20 text-primaryDark transition hover:bg-primary/5"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-muted">New stock will be <span className="font-semibold text-primaryDark">{scanStockConfirm.quantity + Math.max(1, Math.round(scanStockQty))}</span>.</p>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setScanStockConfirm(null)}
+                className="flex-1 rounded-full border-2 border-primary/20 px-4 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmScanToInventory}
+                className="flex-1 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5"
+              >
+                Add to inventory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QR label modal: generate + print a QR for an item's SKU (or id) */}
       {qrModalItem && (

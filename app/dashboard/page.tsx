@@ -2855,6 +2855,39 @@ export default function DashboardPage() {
     }
   }
 
+  // Recompute an order's items/totals (admin edit): quantities and line removals.
+  // Keeps the order's original tax rate; re-applies free shipping over $80.
+  const recomputeOrder = (order: OnlineOrder, items: OnlineOrderItem[]): OnlineOrder => {
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const nextItems = items.map((it) => ({ ...it, lineTotal: round2(it.unitPrice * it.quantity) }))
+    const subtotal = round2(nextItems.reduce((s, it) => s + it.lineTotal, 0))
+    const taxRate = order.subtotal > 0 ? (order.tax ?? 0) / order.subtotal : 0
+    const tax = round2(subtotal * taxRate)
+    const shippingFee = subtotal >= 80 ? 0 : (subtotal > 0 ? 5.99 : 0)
+    const total = round2(subtotal + tax + shippingFee)
+    return { ...order, items: nextItems, subtotal, tax, shippingFee, total }
+  }
+
+  const [savingOrder, setSavingOrder] = useState(false)
+  const saveOrderItems = async (order: OnlineOrder) => {
+    setSavingOrder(true)
+    try {
+      await updateDoc(doc(db, 'orders', order.id), {
+        items: order.items,
+        subtotal: order.subtotal,
+        tax: order.tax,
+        shippingFee: order.shippingFee,
+        total: order.total,
+      })
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? order : o)))
+    } catch (error) {
+      console.error('Failed to save order items:', error)
+      alert('Could not save the order changes. Please try again.')
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
   const deleteReaderRegistration = async (reader: SummerReader) => {
     if (!confirm(`Delete registration for ${reader.childName}? This cannot be undone.`)) return
     try {
@@ -6094,12 +6127,24 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted">Items</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">Items <span className="font-normal normal-case">(editable)</span></p>
                 <ul className="mt-2 space-y-2">
                   {expandedOrder.items?.map((it, idx) => (
-                    <li key={idx} className="flex items-center justify-between text-sm">
-                      <span className="text-ink">{it.title} <span className="text-muted">× {it.quantity}</span></span>
-                      <span className="font-semibold text-primaryDark">${it.lineTotal?.toFixed(2)}</span>
+                    <li key={idx} className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 p-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate text-ink" title={it.title}>{it.title}</span>
+                      <div className="flex items-center gap-1 rounded-full border border-gray-200">
+                        <button type="button" aria-label={`Decrease ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                        </button>
+                        <span className="min-w-[1.5rem] text-center font-semibold">{it.quantity}</span>
+                        <button type="button" aria-label={`Increase ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: x.quantity + 1 } : x)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        </button>
+                      </div>
+                      <span className="w-16 text-right font-semibold text-primaryDark">${it.lineTotal?.toFixed(2)}</span>
+                      <button type="button" aria-label={`Remove ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.filter((_, i) => i !== idx)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-red-50 hover:text-red-500">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -6109,6 +6154,14 @@ export default function DashboardPage() {
                   <div className="flex justify-between text-muted"><span>Tax</span><span>${(expandedOrder.tax ?? 0).toFixed(2)}</span></div>
                   <div className="flex justify-between pt-1 text-base font-bold text-primaryDark"><span>Total</span><span>${expandedOrder.total?.toFixed(2)}</span></div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => saveOrderItems(expandedOrder)}
+                  disabled={savingOrder}
+                  className="btn-shine mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                >
+                  {savingOrder ? 'Saving…' : 'Save item changes'}
+                </button>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">

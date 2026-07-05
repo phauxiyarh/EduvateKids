@@ -22,6 +22,7 @@ import {
   AreaChart, Area, CartesianGrid
 } from 'recharts'
 import { auth, db } from '../../lib/firebase'
+import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
@@ -36,6 +37,8 @@ type InventoryItem = {
   title: string
   category: InventoryCategory
   publisher: string
+  sku: string
+  isbn: string
   rrp: number
   discount: number
   quantity: number
@@ -183,6 +186,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'My First Quran Stories',
     category: 'Books',
     publisher: 'Noor Press',
+    sku: '',
+    isbn: '',
     rrp: 22,
     discount: 10,
     quantity: 14,
@@ -193,6 +198,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Ramadan Activity Kit',
     category: 'Crafts',
     publisher: 'Little Lanterns',
+    sku: '',
+    isbn: '',
     rrp: 35,
     discount: 5,
     quantity: 9,
@@ -203,6 +210,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Hajj Adventure Puzzle',
     category: 'Puzzles',
     publisher: 'Kite & Compass',
+    sku: '',
+    isbn: '',
     rrp: 28,
     discount: 0,
     quantity: 12,
@@ -213,6 +222,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Eid Gift Bundle',
     category: 'Gifts',
     publisher: 'Barakah Box',
+    sku: '',
+    isbn: '',
     rrp: 40,
     discount: 12,
     quantity: 6,
@@ -277,6 +288,8 @@ const normalizeInventoryItem = (data: Partial<InventoryItem>, id: string): Inven
     title,
     category,
     publisher: String(data.publisher ?? '').trim(),
+    sku: String(data.sku ?? '').trim(),
+    isbn: String(data.isbn ?? '').trim(),
     rrp,
     discount,
     quantity,
@@ -407,9 +420,12 @@ export default function DashboardPage() {
   // Inventory edit state
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null)
   const [showAddInventoryItem, setShowAddInventoryItem] = useState(false)
+  const [inventoryScannerOpen, setInventoryScannerOpen] = useState(false)
   const [invEditTitle, setInvEditTitle] = useState('')
   const [invEditCategory, setInvEditCategory] = useState<InventoryCategory>('Books')
   const [invEditPublisher, setInvEditPublisher] = useState('')
+  const [invEditSku, setInvEditSku] = useState('')
+  const [invEditIsbn, setInvEditIsbn] = useState('')
   const [invEditRrp, setInvEditRrp] = useState('')
   const [invEditDiscount, setInvEditDiscount] = useState('')
   const [invEditQuantity, setInvEditQuantity] = useState('')
@@ -1069,6 +1085,8 @@ export default function DashboardPage() {
           title,
           category,
           publisher: String(rowData.publisher ?? '').trim(),
+          sku: String(rowData.sku ?? '').trim(),
+          isbn: String(rowData.isbn ?? '').trim(),
           rrp,
           discount,
           quantity,
@@ -2366,6 +2384,8 @@ export default function DashboardPage() {
     setInvEditTitle(item.title)
     setInvEditCategory(item.category)
     setInvEditPublisher(item.publisher)
+    setInvEditSku(item.sku ?? '')
+    setInvEditIsbn(item.isbn ?? '')
     setInvEditRrp(String(item.rrp))
     setInvEditDiscount(String(item.discount))
     setInvEditQuantity(String(item.quantity))
@@ -2377,10 +2397,44 @@ export default function DashboardPage() {
     setInvEditTitle('')
     setInvEditCategory('Books')
     setInvEditPublisher('')
+    setInvEditSku('')
+    setInvEditIsbn('')
     setInvEditRrp('')
     setInvEditDiscount('0')
     setInvEditQuantity('')
     setInvEditSellingPrice('')
+  }
+
+  const handleInventoryScan = (raw: string) => {
+    const code = raw.trim().toLowerCase()
+    if (!code) return
+    const exact = inventory.find(
+      (i) =>
+        (i.sku || '').toLowerCase() === code ||
+        (i.isbn || '').toLowerCase() === code ||
+        i.id.toLowerCase() === code
+    )
+    if (exact) {
+      openEditInventoryItem(exact)
+      setInventoryScannerOpen(false)
+      return
+    }
+    const titleMatches = inventory.filter((i) => i.title.toLowerCase().includes(code))
+    if (titleMatches.length === 1) {
+      openEditInventoryItem(titleMatches[0])
+      setInventoryScannerOpen(false)
+      return
+    }
+    // No or ambiguous match → open the Add form pre-filled with the scanned code.
+    const looksLikeIsbn = /^\d{13}$/.test(raw.trim())
+    openAddInventoryItem()
+    if (looksLikeIsbn) {
+      setInvEditIsbn(raw.trim())
+    } else {
+      setInvEditSku(raw.trim())
+    }
+    setUploadMessage(`No item matched "${raw.trim()}". Add it as a new item.`)
+    setInventoryScannerOpen(false)
   }
 
   const handleSaveInventoryItem = async () => {
@@ -2391,6 +2445,8 @@ export default function DashboardPage() {
       title: invEditTitle.trim(),
       category: invEditCategory,
       publisher: invEditPublisher.trim(),
+      sku: invEditSku.trim(),
+      isbn: invEditIsbn.trim(),
       rrp: Number(invEditRrp) || 0,
       discount: Number(invEditDiscount) || 0,
       quantity: Number(invEditQuantity) || 0,
@@ -2775,6 +2831,18 @@ export default function DashboardPage() {
               Export Stock
             </span>
           </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setInventoryScannerOpen(true)}
+              className="rounded-full border-2 border-primary/30 bg-white px-6 py-3 text-sm font-semibold text-primaryDark hover:bg-primary/5 hover:-translate-y-0.5 transition-all shadow-sm"
+              type="button"
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+                Scan
+              </span>
+            </button>
+          )}
           {userRole === 'admin' && inventory.length > 0 && (
             <button
               onClick={handleClearInventory}
@@ -5156,6 +5224,15 @@ export default function DashboardPage() {
       {showCreateCatalog && renderCatalogFormModal(false)}
       {editingCatalogItem && renderCatalogFormModal(true)}
 
+      {/* Inventory barcode / QR scanner */}
+      <BarcodeScanner
+        open={inventoryScannerOpen}
+        onClose={() => setInventoryScannerOpen(false)}
+        onDetected={handleInventoryScan}
+        title="Scan to add / find stock"
+        hint="Scan a book barcode or QR code to find it in inventory or add it as new."
+      />
+
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
@@ -5211,6 +5288,26 @@ export default function DashboardPage() {
                   value={invEditPublisher}
                   onChange={(e) => setInvEditPublisher(e.target.value)}
                   placeholder="e.g., Learning Roots"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">SKU</label>
+                <input
+                  type="text"
+                  value={invEditSku}
+                  onChange={(e) => setInvEditSku(e.target.value)}
+                  placeholder="e.g., LR-ABC-001"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">ISBN / Barcode</label>
+                <input
+                  type="text"
+                  value={invEditIsbn}
+                  onChange={(e) => setInvEditIsbn(e.target.value)}
+                  placeholder="e.g., 9781234567890"
                   className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>

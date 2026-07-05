@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
 
 type InventoryCategory = 'Books' | 'Crafts' | 'Puzzles' | 'Gifts'
@@ -18,6 +19,8 @@ type InventoryItem = {
   discount: number
   quantity: number
   sellingPrice: number
+  sku: string
+  isbn: string
 }
 
 type Sale = {
@@ -60,6 +63,7 @@ export default function POSPage() {
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
   const [message, setMessage] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [discount, setDiscount] = useState(0)
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage')
 
@@ -82,7 +86,9 @@ export default function POSPage() {
                 rrp: Number(data.rrp ?? 0),
                 discount: Number(data.discount ?? 0),
                 quantity: Number(data.quantity ?? 0),
-                sellingPrice: Number(data.sellingPrice ?? 0)
+                sellingPrice: Number(data.sellingPrice ?? 0),
+                sku: String(data.sku ?? ''),
+                isbn: String(data.isbn ?? '')
               }
             })
             .filter((item) => item.title) // Only include items with titles
@@ -151,6 +157,35 @@ export default function POSPage() {
     })
 
     setMessage(`${item.title} added to cart.`)
+  }
+
+  // Resolve a scanned/typed code to an inventory item: exact sku/isbn/id first,
+  // then a loose title match. Adds to cart on a confident single match.
+  const handleScanDetected = (raw: string) => {
+    const code = raw.trim().toLowerCase()
+    if (!code) return
+    const exact = inventory.find(
+      (i) => i.sku.toLowerCase() === code || i.isbn.toLowerCase() === code || i.id.toLowerCase() === code
+    )
+    if (exact) {
+      handleAddToCart(exact.id)
+      setScannerOpen(false)
+      return
+    }
+    const titleMatches = inventory.filter((i) => i.title.toLowerCase().includes(code))
+    if (titleMatches.length === 1) {
+      handleAddToCart(titleMatches[0].id)
+      setScannerOpen(false)
+      return
+    }
+    if (titleMatches.length > 1) {
+      // Ambiguous — drop the scanner and pre-fill search so the cashier picks.
+      setSearchQuery(raw.trim())
+      setScannerOpen(false)
+      setMessage(`Multiple matches for "${raw.trim()}". Showing search results.`)
+      return
+    }
+    setMessage(`No item found for "${raw.trim()}". Try manual search.`)
   }
 
   const handleUpdateCartQuantity = (itemId: string, nextValue: number) => {
@@ -359,20 +394,31 @@ export default function POSPage() {
 
                 {/* Search & Filter */}
                 <div className="space-y-3 mb-4">
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
-                      </svg>
-                    </span>
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search products..."
-                      aria-label="Search products by title, publisher, or category"
-                      className="w-full rounded-xl border-2 border-primary/20 pl-11 pr-4 py-3 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
-                    />
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                        </svg>
+                      </span>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search products..."
+                        aria-label="Search products by title, publisher, or category"
+                        className="w-full rounded-xl border-2 border-primary/20 pl-11 pr-4 py-3 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setScannerOpen(true)}
+                      aria-label="Scan a barcode or QR code"
+                      className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+                      <span className="hidden sm:inline">Scan</span>
+                    </button>
                   </div>
                   <select
                     value={categoryFilter}
@@ -801,6 +847,14 @@ export default function POSPage() {
           </div>
         </div>
       </footer>
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={handleScanDetected}
+        title="Scan to add to cart"
+        hint="Scan a book's barcode or QR code to add it to the cart. You can keep scanning."
+      />
     </div>
   )
 }

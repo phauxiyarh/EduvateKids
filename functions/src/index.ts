@@ -65,7 +65,8 @@ function orderMetadata(
 
 /**
  * Stripe: create a PaymentIntent for the server-priced cart.
- * Returns { clientSecret, total, currency } for the Payment Element.
+ * Returns { clientSecret, subtotal, shippingFee, tax, total, currency } for the Payment Element.
+ * (rev: idempotency-key removed to fix StripeIdempotencyError on cart retries)
  */
 export const createStripePaymentIntent = onCall(
   { secrets: [STRIPE_SECRET_KEY], cors: true },

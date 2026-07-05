@@ -24,6 +24,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import QRCode from 'qrcode'
 import { auth, db, functions } from '../../lib/firebase'
+import { isAdminHostAllowed } from '../../lib/adminAccess'
 import { uploadCatalogImage } from '../../lib/uploadImage'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
@@ -475,6 +476,11 @@ export default function DashboardPage() {
   const [catalogSliderIndex, setCatalogSliderIndex] = useState<Record<string, number>>({})
 
   useEffect(() => {
+    // Admin backend only permitted from the canonical host; bounce others home.
+    if (!isAdminHostAllowed()) {
+      router.push('/')
+      return
+    }
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser)

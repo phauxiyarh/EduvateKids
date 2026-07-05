@@ -596,7 +596,7 @@ export default function CatalogPage() {
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
               <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Products</Link>
+              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalogue</Link>
               <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>

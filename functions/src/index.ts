@@ -88,16 +88,17 @@ export const createStripePaymentIntent = onCall(
     // Stripe expects the smallest currency unit (cents).
     const amountMinor = Math.round(priced.total * 100);
 
-    const intent = await stripe.paymentIntents.create(
-      {
-        amount: amountMinor,
-        currency: priced.currency,
-        automatic_payment_methods: { enabled: true },
-        receipt_email: data.customer.email,
-        metadata: orderMetadata(priced.items, data.customer, data.shippingAddress, priced),
-      },
-      { idempotencyKey: `ek_${data.customer.email}_${amountMinor}_${priced.items.map((i) => i.id + 'x' + i.quantity).join('_')}`.slice(0, 255) }
-    );
+    // No idempotency key here: each checkout attempt creates its own PaymentIntent
+    // (a per-cart key would 400 on retries/abandoned carts). Duplicate ORDERS are
+    // still prevented downstream by the deterministic order doc id keyed on the
+    // PaymentIntent id (see finalizeOrder). Unpaid duplicate intents are harmless.
+    const intent = await stripe.paymentIntents.create({
+      amount: amountMinor,
+      currency: priced.currency,
+      automatic_payment_methods: { enabled: true },
+      receipt_email: data.customer.email,
+      metadata: orderMetadata(priced.items, data.customer, data.shippingAddress, priced),
+    });
 
     return {
       clientSecret: intent.client_secret,

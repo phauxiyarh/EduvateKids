@@ -326,7 +326,7 @@ export default function SummerReadsPage() {
               <Link href="/" className="transition-colors hover:text-white">Home</Link>
               <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
               <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
-              <Link href="/catalog" className="transition-colors hover:text-white">Our Products</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Catalogue</Link>
             </div>
           </div>
           <div className="mt-8 flex justify-center">

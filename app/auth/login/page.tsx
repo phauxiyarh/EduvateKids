@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../../lib/firebase'
+import { isAdminHostAllowed } from '../../../lib/adminAccess'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -20,6 +21,13 @@ export default function AdminLoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Admin backend is only permitted from the canonical host.
+    if (!isAdminHostAllowed()) {
+      setError('Admin sign-in is only available at eduvatekids-store.web.app.')
+      return
+    }
+
     setLoading(true)
 
     try {

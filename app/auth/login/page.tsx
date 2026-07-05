@@ -24,7 +24,7 @@ export default function AdminLoginPage() {
 
     // Admin backend is only permitted from the canonical host.
     if (!isAdminHostAllowed()) {
-      setError('Admin sign-in is only available at eduvatekids-store.web.app.')
+      setError('Login error. Please try again.')
       return
     }
 

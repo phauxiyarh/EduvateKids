@@ -47,6 +47,7 @@ type InventoryItem = {
   discount: number
   quantity: number
   sellingPrice: number
+  weight: number
 }
 
 type Sale = {
@@ -206,7 +207,8 @@ const defaultInventory: InventoryItem[] = [
     rrp: 22,
     discount: 10,
     quantity: 14,
-    sellingPrice: 19.8
+    sellingPrice: 19.8,
+    weight: 320
   },
   {
     id: 'inv-2',
@@ -218,7 +220,8 @@ const defaultInventory: InventoryItem[] = [
     rrp: 35,
     discount: 5,
     quantity: 9,
-    sellingPrice: 33.25
+    sellingPrice: 33.25,
+    weight: 600
   },
   {
     id: 'inv-3',
@@ -230,7 +233,8 @@ const defaultInventory: InventoryItem[] = [
     rrp: 28,
     discount: 0,
     quantity: 12,
-    sellingPrice: 28
+    sellingPrice: 28,
+    weight: 450
   },
   {
     id: 'inv-4',
@@ -242,7 +246,8 @@ const defaultInventory: InventoryItem[] = [
     rrp: 40,
     discount: 12,
     quantity: 6,
-    sellingPrice: 35.2
+    sellingPrice: 35.2,
+    weight: 800
   }
 ]
 
@@ -297,6 +302,7 @@ const normalizeInventoryItem = (data: Partial<InventoryItem>, id: string): Inven
   const quantity = Math.max(0, Math.round(parseNumber(data.quantity)))
   const sellingPriceRaw = parseNumber(data.sellingPrice)
   const sellingPrice = sellingPriceRaw || Number((rrp * (1 - discount / 100)).toFixed(2))
+  const weight = Math.max(0, parseNumber(data.weight))
 
   return {
     id,
@@ -308,7 +314,8 @@ const normalizeInventoryItem = (data: Partial<InventoryItem>, id: string): Inven
     rrp,
     discount,
     quantity,
-    sellingPrice
+    sellingPrice,
+    weight
   }
 }
 
@@ -351,7 +358,10 @@ const headerMap: Record<string, keyof InventoryItem> = {
   'sellingprice': 'sellingPrice',
   'discount percent': 'discount',
   'discount %': 'discount',
-  'recommended retail price': 'rrp'
+  'recommended retail price': 'rrp',
+  weight: 'weight',
+  'weight g': 'weight',
+  'weight grams': 'weight'
 }
 
 export default function DashboardPage() {
@@ -386,6 +396,7 @@ export default function DashboardPage() {
   const [catalogLinkMessage, setCatalogLinkMessage] = useState('')
   const [inventorySortKey, setInventorySortKey] = useState<keyof InventoryItem | ''>('')
   const [inventorySortDir, setInventorySortDir] = useState<'asc' | 'desc'>('asc')
+  const [inventorySearch, setInventorySearch] = useState('')
   const [eventMessage, setEventMessage] = useState('')
   const [newEventName, setNewEventName] = useState('')
   const [newEventCost, setNewEventCost] = useState('')
@@ -404,6 +415,9 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addQuantity, setAddQuantity] = useState(1)
+  // POS "Scan to cart": camera scanner + a confirmation for the matched bound book.
+  const [posScannerOpen, setPosScannerOpen] = useState(false)
+  const [scanCartConfirm, setScanCartConfirm] = useState<InventoryItem | null>(null)
   const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
@@ -452,6 +466,7 @@ export default function DashboardPage() {
   const [invEditDiscount, setInvEditDiscount] = useState('')
   const [invEditQuantity, setInvEditQuantity] = useState('')
   const [invEditSellingPrice, setInvEditSellingPrice] = useState('')
+  const [invEditWeight, setInvEditWeight] = useState('')
 
   // Catalog state
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
@@ -1020,8 +1035,8 @@ export default function DashboardPage() {
 
   const handleDownloadTemplate = () => {
     const rows = [
-      ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price'],
-      ['Sample Title', 'Books', 'Sample Publisher', 20, 10, 5, 18]
+      ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)'],
+      ['Sample Title', 'Books', 'Sample Publisher', 20, 10, 5, 18, 350]
     ]
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1045,9 +1060,9 @@ export default function DashboardPage() {
       setUploadMessage('No inventory data to export.')
       return
     }
-    const header = ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price']
+    const header = ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)']
     const rows = inventory.map((item) => [
-      item.title, item.category, item.publisher, item.rrp, item.discount, item.quantity, item.sellingPrice
+      item.title, item.category, item.publisher, item.rrp, item.discount, item.quantity, item.sellingPrice, item.weight
     ])
     const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
     const workbook = XLSX.utils.book_new()
@@ -1106,7 +1121,7 @@ export default function DashboardPage() {
             rowData[key] = rowValues[colIndex] as never
           })
         } else {
-          ;[rowData.title, rowData.category, rowData.publisher, rowData.rrp, rowData.discount, rowData.quantity, rowData.sellingPrice] =
+          ;[rowData.title, rowData.category, rowData.publisher, rowData.rrp, rowData.discount, rowData.quantity, rowData.sellingPrice, rowData.weight] =
             rowValues as never[]
         }
 
@@ -1125,6 +1140,7 @@ export default function DashboardPage() {
         const sellingPriceRaw = parseNumber(rowData.sellingPrice)
         const sellingPrice =
           sellingPriceRaw || Number((rrp * (1 - discount / 100)).toFixed(2))
+        const weight = Math.max(0, parseNumber(rowData.weight))
 
         parsedItems.push({
           id: `inv-${Date.now()}-${index}`,
@@ -1136,7 +1152,8 @@ export default function DashboardPage() {
           rrp,
           discount,
           quantity,
-          sellingPrice
+          sellingPrice,
+          weight
         })
       })
 
@@ -1537,7 +1554,8 @@ export default function DashboardPage() {
           rrp: opts.price,
           discount: 0,
           quantity: opts.quantity,
-          sellingPrice: opts.sellingPrice || opts.price
+          sellingPrice: opts.sellingPrice || opts.price,
+          weight: 0
         }
     setInventory((current) =>
       existing ? current.map((i) => (i.id === invId ? invItem : i)) : [...current, invItem]
@@ -1782,11 +1800,11 @@ export default function DashboardPage() {
     [inventory]
   )
 
-  const handleAddToCart = (itemId: string) => {
+  const handleAddToCart = (itemId: string, qtyOverride?: number) => {
     const item = inventory.find((stock) => stock.id === itemId)
     if (!item) return
 
-    const quantity = Math.max(1, Math.round(addQuantity))
+    const quantity = Math.max(1, Math.round(qtyOverride ?? addQuantity))
     const existing = cartItems.find((cartItem) => cartItem.itemId === itemId)
     const currentQty = existing?.quantity ?? 0
     const available = item.quantity - currentQty
@@ -1817,6 +1835,36 @@ export default function DashboardPage() {
 
     setAddQuantity(1)
     setEventMessage(`${item.title} added to cart.`)
+  }
+
+  // POS scan-to-cart: a scanned/typed code is matched to a bound inventory item.
+  // Since the same QR/ISBN is shared by all copies of the same book, a match
+  // means "add one of this book" — we surface a confirmation before it hits the
+  // cart. Actual stock is deducted when the sale is completed (handleRecordSale),
+  // so adding to cart reserves one unit against remaining stock.
+  const handlePosScan = (raw: string) => {
+    const code = raw.trim().toLowerCase()
+    if (!code) return
+    const match = inventory.find(
+      (i) =>
+        (i.sku || '').toLowerCase() === code ||
+        (i.isbn || '').toLowerCase() === code ||
+        i.id.toLowerCase() === code
+    )
+    if (!match) {
+      setEventMessage(`No bound book matches "${raw.trim()}". Bind it to an item in Inventory first.`)
+      return
+    }
+    setPosScannerOpen(false)
+    setScanCartConfirm(match)
+  }
+
+  // Confirm the scanned book → add one unit to the cart (respecting stock).
+  const confirmScanToCart = () => {
+    const item = scanCartConfirm
+    setScanCartConfirm(null)
+    if (!item) return
+    handleAddToCart(item.id, 1)
   }
 
   const handleUpdateCartQuantity = (itemId: string, nextValue: number) => {
@@ -2568,8 +2616,15 @@ export default function DashboardPage() {
   )
 
   const sortedInventory = useMemo(() => {
-    if (!inventorySortKey) return inventory
-    return [...inventory].sort((a, b) => {
+    const query = inventorySearch.trim().toLowerCase()
+    const base = query
+      ? inventory.filter((item) =>
+          [item.title, item.publisher, item.category, item.sku, item.isbn]
+            .some((field) => (field ?? '').toString().toLowerCase().includes(query))
+        )
+      : inventory
+    if (!inventorySortKey) return base
+    return [...base].sort((a, b) => {
       const aVal = a[inventorySortKey]
       const bVal = b[inventorySortKey]
       if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -2577,7 +2632,7 @@ export default function DashboardPage() {
       }
       return inventorySortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
     })
-  }, [inventory, inventorySortKey, inventorySortDir])
+  }, [inventory, inventorySortKey, inventorySortDir, inventorySearch])
 
   const handleInventorySort = (key: keyof InventoryItem) => {
     if (inventorySortKey === key) {
@@ -2616,6 +2671,7 @@ export default function DashboardPage() {
     setInvEditDiscount(String(item.discount))
     setInvEditQuantity(String(item.quantity))
     setInvEditSellingPrice(String(item.sellingPrice))
+    setInvEditWeight(item.weight ? String(item.weight) : '')
   }
 
   const openAddInventoryItem = () => {
@@ -2629,6 +2685,7 @@ export default function DashboardPage() {
     setInvEditDiscount('0')
     setInvEditQuantity('')
     setInvEditSellingPrice('')
+    setInvEditWeight('')
   }
 
   const handleInventoryScan = (raw: string) => {
@@ -2676,7 +2733,8 @@ export default function DashboardPage() {
       rrp: Number(invEditRrp) || 0,
       discount: Number(invEditDiscount) || 0,
       quantity: Number(invEditQuantity) || 0,
-      sellingPrice: Number(invEditSellingPrice) || 0
+      sellingPrice: Number(invEditSellingPrice) || 0,
+      weight: Number(invEditWeight) || 0
     }
     if (editingInventoryItem) {
       setInventory((current) => current.map((i) => i.id === updatedItem.id ? updatedItem : i))
@@ -2736,6 +2794,23 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Bind code error:', error)
       setUploadMessage(`"${item.title}" bound locally but failed to sync to cloud.`)
+    }
+  }
+
+  // Remove the SKU and/or ISBN bound to an item so a mistaken code can be
+  // corrected (then re-bind). Persists via the same setDoc path.
+  const handleUnbindCode = async (item: InventoryItem) => {
+    if (!item.sku && !item.isbn) return
+    if (!confirm(`Unbind the code from "${item.title}"? You can re-bind a new QR/ISBN afterwards.`)) return
+    const updatedItem: InventoryItem = { ...item, sku: '', isbn: '' }
+    setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+    setQrModalItem((cur) => (cur && cur.id === updatedItem.id ? updatedItem : cur))
+    setUploadMessage(`Unbound the code from "${item.title}".`)
+    try {
+      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+    } catch (error) {
+      console.error('Unbind code error:', error)
+      setUploadMessage(`"${item.title}" unbound locally but failed to sync to cloud.`)
     }
   }
 
@@ -3173,7 +3248,7 @@ export default function DashboardPage() {
           </div>
         </div>
         <p className="text-sm text-muted mb-6 p-4 bg-primary/5 rounded-xl border border-primary/10">
-          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, RRP, Discount %, Quantity, Selling Price
+          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, RRP, Discount %, Quantity, Selling Price, Weight (g)
         </p>
         <div className="flex flex-wrap items-center gap-4">
           <label className="cursor-pointer">
@@ -3270,7 +3345,7 @@ export default function DashboardPage() {
 
       <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
         <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="font-display text-2xl gradient-text">Current Stock</h3>
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted">Total items:</span>
@@ -3286,12 +3361,43 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-primary/40">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={inventorySearch}
+                onChange={(event) => setInventorySearch(event.target.value)}
+                placeholder="Search stock by title, publisher, category, SKU, or ISBN..."
+                className="w-full rounded-2xl border-2 border-primary/20 bg-white pl-11 pr-11 py-3 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
+              />
+              {inventorySearch && (
+                <button
+                  type="button"
+                  onClick={() => setInventorySearch('')}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-primary/10 hover:text-primaryDark"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+            </div>
+            {inventorySearch.trim() && (
+              <span className="whitespace-nowrap text-xs font-semibold text-muted">
+                {sortedInventory.length} match{sortedInventory.length === 1 ? '' : 'es'}
+              </span>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="w-full min-w-[1000px] text-sm">
             <thead className="bg-gradient-to-r from-primary/10 to-secondary/10 text-left">
               <tr>
-                {([['title', 'Title'], ['category', 'Category'], ['publisher', 'Publisher'], ['rrp', 'RRP'], ['discount', 'Discount %'], ['quantity', 'Quantity'], ['sellingPrice', 'Selling Price']] as [keyof InventoryItem, string][]).map(([key, label]) => (
+                {([['title', 'Title'], ['category', 'Category'], ['publisher', 'Publisher'], ['rrp', 'RRP'], ['discount', 'Discount %'], ['quantity', 'Quantity'], ['sellingPrice', 'Selling Price'], ['weight', 'Weight (g)']] as [keyof InventoryItem, string][]).map(([key, label]) => (
                   <th key={key} className="px-3 sm:px-6 py-3 sm:py-4">
                     <button
                       type="button"
@@ -3353,6 +3459,7 @@ export default function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
+                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-muted whitespace-nowrap">{item.weight ? `${formatNumber(item.weight)} g` : '-'}</td>
                   {userRole === 'admin' && (
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <div className="flex flex-wrap items-center gap-2">
@@ -3389,6 +3496,19 @@ export default function DashboardPage() {
                           </svg>
                           QR Label
                         </button>
+                        {(item.sku || item.isbn) && (
+                          <button
+                            onClick={() => handleUnbindCode(item)}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
+                            type="button"
+                            aria-label={`Unbind code from ${item.title}`}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1M4 4l16 16" />
+                            </svg>
+                            Unbind
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDeleteInventoryItem(item)}
                           className="inline-flex items-center justify-center rounded-full p-2 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
@@ -3404,6 +3524,15 @@ export default function DashboardPage() {
                   )}
                 </tr>
               ))}
+              {sortedInventory.length === 0 && (
+                <tr>
+                  <td colSpan={userRole === 'admin' ? 9 : 8} className="px-6 py-10 text-center text-sm text-muted">
+                    {inventorySearch.trim()
+                      ? <>No items match &ldquo;{inventorySearch.trim()}&rdquo;.</>
+                      : 'No inventory items yet.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -3457,14 +3586,14 @@ export default function DashboardPage() {
 
         {/* Search & Catalog Card */}
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
-          <div className="mb-6">
-            <div className="relative">
+          <div className="mb-6 flex items-stretch gap-3">
+            <div className="relative flex-1">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search products by title, publisher, or category..."
-                className="w-full rounded-2xl border-2 border-primary/20 px-5 py-4 pr-12 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
+                className="w-full h-full rounded-2xl border-2 border-primary/20 px-5 py-4 pr-12 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3472,6 +3601,17 @@ export default function DashboardPage() {
                 </svg>
               </div>
             </div>
+            {/* Scan to cart — an alternative to typing a search. Scans a bound
+                QR/ISBN and, after confirmation, adds that book to the cart. */}
+            <button
+              type="button"
+              onClick={() => setPosScannerOpen(true)}
+              title="Scan a book's QR/barcode to add it to the cart"
+              className="flex flex-col items-center justify-center gap-1 whitespace-nowrap rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+              <span className="text-[11px] font-bold uppercase tracking-wide">Scan to cart</span>
+            </button>
           </div>
 
           {/* Product Grid */}
@@ -5729,6 +5869,68 @@ export default function DashboardPage() {
         hint="Scan or type a barcode/QR. A 13-digit value is saved as ISBN, anything else as SKU."
       />
 
+      {/* POS scan-to-cart scanner */}
+      <BarcodeScanner
+        open={posScannerOpen}
+        onClose={() => setPosScannerOpen(false)}
+        onDetected={handlePosScan}
+        title="Scan to cart"
+        hint="Scan a book's QR or barcode to add it to the sale. The book must already be bound in Inventory."
+      />
+
+      {/* Scan-to-cart confirmation: same QR/ISBN = same book, so confirm before adding a unit */}
+      {scanCartConfirm && (() => {
+        const inCart = cartItems.find((c) => c.itemId === scanCartConfirm.id)?.quantity ?? 0
+        const remaining = scanCartConfirm.quantity - inCart
+        return (
+          <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setScanCartConfirm(null)}>
+            <div className="w-full sm:max-w-sm max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+                </span>
+                <div className="min-w-0">
+                  <h4 className="font-display text-lg font-bold text-primaryDark">Add to cart?</h4>
+                  <p className="mt-1 text-sm text-muted">This book is already bound. Add one unit to the current sale?</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-2xl bg-gray-50 border border-black/5 p-4">
+                <p className="font-semibold text-ink">{scanCartConfirm.title}</p>
+                <p className="mt-1 font-mono text-xs text-muted">{scanCartConfirm.isbn ? `ISBN ${scanCartConfirm.isbn}` : scanCartConfirm.sku ? `SKU ${scanCartConfirm.sku}` : scanCartConfirm.id}</p>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-muted">Price</span>
+                  <span className="font-bold text-primaryDark">${formatNumber(scanCartConfirm.sellingPrice)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="text-muted">In cart / stock</span>
+                  <span className="font-semibold text-ink">{inCart} / {scanCartConfirm.quantity}</span>
+                </div>
+              </div>
+              {remaining <= 0 && (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">No remaining stock for this book.</p>
+              )}
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setScanCartConfirm(null)}
+                  className="flex-1 rounded-full border-2 border-primary/20 px-4 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmScanToCart}
+                  disabled={remaining <= 0}
+                  className="flex-1 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                >
+                  Add to cart
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* QR label modal: generate + print a QR for an item's SKU (or id) */}
       {qrModalItem && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn print:static print:bg-white print:p-0" onClick={() => { setQrModalItem(null); setQrDataUrl('') }}>
@@ -5771,8 +5973,8 @@ export default function DashboardPage() {
 
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:px-4 animate-fadeIn">
+          <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">
@@ -5893,6 +6095,18 @@ export default function DashboardPage() {
                   value={invEditSellingPrice}
                   onChange={(e) => setInvEditSellingPrice(e.target.value)}
                   placeholder="0.00"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Weight (grams)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={invEditWeight}
+                  onChange={(e) => setInvEditWeight(e.target.value)}
+                  placeholder="e.g., 350"
                   className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>

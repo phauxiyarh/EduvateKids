@@ -36,7 +36,6 @@ export default function CheckoutPage() {
   const [breakdown, setBreakdown] = useState<{ shippingFee: number; tax: number; shipWeightGrams?: number; shipZone?: number } | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-  const [addressNote, setAddressNote] = useState('')
 
   const canSubmitAddress =
     customer.name && customer.email && address.line1 && address.city && address.state && address.postalCode && address.country
@@ -44,7 +43,6 @@ export default function CheckoutPage() {
   const proceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setAddressNote('')
     if (!canSubmitAddress) return
     setCreating(true)
     try {
@@ -64,9 +62,10 @@ export default function CheckoutPage() {
           return
         }
         if (vr.available && vr.corrected) {
+          // Apply USPS standardisation silently so the shipping zone/ZIP are
+          // canonical, without showing the customer a notice.
           shippingAddress = vr.corrected
           setAddress(vr.corrected)
-          if (vr.changed) setAddressNote('We standardised your address to match USPS records.')
         }
       } catch {
         /* validation unavailable — proceed with entered address */
@@ -135,12 +134,6 @@ export default function CheckoutPage() {
                     <span>{error}</span>
                   </div>
                 )}
-                {addressNote && (
-                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-                    <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    <span>{addressNote}</span>
-                  </div>
-                )}
                 <div className="mt-5 grid gap-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Full Name *"><input className={inputClass} value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} required /></Field>
@@ -177,8 +170,38 @@ export default function CheckoutPage() {
                   Edit details
                 </button>
                 <h2 className="font-display text-xl gradient-text">Payment</h2>
+                <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-muted">
+                  <svg className="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  Secure, encrypted payment powered by Stripe
+                </div>
+                <AcceptedMethods />
                 {clientSecret && getStripe() ? (
-                  <Elements stripe={getStripe()} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#7c3aed', borderRadius: '12px' } } }}>
+                  <Elements
+                    stripe={getStripe()}
+                    options={{
+                      clientSecret,
+                      appearance: {
+                        theme: 'flat',
+                        variables: {
+                          colorPrimary: '#7c3aed',
+                          colorText: '#1f1633',
+                          colorTextSecondary: '#6b6480',
+                          fontFamily: 'inherit',
+                          borderRadius: '14px',
+                          spacingUnit: '4px',
+                          fontSizeBase: '15px',
+                        },
+                        rules: {
+                          '.Tab': { border: '1px solid #e7e1f5', boxShadow: '0 1px 2px rgba(124,58,237,0.05)' },
+                          '.Tab:hover': { borderColor: '#c4b5fd' },
+                          '.Tab--selected': { borderColor: '#7c3aed', boxShadow: '0 0 0 1px #7c3aed' },
+                          '.Input': { border: '1px solid #e7e1f5', padding: '12px' },
+                          '.Input:focus': { borderColor: '#7c3aed', boxShadow: '0 0 0 3px rgba(124,58,237,0.15)' },
+                          '.Label': { fontWeight: '600', color: '#6b6480' },
+                        },
+                      },
+                    }}
+                  >
                     <PaymentForm total={serverTotal} />
                   </Elements>
                 ) : (
@@ -201,7 +224,7 @@ export default function CheckoutPage() {
             </ul>
             <div className="mt-4 space-y-1.5 border-t border-black/5 pt-4 text-sm">
               <div className="flex justify-between text-muted"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-muted"><span>Shipping{breakdown?.shipWeightGrams ? ` (${(breakdown.shipWeightGrams / 1000).toFixed(2)} kg)` : ''}</span><span>{breakdown ? `$${breakdown.shippingFee.toFixed(2)}` : 'Calculated next'}</span></div>
+              <div className="flex justify-between text-muted"><span>Shipping</span><span>{breakdown ? `$${breakdown.shippingFee.toFixed(2)}` : 'Calculated next'}</span></div>
               <div className="flex justify-between text-muted"><span>Tax</span><span>{breakdown ? `$${breakdown.tax.toFixed(2)}` : 'Calculated next'}</span></div>
               <div className="flex justify-between pt-1 text-base font-bold text-primaryDark"><span>Total</span><span>${(serverTotal ?? subtotal).toFixed(2)}</span></div>
             </div>
@@ -259,8 +282,8 @@ function PaymentForm({ total }: { total: number | null }) {
   }
 
   return (
-    <form onSubmit={pay} className="mt-5">
-      <PaymentElement />
+    <form onSubmit={pay} className="mt-4">
+      <PaymentElement options={{ layout: { type: 'tabs', defaultCollapsed: false } }} />
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
@@ -275,10 +298,49 @@ function PaymentForm({ total }: { total: number | null }) {
         {processing ? (
           <><svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Processing…</>
         ) : (
-          <>Pay {total !== null ? `$${total.toFixed(2)}` : ''}</>
+          <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>Pay {total !== null ? `$${total.toFixed(2)}` : ''} securely</>
         )}
       </button>
+      <p className="mt-3 text-center text-xs text-muted">Your card details are encrypted and never stored on our servers.</p>
     </form>
+  )
+}
+
+/**
+ * A friendly strip that shows the payment methods we accept. This is
+ * informational only — which options actually appear in the Stripe Payment
+ * Element is controlled by what is enabled in the Stripe Dashboard.
+ */
+function AcceptedMethods() {
+  const methods = [
+    'Credit & debit cards',
+    'Visa',
+    'Mastercard',
+    'American Express',
+    'Discover',
+    'Apple Pay',
+    'Google Pay',
+    'Cash App Pay',
+    'Link',
+  ]
+  return (
+    <div className="mt-4 rounded-2xl border border-primary/10 bg-gradient-to-br from-purple-50/60 to-pink-50/50 p-4">
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primaryDark">
+        <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5" /><path strokeLinecap="round" d="M3 10h18M7 15h4" /></svg>
+        Cards &amp; wallets we accept
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {methods.map((m) => (
+          <span
+            key={m}
+            className="inline-flex items-center rounded-full border border-primary/15 bg-white px-3 py-1 text-xs font-semibold text-primaryDark shadow-sm"
+          >
+            {m}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2.5 text-xs text-muted">Choose your preferred method below. All payments are processed securely.</p>
+    </div>
   )
 }
 

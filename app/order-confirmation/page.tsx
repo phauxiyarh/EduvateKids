@@ -38,8 +38,79 @@ export default function OrderConfirmationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Confetti pieces for the success celebration (deterministic, no random at render).
+  const confetti = Array.from({ length: 28 }, (_, i) => {
+    const colors = ['#7c3aed', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6']
+    const left = (i * 37) % 100
+    const delay = (i % 7) * 0.12
+    const duration = 2.4 + ((i % 5) * 0.35)
+    const rotate = (i * 47) % 360
+    const size = 7 + (i % 4) * 2
+    return { color: colors[i % colors.length], left, delay, duration, rotate, size, round: i % 3 === 0 }
+  })
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50/50 via-white to-pink-50/50 text-ink">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-purple-50/50 via-white to-pink-50/50 text-ink">
+      <style jsx global>{`
+        @keyframes ek-pop {
+          0% { transform: scale(0); opacity: 0; }
+          60% { transform: scale(1.12); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes ek-ring {
+          0% { transform: scale(0.6); opacity: 0.65; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @keyframes ek-check {
+          from { stroke-dashoffset: 32; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes ek-rise {
+          from { transform: translateY(14px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes ek-confetti {
+          0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+        .ek-pop { animation: ek-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .ek-ring { animation: ek-ring 1.1s ease-out 0.2s both; }
+        .ek-ring-2 { animation: ek-ring 1.1s ease-out 0.45s both; }
+        .ek-check { stroke-dasharray: 32; animation: ek-check 0.5s ease-out 0.45s both; }
+        .ek-rise { animation: ek-rise 0.6s ease-out both; }
+        .ek-rise-1 { animation-delay: 0.35s; }
+        .ek-rise-2 { animation-delay: 0.5s; }
+        .ek-confetti-piece { position: absolute; top: -6vh; will-change: transform, opacity; animation-name: ek-confetti; animation-timing-function: linear; animation-iteration-count: 1; }
+        @media (prefers-reduced-motion: reduce) {
+          .ek-pop, .ek-ring, .ek-ring-2, .ek-check, .ek-rise, .ek-confetti-piece { animation: none !important; }
+          .ek-check { stroke-dashoffset: 0 !important; }
+          .ek-rise { opacity: 1 !important; transform: none !important; }
+          .ek-confetti-piece { display: none !important; }
+        }
+      `}</style>
+
+      {status === 'success' && (
+        <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+          {confetti.map((c, i) => (
+            <span
+              key={i}
+              className="ek-confetti-piece"
+              style={{
+                left: `${c.left}%`,
+                width: `${c.size}px`,
+                height: `${c.size}px`,
+                background: c.color,
+                borderRadius: c.round ? '9999px' : '2px',
+                transform: `rotate(${c.rotate}deg)`,
+                animationDelay: `${c.delay}s`,
+                animationDuration: `${c.duration}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
         <div className="pointer-events-none absolute inset-0 -z-10 backdrop-blur-xl" aria-hidden="true" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -51,14 +122,22 @@ export default function OrderConfirmationPage() {
         </div>
       </header>
 
-      <main className="mx-auto flex min-h-[70vh] w-11/12 max-w-2xl flex-col items-center justify-center py-12 text-center">
+      <main className="relative z-10 mx-auto flex min-h-[70vh] w-11/12 max-w-2xl flex-col items-center justify-center py-12 text-center">
         {status === 'success' && (
-          <div className="animate-fadeIn">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 text-white shadow-lg">
-              <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+          <div>
+            <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
+              {/* pulsing rings */}
+              <span className="ek-ring absolute inset-0 rounded-full bg-emerald-400/30" />
+              <span className="ek-ring-2 absolute inset-0 rounded-full bg-emerald-400/20" />
+              {/* badge with drawn check */}
+              <span className="ek-pop relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 text-white shadow-[0_12px_30px_rgba(16,185,129,0.45)]">
+                <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth={2.6} viewBox="0 0 24 24">
+                  <path className="ek-check" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
             </div>
-            <h1 className="mt-6 font-display text-3xl gradient-text">Thank you for your order!</h1>
-            <p className="mt-3 text-muted">
+            <h1 className="ek-rise ek-rise-1 mt-6 font-display text-3xl gradient-text">Thank you for your order!</h1>
+            <p className="ek-rise ek-rise-2 mt-3 text-muted">
               Your payment was received. We&apos;ll prepare your books and ship them to the address you provided.
               A confirmation email is on its way.
             </p>
@@ -83,7 +162,7 @@ export default function OrderConfirmationPage() {
           </div>
         )}
 
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <div className={`mt-8 flex flex-wrap justify-center gap-3 ${status === 'success' ? 'ek-rise' : ''}`} style={status === 'success' ? { animationDelay: '0.65s' } : undefined}>
           <Link href="/catalog" className="btn-shine rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5">
             {status === 'failed' ? 'Back to Products' : 'Continue Shopping'}
           </Link>

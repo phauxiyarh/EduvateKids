@@ -10,6 +10,7 @@
  * If they are not set, callers should treat validation as unavailable and fall
  * back to plain form entry rather than blocking checkout.
  */
+import * as logger from 'firebase-functions/logger';
 import { USPS_CLIENT_ID, USPS_CLIENT_SECRET } from './config';
 import type { ShippingAddress } from './types';
 
@@ -80,6 +81,7 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
   // customer is asked to check it, rather than throwing (which would silently
   // let a bad address through in the client's catch).
   if (res.status === 404 || res.status === 400) {
+    logger.info('USPS address unverified', { status: res.status });
     return { valid: false, corrected: null, changed: false, message: 'We could not verify that address. Please check the street, city, state, and ZIP.' };
   }
   if (!res.ok) {
@@ -88,11 +90,44 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
 
   const json = (await res.json()) as {
     address?: { streetAddress?: string; secondaryAddress?: string; city?: string; state?: string; ZIPCode?: string; ZIPPlus4?: string };
+    additionalInfo?: { DPVConfirmation?: string };
+    corrections?: Array<{ code?: string; text?: string }>;
+    warnings?: string[];
   };
   const a = json.address;
+  const dpv = json.additionalInfo?.DPVConfirmation;
+  // Log the decision inputs so we can see exactly what USPS said (no PII beyond
+  // city/state/zip which the customer already provided).
+  logger.info('USPS address result', {
+    dpv,
+    city: a?.city,
+    state: a?.state,
+    zip: a?.ZIPCode,
+    corrections: json.corrections?.map((c) => c.code),
+    warnings: json.warnings,
+  });
+
   if (!a || !a.state || !a.ZIPCode) {
     return { valid: false, corrected: null, changed: false, message: 'Address could not be standardised.' };
   }
+
+  // DPVConfirmation is the definitive deliverability signal:
+  //   Y = fully confirmed, D = primary confirmed (missing apt/suite),
+  //   S = primary confirmed (secondary present but unconfirmed), N = not confirmed.
+  // Treat N (or missing) as an unverifiable address so a fake street number is
+  // rejected rather than silently accepted. D/S surface a soft prompt for the unit.
+  if (dpv === 'N') {
+    return { valid: false, corrected: null, changed: false, message: 'We could not verify that address. Please check the street number, city, state, and ZIP.' };
+  }
+  if (dpv === 'D' || dpv === 'S') {
+    return {
+      valid: false,
+      corrected: null,
+      changed: false,
+      message: 'That address needs an apartment, suite, or unit number to be deliverable. Please add it.',
+    };
+  }
+  // Only Y (fully confirmed) is accepted as valid below.
 
   const corrected: ShippingAddress = {
     line1: a.streetAddress || addr.line1,

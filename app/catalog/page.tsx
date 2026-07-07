@@ -175,7 +175,7 @@ export default function CatalogPage() {
             </Link>
             <Link href="/catalog" aria-current="page" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 bg-gradient-to-r from-primary to-secondary text-white shadow-lg">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              <span>Our Catalogue</span>
+              <span>Our Catalog</span>
             </Link>
             <EventNavDropdown />
             <Link href="/contact-us" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5">
@@ -219,7 +219,7 @@ export default function CatalogPage() {
               </Link>
               <Link href="/catalog" onClick={() => setMobileMenuOpen(false)} aria-current="page" className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-bold text-white transition active:scale-[0.98]">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                <span>Our Catalogue</span>
+                <span>Our Catalog</span>
               </Link>
               <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
               <Link href="/summer-reads" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]">
@@ -251,7 +251,7 @@ export default function CatalogPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Full Collection
             </p>
-            <h1 className="mt-4 font-display text-3xl sm:text-5xl gradient-text">Our Catalogue</h1>
+            <h1 className="mt-4 font-display text-3xl sm:text-5xl gradient-text">Our Catalog</h1>
             <p className="mt-4 text-lg text-muted max-w-2xl mx-auto">
               Browse our complete collection of Islamic books, crafts, puzzles, games, and gifts for children of all ages.
             </p>
@@ -270,7 +270,7 @@ export default function CatalogPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by book title..."
-                aria-label="Search catalogue by book title"
+                aria-label="Search catalog by book title"
                 className="w-full rounded-full border border-primary/15 bg-white/90 py-4 pl-14 pr-12 text-base text-ink shadow-[0_8px_30px_rgba(124,58,237,0.08)] backdrop-blur-sm transition-all duration-300 placeholder:text-muted/70 hover:border-primary/30 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
               />
               {searchQuery && (
@@ -601,7 +601,7 @@ export default function CatalogPage() {
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
               <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalogue</Link>
+              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalog</Link>
               <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>

@@ -61,11 +61,22 @@ export function shippingParams() {
   };
 }
 
-/** Allowed browser origins for CORS on callable/onRequest endpoints. */
-export const ALLOWED_ORIGINS = [
+/**
+ * Allowed browser origins for CORS on callable/onRequest endpoints.
+ * Includes the Firebase hosting domains, the custom domain, and localhost for
+ * dev. Regex entries cover the custom apex + any subdomain and local ports so a
+ * legitimate front end is never blocked (which would surface as an "internal"
+ * error in the browser).
+ */
+export const ALLOWED_ORIGINS: (string | RegExp)[] = [
   'https://eduvatekids-store.web.app',
   'https://eduvatekids-store.firebaseapp.com',
-  'http://localhost:8050',
+  'https://eduvatekids.com',
+  'https://www.eduvatekids.com',
+  /^https:\/\/([a-z0-9-]+\.)*eduvatekids\.com$/,
+  /^https:\/\/eduvatekids-store(--[a-z0-9-]+)?\.web\.app$/,
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
 ];
 
 /** True once a Stripe secret is actually present at runtime. */

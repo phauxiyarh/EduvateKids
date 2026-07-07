@@ -76,7 +76,7 @@ export default function SummerRegisterPage() {
             </Link>
             <Link href="/catalog" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              <span>Our Catalogue</span>
+              <span>Our Catalog</span>
             </Link>
             <EventNavDropdown active />
             <Link href="/contact-us" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
@@ -211,7 +211,7 @@ export default function SummerRegisterPage() {
               <Link href="/" className="transition-colors hover:text-white">Home</Link>
               <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
               <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
-              <Link href="/catalog" className="transition-colors hover:text-white">Our Catalogue</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Our Catalog</Link>
             </div>
           </div>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

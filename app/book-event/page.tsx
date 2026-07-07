@@ -193,7 +193,7 @@ export default function BookEventPage() {
           <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
             {[
               { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10', active: false },
-              { label: 'Our Catalogue', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', active: false }
+              { label: 'Our Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', active: false }
             ].map((item) => (
               <Link
                 key={item.label}
@@ -441,7 +441,7 @@ export default function BookEventPage() {
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
               <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalogue</Link>
+              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalog</Link>
               <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>

@@ -163,7 +163,7 @@ const AGE_CATEGORIES: Record<AgeCategory, { range: string; title: string }> = {
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
 
-// Simple lower-bound "N+" label for an age category (public catalogue style).
+// Simple lower-bound "N+" label for an age category (public catalog style).
 const AGE_SHORT_LABEL: Record<AgeCategory, string> = {
   '0-5': '3+',
   '6-9': '6+',
@@ -393,7 +393,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
   const [uploadMessage, setUploadMessage] = useState<string>('')
-  // Inventory item that has no matching catalogue entry; prompts the admin to add images/description.
+  // Inventory item that has no matching catalog entry; prompts the admin to add images/description.
   const [noCatalogPrompt, setNoCatalogPrompt] = useState<InventoryItem | null>(null)
   const [catalogLinkMessage, setCatalogLinkMessage] = useState('')
   const [inventorySortKey, setInventorySortKey] = useState<keyof InventoryItem | ''>('')
@@ -1432,7 +1432,7 @@ export default function DashboardPage() {
   }
 
   // Open the catalog create form prefilled from an inventory item that lacks a
-  // catalogue entry, so an admin can add an image and description for it.
+  // catalog entry, so an admin can add an image and description for it.
   const openCatalogFormFromInventory = (item: InventoryItem) => {
     resetCatalogForm()
     setEditingCatalogItem(null)
@@ -1716,7 +1716,7 @@ export default function DashboardPage() {
     }
   }
 
-  // One-time reconcile: link catalogue items to inventory items by SKU. For each
+  // One-time reconcile: link catalog items to inventory items by SKU. For each
   // catalog item without a SKU, find an inventory item with the same (trimmed,
   // case-insensitive) title. If found, copy its SKU to the catalog item; if that
   // inventory item also lacks a SKU, generate one and write it to BOTH. Runs only
@@ -1761,7 +1761,7 @@ export default function DashboardPage() {
       }
       setCatalogLinkMessage(`Linked ${linked} product${linked === 1 ? '' : 's'}.`)
     } catch (error) {
-      console.error('Link catalogue and inventory error:', error)
+      console.error('Link catalog and inventory error:', error)
       setCatalogLinkMessage('Failed to link. Please try again.')
     } finally {
       setIsLinkingCatalog(false)
@@ -2772,7 +2772,7 @@ export default function DashboardPage() {
     setShowAddInventoryItem(false)
     setIsSavingInventory(false)
     setUploadMessage(editingInventoryItem ? `✅ "${updatedItem.title}" updated.` : `✅ "${updatedItem.title}" added.`)
-    // Reverse link: if this item has a SKU but no catalogue entry exists for it,
+    // Reverse link: if this item has a SKU but no catalog entry exists for it,
     // prompt the admin to add images and description (do not fabricate anything).
     if (updatedItem.sku) {
       const hasCatalog = catalogItems.some(
@@ -3348,7 +3348,7 @@ export default function DashboardPage() {
         <div className="panel-card rounded-2xl bg-amber-50 border border-amber-200 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-amber-800">
             <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14A2 2 0 0021 16.7L13.7 5.3a2 2 0 00-3.4 0L3 16.7A2 2 0 004.93 19z" /></svg>
-            <span>No catalogue entry for &quot;{noCatalogPrompt.title}&quot;.</span>
+            <span>No catalog entry for &quot;{noCatalogPrompt.title}&quot;.</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -5426,7 +5426,7 @@ export default function DashboardPage() {
               type="button"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.656-2.828a4 4 0 00-5.656 0l-3 3a4 4 0 000 5.656" /></svg>
-              {isLinkingCatalog ? 'Linking...' : 'Link Catalogue & Inventory'}
+              {isLinkingCatalog ? 'Linking...' : 'Link Catalog & Inventory'}
             </button>
             <button
               onClick={() => { resetCatalogForm(); setShowCreateCatalog(true) }}

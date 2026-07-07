@@ -7,7 +7,8 @@
  *  - Stock is decremented inside the same transaction that marks the order paid.
  */
 import * as admin from 'firebase-admin';
-import { CURRENCY, FLAT_SHIPPING_FEE, FREE_SHIPPING_THRESHOLD, TAX_RATE_PERCENT } from './config';
+import { CURRENCY, TAX_RATE_PERCENT, shippingParams } from './config';
+import { computeShipping } from './shipping';
 import type {
   CartLineInput,
   CustomerInfo,
@@ -26,13 +27,27 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export async function priceCart(
   db: FirebaseFirestore.Firestore,
-  lines: CartLineInput[]
-): Promise<{ items: OrderItem[]; subtotal: number; shippingFee: number; tax: number; total: number; currency: string }> {
+  lines: CartLineInput[],
+  destinationState = ''
+): Promise<{
+  items: OrderItem[];
+  subtotal: number;
+  shippingFee: number;
+  shipWeightGrams: number;
+  shipZone: number;
+  tax: number;
+  total: number;
+  currency: string;
+}> {
   if (!Array.isArray(lines) || lines.length === 0) {
     throw new Error('Cart is empty.');
   }
 
+  const ship = shippingParams();
+  const defaultItemGrams = ship.defaultItemWeightKg * 1000;
+
   const items: OrderItem[] = [];
+  let contentGrams = 0;
   for (const line of lines) {
     const qty = Math.max(1, Math.floor(Number(line.quantity) || 0));
     const snap = await db.collection('catalog').doc(String(line.id)).get();
@@ -50,25 +65,45 @@ export async function priceCart(
       throw new Error(`Insufficient stock for ${String(data.title ?? line.id)}`);
     }
 
+    // Per-unit weight in grams; fall back to the configured default if unset.
+    const rawWeight = Number(data.weight ?? data.weightGrams ?? 0);
+    const unitGrams = rawWeight > 0 ? rawWeight : defaultItemGrams;
+    contentGrams += unitGrams * qty;
+
     items.push({
       id: snap.id,
       title: String(data.title ?? ''),
       quantity: qty,
       unitPrice: round2(unitPrice),
       lineTotal: round2(unitPrice * qty),
+      weightGrams: Math.round(unitGrams),
     });
   }
 
   const subtotal = round2(items.reduce((s, i) => s + i.lineTotal, 0));
-  const freeOver = Number(FREE_SHIPPING_THRESHOLD.value() || '50');
-  const flat = Number(FLAT_SHIPPING_FEE.value() || '5.99');
-  const shippingFee = subtotal >= freeOver ? 0 : round2(flat);
+
+  const shipCalc = computeShipping({
+    contentGrams,
+    subtotal,
+    state: destinationState,
+    params: ship,
+  });
+
   // Sales tax on the subtotal (flat rate; Maryland default 6%).
   const taxRate = Number(TAX_RATE_PERCENT.value() || '0') / 100;
   const tax = round2(subtotal * taxRate);
-  const total = round2(subtotal + shippingFee + tax);
+  const total = round2(subtotal + shipCalc.fee + tax);
 
-  return { items, subtotal, shippingFee, tax, total, currency: CURRENCY.value() || 'usd' };
+  return {
+    items,
+    subtotal,
+    shippingFee: shipCalc.fee,
+    shipWeightGrams: Math.round(contentGrams),
+    shipZone: shipCalc.zone,
+    tax,
+    total,
+    currency: CURRENCY.value() || 'usd',
+  };
 }
 
 /**
@@ -86,6 +121,8 @@ export async function finalizeOrder(
     items: OrderItem[];
     subtotal: number;
     shippingFee: number;
+    shipWeightGrams?: number;
+    shipZone?: number;
     tax: number;
     total: number;
     currency: string;
@@ -129,6 +166,8 @@ export async function finalizeOrder(
       items: params.items,
       subtotal: params.subtotal,
       shippingFee: params.shippingFee,
+      ...(params.shipWeightGrams !== undefined ? { shipWeightGrams: params.shipWeightGrams } : {}),
+      ...(params.shipZone !== undefined ? { shipZone: params.shipZone } : {}),
       tax: params.tax,
       total: params.total,
       currency: params.currency,

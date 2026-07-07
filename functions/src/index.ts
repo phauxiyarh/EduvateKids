@@ -20,8 +20,13 @@ import {
   STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET,
   RESEND_API_KEY,
+  USPS_CLIENT_ID,
+  USPS_CLIENT_SECRET,
+  ALLOWED_ORIGINS,
   stripeConfigured,
+  uspsConfigured,
 } from './config';
+import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification } from './email';
 import { registerReader, logBook, editBook, deleteBook, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
@@ -69,12 +74,12 @@ function orderMetadata(
  * (rev: idempotency-key removed to fix StripeIdempotencyError on cart retries)
  */
 export const createStripePaymentIntent = onCall(
-  { secrets: [STRIPE_SECRET_KEY], cors: true },
+  { secrets: [STRIPE_SECRET_KEY], cors: ALLOWED_ORIGINS },
   async (request) => {
     const data = request.data as CreatePaymentInput;
     assertValidPayload(data);
 
-    const priced = await priceCart(db, data.items);
+    const priced = await priceCart(db, data.items, data.shippingAddress.state);
 
     if (!stripeConfigured()) {
       throw new HttpsError(
@@ -105,6 +110,8 @@ export const createStripePaymentIntent = onCall(
       clientSecret: intent.client_secret,
       subtotal: priced.subtotal,
       shippingFee: priced.shippingFee,
+      shipWeightGrams: priced.shipWeightGrams,
+      shipZone: priced.shipZone,
       tax: priced.tax,
       total: priced.total,
       currency: priced.currency,
@@ -149,7 +156,8 @@ export const stripeWebhook = onRequest(
         // Re-price from Firestore to guarantee integrity even at finalize time.
         const priced = await priceCart(
           db,
-          lines.map((l) => ({ id: l.id, quantity: l.q }))
+          lines.map((l) => ({ id: l.id, quantity: l.q })),
+          shippingAddress.state
         );
 
         const result = await finalizeOrder(db, {
@@ -159,6 +167,8 @@ export const stripeWebhook = onRequest(
           items: priced.items,
           subtotal: priced.subtotal,
           shippingFee: priced.shippingFee,
+          shipWeightGrams: priced.shipWeightGrams,
+          shipZone: priced.shipZone,
           tax: priced.tax,
           total: priced.total,
           currency: priced.currency,
@@ -176,6 +186,8 @@ export const stripeWebhook = onRequest(
             items: priced.items,
             subtotal: priced.subtotal,
             shippingFee: priced.shippingFee,
+            shipWeightGrams: priced.shipWeightGrams,
+            shipZone: priced.shipZone,
             tax: priced.tax,
             total: priced.total,
             currency: priced.currency,
@@ -204,7 +216,7 @@ export const stripeWebhook = onRequest(
  * webhook already recorded it. Guarantees an order even if the webhook is delayed.
  */
 export const finalizeStripeOrder = onCall(
-  { secrets: [STRIPE_SECRET_KEY, RESEND_API_KEY], cors: true },
+  { secrets: [STRIPE_SECRET_KEY, RESEND_API_KEY], cors: ALLOWED_ORIGINS },
   async (request) => {
     if (!stripeConfigured()) {
       throw new HttpsError('failed-precondition', 'Stripe is not configured.');
@@ -223,17 +235,19 @@ export const finalizeStripeOrder = onCall(
       const lines = JSON.parse(md.ek_items || '[]') as Array<{ id: string; q: number }>;
       const customer = JSON.parse(md.ek_customer || '{}') as CustomerInfo;
       const shippingAddress = JSON.parse(md.ek_address || '{}') as ShippingAddress;
-      const priced = await priceCart(db, lines.map((l) => ({ id: l.id, quantity: l.q })));
+      const priced = await priceCart(db, lines.map((l) => ({ id: l.id, quantity: l.q })), shippingAddress.state);
       const result = await finalizeOrder(db, {
         paymentRef: pi.id, provider: 'stripe', status: 'paid',
         items: priced.items, subtotal: priced.subtotal, shippingFee: priced.shippingFee,
+        shipWeightGrams: priced.shipWeightGrams, shipZone: priced.shipZone,
         tax: priced.tax, total: priced.total, currency: priced.currency,
         customer, shippingAddress, live: pi.livemode,
       });
       if (result.created) {
         await sendOrderNotification({
           orderId: result.orderId, items: priced.items, subtotal: priced.subtotal,
-          shippingFee: priced.shippingFee, tax: priced.tax, total: priced.total,
+          shippingFee: priced.shippingFee, shipWeightGrams: priced.shipWeightGrams, shipZone: priced.shipZone,
+          tax: priced.tax, total: priced.total,
           currency: priced.currency, customer, shippingAddress, paymentRef: pi.id, live: pi.livemode,
         });
       }
@@ -248,7 +262,7 @@ export const finalizeStripeOrder = onCall(
 // ─────────────────────────── Summer Reading Program ───────────────────────────
 
 /** Register a child and return a guaranteed-unique code (server-generated). */
-export const registerSummerReader = onCall({ cors: true }, async (request) => {
+export const registerSummerReader = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as RegisterInput;
   if (!d?.childName?.trim() || !d?.parentName?.trim() || !d?.parentEmail?.trim()) {
     throw new HttpsError('invalid-argument', 'Child name, parent name, and parent email are required.');
@@ -265,7 +279,7 @@ export const registerSummerReader = onCall({ cors: true }, async (request) => {
 });
 
 /** Log a parent-verified book against a code; recomputes count + tier server-side. */
-export const logSummerBook = onCall({ cors: true }, async (request) => {
+export const logSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as LogBookInput;
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
   if (!d?.title?.trim()) throw new HttpsError('invalid-argument', 'A book title is required.');
@@ -280,7 +294,7 @@ export const logSummerBook = onCall({ cors: true }, async (request) => {
 });
 
 /** Edit a logged book at an index. */
-export const editSummerBook = onCall({ cors: true }, async (request) => {
+export const editSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as EditBookInput;
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
   if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
@@ -294,7 +308,7 @@ export const editSummerBook = onCall({ cors: true }, async (request) => {
 });
 
 /** Delete a logged book at an index; recomputes count + tier. */
-export const deleteSummerBook = onCall({ cors: true }, async (request) => {
+export const deleteSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as { code?: string; index?: number };
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
   if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
@@ -305,6 +319,35 @@ export const deleteSummerBook = onCall({ cors: true }, async (request) => {
     throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
   }
 });
+
+// ─────────────────────────── Address validation (USPS) ───────────────────────────
+
+/**
+ * Validate + standardise a US shipping address via USPS. Returns the corrected
+ * address so the customer can confirm it before paying. If USPS credentials are
+ * not configured, returns { available: false } so the client falls back to plain
+ * entry rather than blocking checkout.
+ */
+export const validateAddress = onCall(
+  { secrets: [USPS_CLIENT_ID, USPS_CLIENT_SECRET], cors: ALLOWED_ORIGINS },
+  async (request) => {
+    const a = (request.data as { address?: ShippingAddress })?.address;
+    if (!a || !a.line1 || !a.city || !a.state || !a.postalCode || !a.country) {
+      throw new HttpsError('invalid-argument', 'A complete address is required.');
+    }
+    if (!uspsConfigured()) {
+      return { available: false };
+    }
+    try {
+      const result = await validateUsAddress(a);
+      return { available: true, ...result };
+    } catch (err) {
+      logger.error('validateAddress failed', err);
+      // Do not block checkout on a validation outage.
+      return { available: false };
+    }
+  }
+);
 
 // ─────────────────────────── PayPal (deferred — Phase D) ───────────────────────────
 // Intentionally NOT deployed yet. The PayPal callables + their secrets

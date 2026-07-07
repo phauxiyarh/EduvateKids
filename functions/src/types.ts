@@ -26,6 +26,7 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number; // authoritative price from Firestore at purchase time
   lineTotal: number;
+  weightGrams?: number; // per-unit weight used for shipping (0 if unknown)
 }
 
 export interface ShippingAddress {
@@ -47,6 +48,8 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   shippingFee: number;
+  shipWeightGrams?: number; // cumulative content weight used for shipping
+  shipZone?: number;        // distance zone (1..8) used for shipping
   tax: number;
   total: number;
   currency: string;

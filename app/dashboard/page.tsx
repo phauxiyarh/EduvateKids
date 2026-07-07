@@ -98,6 +98,8 @@ type OnlineOrder = {
   items: OnlineOrderItem[]
   subtotal: number
   shippingFee: number
+  shipWeightGrams?: number
+  shipZone?: number
   tax?: number
   total: number
   currency: string
@@ -6460,7 +6462,7 @@ export default function DashboardPage() {
                 </ul>
                 <div className="mt-3 space-y-1 border-t border-black/5 pt-3 text-sm">
                   <div className="flex justify-between text-muted"><span>Subtotal</span><span>${expandedOrder.subtotal?.toFixed(2)}</span></div>
-                  <div className="flex justify-between text-muted"><span>Shipping</span><span>${expandedOrder.shippingFee?.toFixed(2)}</span></div>
+                  <div className="flex justify-between text-muted"><span>Shipping{expandedOrder.shipWeightGrams ? ` (${(expandedOrder.shipWeightGrams / 1000).toFixed(2)} kg${expandedOrder.shipZone ? `, zone ${expandedOrder.shipZone}` : ''})` : ''}</span><span>${expandedOrder.shippingFee?.toFixed(2)}</span></div>
                   <div className="flex justify-between text-muted"><span>Tax</span><span>${(expandedOrder.tax ?? 0).toFixed(2)}</span></div>
                   <div className="flex justify-between pt-1 text-base font-bold text-primaryDark"><span>Total</span><span>${expandedOrder.total?.toFixed(2)}</span></div>
                 </div>

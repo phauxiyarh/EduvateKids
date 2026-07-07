@@ -33,9 +33,10 @@ export default function CheckoutPage() {
   })
   const [clientSecret, setClientSecret] = useState<string>('')
   const [serverTotal, setServerTotal] = useState<number | null>(null)
-  const [breakdown, setBreakdown] = useState<{ shippingFee: number; tax: number } | null>(null)
+  const [breakdown, setBreakdown] = useState<{ shippingFee: number; tax: number; shipWeightGrams?: number; shipZone?: number } | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [addressNote, setAddressNote] = useState('')
 
   const canSubmitAddress =
     customer.name && customer.email && address.line1 && address.city && address.state && address.postalCode && address.country
@@ -43,19 +44,44 @@ export default function CheckoutPage() {
   const proceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setAddressNote('')
     if (!canSubmitAddress) return
     setCreating(true)
     try {
+      // Verify + standardise the US address via USPS (non-blocking: if the
+      // service is unavailable we proceed with what the customer typed). A
+      // corrected address is applied so shipping zone/ZIP are canonical.
+      let shippingAddress = address
+      try {
+        const validate = httpsCallable(functions, 'validateAddress')
+        const vr = (await validate({ address })).data as {
+          available: boolean; valid?: boolean; changed?: boolean
+          corrected?: ShippingAddress | null; message?: string
+        }
+        if (vr.available && vr.valid === false) {
+          setError(vr.message || 'We could not verify that address. Please double-check it.')
+          setCreating(false)
+          return
+        }
+        if (vr.available && vr.corrected) {
+          shippingAddress = vr.corrected
+          setAddress(vr.corrected)
+          if (vr.changed) setAddressNote('We standardised your address to match USPS records.')
+        }
+      } catch {
+        /* validation unavailable — proceed with entered address */
+      }
+
       const call = httpsCallable(functions, 'createStripePaymentIntent')
       const res = await call({
         items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
         customer,
-        shippingAddress: address,
+        shippingAddress,
       })
-      const data = res.data as { clientSecret: string; subtotal: number; shippingFee: number; tax: number; total: number; currency: string }
+      const data = res.data as { clientSecret: string; subtotal: number; shippingFee: number; shipWeightGrams?: number; shipZone?: number; tax: number; total: number; currency: string }
       setClientSecret(data.clientSecret)
       setServerTotal(data.total)
-      setBreakdown({ shippingFee: data.shippingFee, tax: data.tax })
+      setBreakdown({ shippingFee: data.shippingFee, tax: data.tax, shipWeightGrams: data.shipWeightGrams, shipZone: data.shipZone })
       setStep('payment')
     } catch (err) {
       const msg = (err as { message?: string })?.message || 'Could not start checkout. Please try again.'
@@ -107,6 +133,12 @@ export default function CheckoutPage() {
                   <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
                     <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
                     <span>{error}</span>
+                  </div>
+                )}
+                {addressNote && (
+                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+                    <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <span>{addressNote}</span>
                   </div>
                 )}
                 <div className="mt-5 grid gap-4">
@@ -169,7 +201,7 @@ export default function CheckoutPage() {
             </ul>
             <div className="mt-4 space-y-1.5 border-t border-black/5 pt-4 text-sm">
               <div className="flex justify-between text-muted"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-muted"><span>Shipping</span><span>{breakdown ? `$${breakdown.shippingFee.toFixed(2)}` : 'Calculated next'}</span></div>
+              <div className="flex justify-between text-muted"><span>Shipping{breakdown?.shipWeightGrams ? ` (${(breakdown.shipWeightGrams / 1000).toFixed(2)} kg)` : ''}</span><span>{breakdown ? `$${breakdown.shippingFee.toFixed(2)}` : 'Calculated next'}</span></div>
               <div className="flex justify-between text-muted"><span>Tax</span><span>{breakdown ? `$${breakdown.tax.toFixed(2)}` : 'Calculated next'}</span></div>
               <div className="flex justify-between pt-1 text-base font-bold text-primaryDark"><span>Total</span><span>${(serverTotal ?? subtotal).toFixed(2)}</span></div>
             </div>

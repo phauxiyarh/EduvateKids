@@ -57,8 +57,8 @@ const faqCategories = [
         answer: 'Standard shipping typically takes 5-7 business days within the continental United States. Expedited shipping (2-3 business days) is available at checkout. Orders are processed within 1-2 business days, though this may extend to 3-5 days during peak seasons.'
       },
       {
-        question: 'Do you offer free shipping?',
-        answer: 'Yes! We offer free standard shipping on all orders over $80 within the continental United States. For orders under $80, a flat standard shipping fee of $5.99 applies. Applicable sales tax is calculated at checkout.'
+        question: 'How is shipping calculated, and do you offer free shipping?',
+        answer: 'Shipping is based on the total weight of your order and the distance from us (Maryland) to your address, so you only pay what it actually costs to ship. Your exact shipping fee and order weight are shown at checkout before you pay. Orders of $150 or more ship free within the United States. Applicable sales tax is calculated at checkout.'
       },
       {
         question: 'Can I track my order?',

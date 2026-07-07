@@ -15,6 +15,9 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 export const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 export const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 export const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+// USPS Addresses API v3 (OAuth2). Get credentials at developer.usps.gov.
+export const USPS_CLIENT_ID = defineSecret('USPS_CLIENT_ID');
+export const USPS_CLIENT_SECRET = defineSecret('USPS_CLIENT_SECRET');
 
 // PayPal secrets are intentionally NOT declared yet (Phase D). Declaring a secret
 // makes Firebase prompt for it at deploy time even if unused, so we keep these
@@ -25,10 +28,38 @@ export const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
 /** Non-secret config (safe defaults; override via environment if desired). */
 export const CURRENCY = defineString('EK_CURRENCY', { default: 'usd' });
-export const FLAT_SHIPPING_FEE = defineString('EK_SHIPPING_FEE', { default: '5.99' });
-export const FREE_SHIPPING_THRESHOLD = defineString('EK_FREE_SHIPPING_OVER', { default: '50' });
 /** Flat sales-tax rate as a percentage of subtotal (Maryland = 6). Override via env EK_TAX_RATE. */
 export const TAX_RATE_PERCENT = defineString('EK_TAX_RATE', { default: '6' });
+
+/**
+ * Weight + zone shipping parameters (see functions/src/shipping.ts and the
+ * approved model in implementation_docs/Weight_Based_Shipping_Model.md).
+ * All overridable via environment so pricing tunes without a code change.
+ */
+export const SHIP_BASE_FEE = defineString('EK_SHIP_BASE_FEE', { default: '5.20' });
+export const SHIP_ZONE_RATES = defineString('EK_SHIP_ZONE_RATES', { default: '0.35,0.70,1.10,1.55,2.10,2.75,3.15,3.30' });
+export const SHIP_PADDING_G = defineString('EK_SHIP_PADDING_G', { default: '150' });
+export const SHIP_STEP_KG = defineString('EK_SHIP_STEP_KG', { default: '0.25' });
+export const SHIP_MAX_FEE = defineString('EK_SHIP_MAX_FEE', { default: '30' });
+export const FREE_SHIPPING_THRESHOLD = defineString('EK_FREE_SHIPPING_OVER', { default: '150' });
+export const SHIP_DEFAULT_ITEM_G = defineString('EK_SHIP_DEFAULT_ITEM_G', { default: '300' });
+
+/** Build the ShippingParams object from the env-configurable values above. */
+export function shippingParams() {
+  const rates = String(SHIP_ZONE_RATES.value() || '')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  return {
+    baseFee: Number(SHIP_BASE_FEE.value() || '5.20'),
+    zoneRates: rates.length === 8 ? rates : [0.35, 0.70, 1.10, 1.55, 2.10, 2.75, 3.15, 3.30],
+    packagePaddingKg: Number(SHIP_PADDING_G.value() || '150') / 1000,
+    stepKg: Number(SHIP_STEP_KG.value() || '0.25'),
+    maxFee: Number(SHIP_MAX_FEE.value() || '30'),
+    freeOverSubtotal: Number(FREE_SHIPPING_THRESHOLD.value() || '150'),
+    defaultItemWeightKg: Number(SHIP_DEFAULT_ITEM_G.value() || '300') / 1000,
+  };
+}
 
 /** Allowed browser origins for CORS on callable/onRequest endpoints. */
 export const ALLOWED_ORIGINS = [
@@ -50,6 +81,15 @@ export function stripeConfigured(): boolean {
 export function emailConfigured(): boolean {
   try {
     return Boolean(RESEND_API_KEY.value());
+  } catch {
+    return false;
+  }
+}
+
+/** True once USPS API credentials are present (address validation). */
+export function uspsConfigured(): boolean {
+  try {
+    return Boolean(USPS_CLIENT_ID.value() && USPS_CLIENT_SECRET.value());
   } catch {
     return false;
   }

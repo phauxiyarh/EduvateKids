@@ -20,6 +20,7 @@ export interface OrderItem {
   quantity: number
   unitPrice: number
   lineTotal: number
+  weightGrams?: number
 }
 
 export interface ShippingAddress {

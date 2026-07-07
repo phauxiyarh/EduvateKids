@@ -2,101 +2,142 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read and write their own data
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+    // Role is stored on the user's own /users/{uid} doc (set by admin tooling).
+    // Backward-compatible: a signed-in user whose /users doc is missing or has no
+    // `role` is treated as admin (matches the app's historical default), so the
+    // existing owner account is never locked out. Explicit 'cashier' is limited.
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function roleOrDefault() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             && ('role' in userDoc().data)
+             ? userDoc().data.role
+             : 'admin';
+    }
+    function isAdmin() {
+      return signedIn() && roleOrDefault() == 'admin';
+    }
+    // Staff = admin or cashier (operational access to store data).
+    function isStaff() {
+      return signedIn() && (roleOrDefault() == 'admin' || roleOrDefault() == 'cashier');
+    }
+
+    // ── User profiles ─────────────────────────────────────────────────────
+    // A user may read/update their own profile, but MUST NOT escalate their own
+    // role. Only admins can set/change roles (or create other users' docs).
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (request.auth.uid == userId
+                        && request.resource.data.get('role', 'admin')
+                           == resource.data.get('role', 'admin'));
     }
 
-    // Allow all authenticated users to read public data
+    // ── Public config (read by anyone signed in; writes admin-only) ─────────
     match /public/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
-    // Dashboard data - authenticated users only
+    // ── Dashboard aggregates (staff read; admin write) ──────────────────────
     match /dashboard/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if isAdmin();
     }
 
-    // Inventory and event management - authenticated users only
+    // ── Store operations: staff read; writes admin-only ─────────────────────
+    // Cashiers operate the POS (which records sales/orders) but should not be
+    // able to rewrite the master inventory/event catalogue; that stays admin.
     match /inventory/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if isAdmin();
     }
-
     match /events/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
-
     match /generalSales/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
-
     match /generalOrders/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if isStaff();
     }
-
-    // Backups - authenticated users only
     match /backups/{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
-    // Catalog - public read, authenticated write
+    // ── Catalog: public read, admin write ───────────────────────────────────
     match /catalog/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
-    // Contact messages - allow public write, authenticated read
+    // ── Contact messages: public create (validated), staff read, admin manage ─
     match /contactMessages/{document=**} {
-      allow read: if request.auth != null;
-      allow create: if true; // Allow anyone to submit contact form
+      allow read: if isStaff();
+      allow update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(
+                        ['name','email','message','subject','phone','createdAt','_live'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 200
+                    && request.resource.data.email is string
+                    && request.resource.data.email.size() <= 200
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() > 0
+                    && request.resource.data.message.size() <= 5000;
     }
 
-    // Event bookings - allow public create (booking form), authenticated read/manage
+    // ── Event bookings: public create (bounded), staff read, admin manage ────
     match /eventBookings/{document=**} {
-      allow read, update, delete: if request.auth != null;
-      allow create: if true; // Allow anyone to submit an event booking request
+      allow read: if isStaff();
+      allow update, delete: if isAdmin();
+      allow create: if request.resource.data.size() <= 30
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 200;
     }
 
-    // Orders - written ONLY by Cloud Functions (Admin SDK bypasses these rules).
-    // Clients can never create/forge an order (prevents fake "paid" orders).
-    // Admins (users/{uid}.role == 'admin') read orders and update status (mark shipped);
-    // cashiers/other authed users cannot alter orders.
+    // ── Orders: created ONLY by Cloud Functions (Admin SDK bypasses rules) ───
+    // Orders hold customer PII + addresses, so reads are ADMIN-ONLY (a cashier
+    // does not need every customer's address). Clients can never forge an order.
     match /orders/{document=**} {
-      allow read: if request.auth != null;
-      // Admins may edit and delete orders (fulfillment corrections); creation is
-      // functions-only (clients can never forge an order).
-      allow update, delete: if request.auth != null
-                    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
       allow create: if false;
     }
 
-    // Summer Reads registrations.
-    // - Public can create a registration (validated below), but cannot set booksLogged
-    //   counts/tier — those are managed only by the logSummerBook Cloud Function.
-    // - Public can read a SINGLE doc by id (the child code) to view progress, but NOT
-    //   list the collection (so codes aren't enumerable).
-    // - Book logging + updates happen via Cloud Function (Admin SDK bypasses rules).
-    // - Authenticated admins have full read; deletes are function/admin only.
+    // ── Summer Reads registrations ──────────────────────────────────────────
+    // - Registration + book logging normally go through Cloud Functions (Admin
+    //   SDK, bypasses rules). This public create is a tightly-validated fallback.
+    // - Public may READ a single doc by code (progress view) but NOT list.
+    // - Updates/deletes are ADMIN-ONLY (logging is via logSummerBook function).
     match /summerReads/{code} {
       allow get: if true;
-      allow list: if request.auth != null; // admins only can enumerate
-      // Registration normally goes through the registerSummerReader Cloud Function
-      // (Admin SDK, bypasses rules). This public create is a tightly-validated
-      // fallback: it must start with no progress and no admin-only escalation.
+      allow list: if isAdmin();
       allow create: if request.resource.data.childName is string
                     && request.resource.data.childName.size() > 0
+                    && request.resource.data.childName.size() <= 120
                     && request.resource.data.parentEmail is string
+                    && request.resource.data.parentEmail.size() <= 200
                     && request.resource.data.booksCount == 0
                     && request.resource.data.tier == 'none'
                     && request.resource.data.booksLogged is list
                     && request.resource.data.booksLogged.size() == 0
                     && (!('_live' in request.resource.data) || request.resource.data._live == true);
-      // Book logging + edits go through the logSummerBook function; admins can manage.
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
 
-    // Default deny all other requests
+    // ── Default deny ─────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

@@ -112,22 +112,15 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
   }
 
   // DPVConfirmation is the definitive deliverability signal:
-  //   Y = fully confirmed, D = primary confirmed (missing apt/suite),
-  //   S = primary confirmed (secondary present but unconfirmed), N = not confirmed.
-  // Treat N (or missing) as an unverifiable address so a fake street number is
-  // rejected rather than silently accepted. D/S surface a soft prompt for the unit.
+  //   Y = fully confirmed, D = primary confirmed (secondary missing),
+  //   S = primary confirmed (secondary present but not in USPS's table), N = not confirmed.
+  // Only N means the address is genuinely undeliverable, so we reject that.
+  // Y, D and S are all real, deliverable buildings — accept them (many valid
+  // apartments simply aren't in USPS's secondary database, which returns S).
   if (dpv === 'N') {
     return { valid: false, corrected: null, changed: false, message: 'We could not verify that address. Please check the street number, city, state, and ZIP.' };
   }
-  if (dpv === 'D' || dpv === 'S') {
-    return {
-      valid: false,
-      corrected: null,
-      changed: false,
-      message: 'That address needs an apartment, suite, or unit number to be deliverable. Please add it.',
-    };
-  }
-  // Only Y (fully confirmed) is accepted as valid below.
+  // Y, D, and S are accepted as valid below.
 
   const corrected: ShippingAddress = {
     line1: a.streetAddress || addr.line1,

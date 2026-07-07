@@ -58,7 +58,7 @@ export async function sendOrderNotification(params: {
       </table>
       <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">
         <tr><td style="padding:3px 10px;color:#6b7280">Subtotal</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.subtotal.toFixed(2)}</td></tr>
-        <tr><td style="padding:3px 10px;color:#6b7280">Shipping${params.shipWeightGrams ? ` (${(params.shipWeightGrams / 1000).toFixed(2)} kg${params.shipZone ? `, zone ${params.shipZone}` : ''})` : ''}</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.shippingFee.toFixed(2)}</td></tr>
+        <tr><td style="padding:3px 10px;color:#6b7280">Shipping</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.shippingFee.toFixed(2)}</td></tr>
         <tr><td style="padding:3px 10px;color:#6b7280">Tax</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.tax.toFixed(2)}</td></tr>
         <tr><td style="padding:6px 10px 3px;font-weight:bold">Total</td><td style="padding:6px 10px 3px;font-weight:bold;text-align:right">$${params.total.toFixed(2)} ${cur}</td></tr>
       </table>

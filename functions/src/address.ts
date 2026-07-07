@@ -29,6 +29,9 @@ async function getUspsToken(): Promise<string> {
       grant_type: 'client_credentials',
       client_id: USPS_CLIENT_ID.value(),
       client_secret: USPS_CLIENT_SECRET.value(),
+      // The Addresses API requires the "addresses" scope on the token; without
+      // it the /address lookup returns HTTP 400.
+      scope: 'addresses',
     }),
   });
   if (!res.ok) {
@@ -72,8 +75,12 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
 
-  if (res.status === 404) {
-    return { valid: false, corrected: null, changed: false, message: 'Address not found in USPS records.' };
+  // 404 = no match; 400 = the address as entered could not be resolved. Both
+  // mean "we could not verify this address" — return a soft failure so the
+  // customer is asked to check it, rather than throwing (which would silently
+  // let a bad address through in the client's catch).
+  if (res.status === 404 || res.status === 400) {
+    return { valid: false, corrected: null, changed: false, message: 'We could not verify that address. Please check the street, city, state, and ZIP.' };
   }
   if (!res.ok) {
     throw new Error(`USPS address lookup failed (${res.status})`);

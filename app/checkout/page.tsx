@@ -306,23 +306,25 @@ function PaymentForm({ total }: { total: number | null }) {
   )
 }
 
+/** A payment brand logo rendered inside a uniform white card chip. */
+function BrandChip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="flex h-9 w-14 items-center justify-center rounded-lg border border-black/10 bg-white shadow-sm"
+    >
+      {children}
+    </span>
+  )
+}
+
 /**
- * A friendly strip that shows the payment methods we accept. This is
- * informational only — which options actually appear in the Stripe Payment
- * Element is controlled by what is enabled in the Stripe Dashboard.
+ * A friendly strip that shows the payment methods we accept, with real brand
+ * marks. Informational only — which options actually appear in the Stripe
+ * Payment Element is controlled by what is enabled in the Stripe Dashboard.
  */
 function AcceptedMethods() {
-  const methods = [
-    'Credit & debit cards',
-    'Visa',
-    'Mastercard',
-    'American Express',
-    'Discover',
-    'Apple Pay',
-    'Google Pay',
-    'Cash App Pay',
-    'Link',
-  ]
   return (
     <div className="mt-4 rounded-2xl border border-primary/10 bg-gradient-to-br from-purple-50/60 to-pink-50/50 p-4">
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primaryDark">
@@ -330,16 +332,40 @@ function AcceptedMethods() {
         Cards &amp; wallets we accept
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        {methods.map((m) => (
-          <span
-            key={m}
-            className="inline-flex items-center rounded-full border border-primary/15 bg-white px-3 py-1 text-xs font-semibold text-primaryDark shadow-sm"
-          >
-            {m}
-          </span>
-        ))}
+        {/* Visa */}
+        <BrandChip label="Visa">
+          <svg viewBox="0 0 48 16" className="h-3.5"><text x="0" y="13" fontFamily="Arial, sans-serif" fontSize="15" fontStyle="italic" fontWeight="700" fill="#1A1F71">VISA</text></svg>
+        </BrandChip>
+        {/* Mastercard */}
+        <BrandChip label="Mastercard">
+          <svg viewBox="0 0 40 24" className="h-5"><circle cx="15" cy="12" r="9" fill="#EB001B" /><circle cx="25" cy="12" r="9" fill="#F79E1B" /><path d="M20 5a9 9 0 000 14 9 9 0 000-14z" fill="#FF5F00" /></svg>
+        </BrandChip>
+        {/* American Express */}
+        <BrandChip label="American Express">
+          <svg viewBox="0 0 48 20" className="h-5"><rect width="48" height="20" rx="2" fill="#2E77BC" /><text x="24" y="9" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="6.5" fontWeight="700" fill="#fff">AMERICAN</text><text x="24" y="16" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="6.5" fontWeight="700" fill="#fff">EXPRESS</text></svg>
+        </BrandChip>
+        {/* Discover */}
+        <BrandChip label="Discover">
+          <svg viewBox="0 0 60 16" className="h-3"><text x="0" y="13" fontFamily="Arial, sans-serif" fontSize="13" fontWeight="700" fill="#231F20">Disc</text><text x="26" y="13" fontFamily="Arial, sans-serif" fontSize="13" fontWeight="700" fill="#231F20">ver</text><circle cx="24.5" cy="9" r="4.2" fill="#F58220" /></svg>
+        </BrandChip>
+        {/* Apple Pay */}
+        <BrandChip label="Apple Pay">
+          <svg viewBox="0 0 40 18" className="h-4" fill="#000"><path d="M7.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM8.2 5.2c-.9-.05-1.7.5-2.1.5-.4 0-1.1-.5-1.8-.5-.9 0-1.8.5-2.2 1.4-1 1.7-.3 4.2.7 5.6.5.7 1 1.4 1.8 1.4.7 0 1-.5 1.9-.5.9 0 1.1.5 1.8.4.8 0 1.2-.7 1.7-1.3.5-.8.7-1.5.8-1.6 0 0-1.5-.6-1.5-2.3 0-1.4 1.2-2.1 1.2-2.1-.6-1-1.7-1-2.1-1z" /><text x="14" y="13" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="600" fill="#000">Pay</text></svg>
+        </BrandChip>
+        {/* Google Pay */}
+        <BrandChip label="Google Pay">
+          <svg viewBox="0 0 48 18" className="h-4"><text x="0" y="13" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="500"><tspan fill="#4285F4">G</tspan><tspan fill="#EA4335">o</tspan><tspan fill="#FBBC05">o</tspan><tspan fill="#4285F4">g</tspan><tspan fill="#34A853">l</tspan><tspan fill="#EA4335">e</tspan></text><text x="34" y="13" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="500" fill="#5F6368">Pay</text></svg>
+        </BrandChip>
+        {/* Cash App Pay */}
+        <BrandChip label="Cash App Pay">
+          <svg viewBox="0 0 24 24" className="h-5"><rect width="24" height="24" rx="5" fill="#00D632" /><path d="M15.5 9.3c.2.2.5.2.7 0l.7-.7c.2-.2.2-.5 0-.7-.6-.6-1.4-1-2.3-1.2l.1-.6c.05-.3-.2-.5-.5-.5h-1c-.25 0-.45.18-.5.42l-.1.5c-1.6.1-2.9 1-2.9 2.6 0 1.5 1.2 2.1 2.5 2.5 1.1.35 1.6.6 1.6 1.1 0 .5-.5.85-1.3.85-.75 0-1.5-.28-2-.75-.2-.18-.5-.18-.7.02l-.75.72c-.2.2-.2.5 0 .7.6.55 1.35.95 2.2 1.1l-.1.55c-.05.3.18.55.48.55h1c.25 0 .46-.18.5-.42l.1-.5c1.75-.12 3-1.1 3-2.7 0-1.5-1.25-2.15-2.6-2.55-1-.32-1.55-.55-1.55-1.05 0-.48.5-.8 1.2-.8.7 0 1.3.25 1.75.65z" fill="#fff" /></svg>
+        </BrandChip>
+        {/* Link */}
+        <BrandChip label="Link by Stripe">
+          <svg viewBox="0 0 44 20" className="h-4"><rect width="44" height="20" rx="4" fill="#00D66F" /><text x="22" y="14" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="10" fontWeight="700" fill="#011E0F">link</text></svg>
+        </BrandChip>
       </div>
-      <p className="mt-2.5 text-xs text-muted">Choose your preferred method below. All payments are processed securely.</p>
+      <p className="mt-2.5 text-xs text-muted">Credit &amp; debit cards and wallets accepted. Choose your preferred method below — all payments are processed securely.</p>
     </div>
   )
 }

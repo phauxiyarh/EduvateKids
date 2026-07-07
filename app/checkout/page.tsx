@@ -8,6 +8,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../lib/firebase'
 import { useCart } from '../../lib/cart'
+import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import logo from '../../assets/logo.png'
 import type { CustomerInfo, ShippingAddress } from '../../lib/orders'
 
@@ -140,7 +141,15 @@ export default function CheckoutPage() {
                     <Field label="Email *"><input type="email" className={inputClass} value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} required /></Field>
                   </div>
                   <Field label="Phone"><input type="tel" className={inputClass} value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} /></Field>
-                  <Field label="Address Line 1 *"><input className={inputClass} value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} required /></Field>
+                  <Field label="Address Line 1 *">
+                    <AddressAutocomplete
+                      className={inputClass}
+                      value={address.line1}
+                      placeholder="Start typing your address…"
+                      onChange={(v) => setAddress({ ...address, line1: v })}
+                      onSelect={(p) => setAddress({ ...address, line1: p.line1, city: p.city, state: p.state, postalCode: p.postalCode, country: p.country })}
+                    />
+                  </Field>
                   <Field label="Address Line 2"><input className={inputClass} value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} /></Field>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="City *"><input className={inputClass} value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} required /></Field>

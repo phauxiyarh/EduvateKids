@@ -13,7 +13,8 @@ import {
   deleteDoc,
   writeBatch,
   getDoc,
-  serverTimestamp
+  serverTimestamp,
+  increment
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import {
@@ -92,7 +93,7 @@ type CartItem = {
 }
 
 /** Online store order (written by the Stripe webhook to the `orders` collection). */
-type OnlineOrderItem = { id: string; title: string; quantity: number; unitPrice: number; lineTotal: number }
+type OnlineOrderItem = { id: string; inventoryId?: string; sku?: string; title: string; quantity: number; unitPrice: number; lineTotal: number }
 type OnlineOrder = {
   id: string
   items: OnlineOrderItem[]
@@ -108,6 +109,7 @@ type OnlineOrder = {
   paymentProvider: string
   paymentRef: string
   status: 'pending' | 'paid' | 'failed' | 'shipped' | 'cancelled'
+  stockRestored?: boolean // true once this order's stock has been returned to inventory
   createdAt?: { seconds: number } | null
   paidAt?: { seconds: number } | null
   shippedAt?: { seconds: number } | null
@@ -353,6 +355,11 @@ const headerMap: Record<string, keyof InventoryItem> = {
   title: 'title',
   category: 'category',
   publisher: 'publisher',
+  sku: 'sku',
+  'sku code': 'sku',
+  isbn: 'isbn',
+  'isbn 13': 'isbn',
+  'barcode': 'isbn',
   rrp: 'rrp',
   discount: 'discount',
   quantity: 'quantity',
@@ -1041,8 +1048,8 @@ export default function DashboardPage() {
 
   const handleDownloadTemplate = () => {
     const rows = [
-      ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)'],
-      ['Sample Title', 'Books', 'Sample Publisher', 20, 10, 5, 18, 350]
+      ['Title', 'Category', 'Publisher', 'SKU', 'ISBN', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)'],
+      ['Sample Title', 'Books', 'Sample Publisher', 'SKU-001', '9781234567897', 20, 10, 5, 18, 350]
     ]
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1066,9 +1073,9 @@ export default function DashboardPage() {
       setUploadMessage('No inventory data to export.')
       return
     }
-    const header = ['Title', 'Category', 'Publisher', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)']
+    const header = ['Title', 'Category', 'Publisher', 'SKU', 'ISBN', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)']
     const rows = inventory.map((item) => [
-      item.title, item.category, item.publisher, item.rrp, item.discount, item.quantity, item.sellingPrice, item.weight
+      item.title, item.category, item.publisher, item.sku || '', item.isbn || '', item.rrp, item.discount, item.quantity, item.sellingPrice, item.weight
     ])
     const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
     const workbook = XLSX.utils.book_new()
@@ -2050,15 +2057,20 @@ export default function DashboardPage() {
         }
       }
 
-      // Batch 2: Update inventory quantities separately
+      // Batch 2: Update inventory quantities separately, using atomic decrements
+      // (increment) so a concurrent write (e.g. an online-order finalize) cannot
+      // clobber the count.
       if (changedInventoryItems.length > 0) {
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
             const invBatch = writeBatch(db)
             changedInventoryItems.forEach((item) => {
-              invBatch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+              const sold = cartItems.find((c) => c.itemId === item.id)?.quantity ?? 0
+              invBatch.update(doc(db, 'inventory', item.id), { quantity: increment(-sold), _live: true })
             })
             await invBatch.commit()
+            // Mirror the new counts onto the storefront catalog.
+            await Promise.all(changedInventoryItems.map((item) => mirrorStockToCatalog(item)))
             break
           } catch (error) {
             console.error(`Inventory update error (attempt ${attempt}/${MAX_RETRIES}):`, error)
@@ -2103,13 +2115,24 @@ export default function DashboardPage() {
   const handleDeleteOrder = async (order: Order) => {
     if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This will restore inventory and remove all related sales records. Continue?`)) return
 
-    // Restore inventory quantities from the deleted order
-    const restoredInventory = inventory.map((item) => {
-      const orderItem = order.items.find((oi) => oi.itemId === item.id)
-      if (!orderItem) return item
-      return { ...item, quantity: item.quantity + orderItem.quantity }
-    })
+    // Restore inventory quantities from the deleted order. Build a per-item
+    // add-back delta so the cloud write can use atomic increment().
+    const restoreDeltas = new Map<string, number>() // inventoryId -> qty to add back
+    for (const oi of order.items) {
+      if (inventory.some((i) => i.id === oi.itemId)) {
+        restoreDeltas.set(oi.itemId, (restoreDeltas.get(oi.itemId) ?? 0) + oi.quantity)
+      }
+    }
+    const restoredInventory = inventory.map((item) =>
+      restoreDeltas.has(item.id) ? { ...item, quantity: item.quantity + (restoreDeltas.get(item.id) as number) } : item
+    )
     setInventory(restoredInventory)
+    // Mirror the restored counts onto the storefront catalog.
+    void Promise.all(
+      restoredInventory
+        .filter((it) => restoreDeltas.has(it.id))
+        .map((it) => mirrorStockToCatalog(it, it.quantity))
+    )
 
     const isGeneralOrder = order.eventId === 'general'
     if (isGeneralOrder) {
@@ -2127,8 +2150,8 @@ export default function DashboardPage() {
         salesToRemove.forEach((sale) => {
           batch.delete(doc(db, 'generalSales', sale.id))
         })
-        restoredInventory.forEach((item) => {
-          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+        restoreDeltas.forEach((qty, id) => {
+          batch.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true })
         })
         await batch.commit()
       } catch (error) {
@@ -2156,8 +2179,8 @@ export default function DashboardPage() {
       try {
         const batch = writeBatch(db)
         batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, sales: updatedSales, _live: true })
-        restoredInventory.forEach((item) => {
-          batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
+        restoreDeltas.forEach((qty, id) => {
+          batch.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true })
         })
         await batch.commit()
       } catch (error) {
@@ -2739,7 +2762,9 @@ export default function DashboardPage() {
     setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
     setUploadMessage(`Added ${addQty} to "${item.title}" (now ${updatedItem.quantity} in stock).`)
     try {
-      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+      // Atomic add so a concurrent sale can't clobber the restock.
+      await updateDoc(doc(db, 'inventory', updatedItem.id), { quantity: increment(addQty), _live: true })
+      await mirrorStockToCatalog(updatedItem, updatedItem.quantity)
     } catch (error) {
       console.error('Scan restock error:', error)
       setUploadMessage(`"${item.title}" updated locally but failed to sync to cloud.`)
@@ -2787,6 +2812,7 @@ export default function DashboardPage() {
     // Sync to Firebase in the background
     try {
       await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+      await mirrorStockToCatalog(updatedItem)
     } catch (error) {
       console.error('Save inventory item error:', error)
       setUploadMessage(`⚠️ "${updatedItem.title}" saved locally but failed to sync to cloud.`)
@@ -2933,23 +2959,118 @@ export default function DashboardPage() {
   }
 
   const deleteOnlineOrder = async (order: OnlineOrder) => {
-    if (!confirm(`Delete order ${order.id}? This cannot be undone.`)) return
+    // Return stock only if this order reduced it (paid/shipped) AND it hasn't
+    // already been restored (e.g. it was cancelled first).
+    const willRestore = (order.status === 'paid' || order.status === 'shipped') && !order.stockRestored
+    if (!confirm(`Delete order ${order.id}?${willRestore ? ' Its items will be returned to inventory.' : ''} This cannot be undone.`)) return
+    const restore = willRestore ? restoreInventoryForOnlineOrder(order) : new Map<string, number>()
     try {
       await deleteDoc(doc(db, 'orders', order.id))
       setOrders((prev) => prev.filter((o) => o.id !== order.id))
       setExpandedOrder(null)
+      await syncInventoryDeltas(restore)
     } catch (error) {
       console.error('Failed to delete order:', error)
       alert('Could not delete the order. Please try again.')
     }
   }
 
+  // Resolve which inventory item an online-order line corresponds to. New orders
+  // carry inventoryId/sku (set server-side); older ones fall back to sku, ISBN,
+  // then exact title (mirroring the server's resolution order).
+  const findInventoryForOrderItem = (it: OnlineOrderItem): InventoryItem | undefined => {
+    if (it.inventoryId) {
+      const byId = inventory.find((i) => i.id === it.inventoryId)
+      if (byId) return byId
+    }
+    if (it.sku && it.sku.trim()) {
+      const bySku = inventory.find((i) => (i.sku || '').trim() === it.sku!.trim())
+      if (bySku) return bySku
+    }
+    return inventory.find((i) => i.title.trim().toLowerCase() === it.title.trim().toLowerCase())
+  }
+
+  // Add an online order's quantities back to inventory (on cancel/delete of a
+  // previously-paid order). Returns a map of inventoryId -> quantity to add back,
+  // and applies the change to local state. The cloud write uses increment() so it
+  // merges safely with any concurrent decrement (e.g. a racing online finalize).
+  const restoreInventoryForOnlineOrder = (order: OnlineOrder): Map<string, number> => {
+    const deltas = new Map<string, number>() // inventoryId -> qty to add back (positive)
+    let unmatched = 0
+    for (const it of order.items ?? []) {
+      const inv = findInventoryForOrderItem(it)
+      if (inv) deltas.set(inv.id, (deltas.get(inv.id) ?? 0) + it.quantity)
+      else unmatched += 1
+    }
+    if (unmatched > 0) {
+      alert(`Note: ${unmatched} item(s) on this order could not be matched to an inventory record, so their stock was not restored. Adjust those items manually.`)
+    }
+    if (deltas.size === 0) return deltas
+    setInventory((current) =>
+      current.map((i) => (deltas.has(i.id) ? { ...i, quantity: i.quantity + (deltas.get(i.id) as number) } : i))
+    )
+    return deltas
+  }
+
+  // Apply inventory quantity CHANGES atomically. `deltas` maps inventoryId to a
+  // signed change (negative = sold, positive = restored). Uses Firestore
+  // increment() so concurrent writers never clobber each other's counts, then
+  // mirrors the resulting count onto the storefront catalog.
+  const syncInventoryDeltas = async (deltas: Map<string, number>) => {
+    const entries = [...deltas.entries()].filter(([, d]) => d !== 0)
+    if (entries.length === 0) return
+    try {
+      const batch = writeBatch(db)
+      entries.forEach(([id, d]) => batch.update(doc(db, 'inventory', id), { quantity: increment(d), _live: true }))
+      await batch.commit()
+    } catch (error) {
+      console.error('Inventory delta sync error:', error)
+    }
+    // Mirror to catalog using the post-change quantity (snapshot + delta).
+    await Promise.all(
+      entries.map(([id, d]) => {
+        const it = inventory.find((i) => i.id === id)
+        return it ? mirrorStockToCatalog(it, it.quantity + d) : Promise.resolve()
+      })
+    )
+  }
+
+  // Inventory is the single stock source of truth; the catalog carries a
+  // mirrored display count so the storefront shows correct availability. Push an
+  // inventory item's current quantity onto its linked catalog doc (matched by
+  // SKU, else title). Best-effort and non-blocking.
+  const mirrorStockToCatalog = async (item: InventoryItem, quantityOverride?: number) => {
+    const sku = (item.sku || '').trim()
+    const match = catalogItems.find(
+      (c) => (sku && (c.sku || '').trim() === sku) ||
+             c.title.trim().toLowerCase() === item.title.trim().toLowerCase()
+    )
+    if (!match) return
+    const qty = quantityOverride ?? item.quantity
+    try {
+      await updateDoc(doc(db, 'catalog', match.id), { stock: Math.max(0, qty) })
+    } catch (error) {
+      console.error('Catalog stock mirror error:', error)
+    }
+  }
+
   const updateOnlineOrderStatus = async (order: OnlineOrder, status: OnlineOrder['status']) => {
     if (status === order.status) return
+    // Cancelling/failing a paid or shipped order returns its stock to inventory,
+    // but only ONCE (guarded by the stockRestored flag) so toggling status can't
+    // inflate stock. Once restored, the flag stays set for the order's life.
+    const nowCancelled = status === 'cancelled' || status === 'failed'
+    const shouldRestore = nowCancelled && !order.stockRestored
+    const restore = shouldRestore ? restoreInventoryForOnlineOrder(order) : new Map<string, number>()
+    const didRestore = restore.size > 0
     try {
-      await updateDoc(doc(db, 'orders', order.id), { status })
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status } : o)))
-      setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status } : cur))
+      await updateDoc(doc(db, 'orders', order.id), {
+        status,
+        ...(didRestore ? { stockRestored: true } : {}),
+      })
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status, ...(didRestore ? { stockRestored: true } : {}) } : o)))
+      setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status, ...(didRestore ? { stockRestored: true } : {}) } : cur))
+      await syncInventoryDeltas(restore)
     } catch (error) {
       console.error('Failed to update order status:', error)
       alert('Could not update the order status. Please try again.')
@@ -3274,7 +3395,7 @@ export default function DashboardPage() {
           </div>
         </div>
         <p className="text-sm text-muted mb-6 p-4 bg-primary/5 rounded-xl border border-primary/10">
-          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, RRP, Discount %, Quantity, Selling Price, Weight (g)
+          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, SKU, ISBN, RRP, Discount %, Quantity, Selling Price, Weight (g)
         </p>
         <div className="flex flex-wrap items-center gap-4">
           <label className="cursor-pointer">

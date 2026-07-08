@@ -21,7 +21,9 @@ export interface CartLineInput {
 
 /** A resolved, server-priced line item stored on the order. */
 export interface OrderItem {
-  id: string;
+  id: string;            // catalog document id
+  inventoryId?: string;  // resolved inventory document id (single stock ledger)
+  sku?: string;          // shared SKU that links catalog <-> inventory
   title: string;
   quantity: number;
   unitPrice: number; // authoritative price from Firestore at purchase time

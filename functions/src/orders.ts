@@ -21,6 +21,35 @@ import type {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
+ * Resolve the INVENTORY document that a catalog item corresponds to, so online
+ * orders draw from the same single stock ledger as POS/event/general sales.
+ * Match priority: shared SKU, then ISBN, then exact title. Returns null if none.
+ * Inventory is the source of truth; catalog carries a mirrored display count.
+ */
+async function resolveInventoryRef(
+  db: FirebaseFirestore.Firestore,
+  catalog: { sku?: string; isbn?: string; title?: string }
+): Promise<FirebaseFirestore.DocumentReference | null> {
+  const inv = db.collection('inventory');
+  const sku = String(catalog.sku ?? '').trim();
+  if (sku) {
+    const q = await inv.where('sku', '==', sku).limit(1).get();
+    if (!q.empty) return q.docs[0].ref;
+  }
+  const isbn = String(catalog.isbn ?? '').trim();
+  if (isbn) {
+    const q = await inv.where('isbn', '==', isbn).limit(1).get();
+    if (!q.empty) return q.docs[0].ref;
+  }
+  const title = String(catalog.title ?? '').trim();
+  if (title) {
+    const q = await inv.where('title', '==', title).limit(1).get();
+    if (!q.empty) return q.docs[0].ref;
+  }
+  return null;
+}
+
+/**
  * Resolve cart line inputs against the live `catalog` collection and compute an
  * authoritative price breakdown. Throws if any item is missing, not purchasable,
  * or out of stock for the requested quantity.
@@ -70,8 +99,19 @@ export async function priceCart(
     const unitGrams = rawWeight > 0 ? rawWeight : defaultItemGrams;
     contentGrams += unitGrams * qty;
 
+    // Resolve the inventory ledger doc for this catalog item (single source of
+    // truth for stock). Stored on the order so cancel/delete can restore it.
+    const sku = String(data.sku ?? '').trim();
+    const invRef = await resolveInventoryRef(db, {
+      sku,
+      isbn: String(data.isbn ?? '').trim(),
+      title: String(data.title ?? ''),
+    });
+
     items.push({
       id: snap.id,
+      inventoryId: invRef ? invRef.id : undefined,
+      sku: sku || undefined,
       title: String(data.title ?? ''),
       quantity: qty,
       unitPrice: round2(unitPrice),
@@ -144,21 +184,50 @@ export async function finalizeOrder(
       return { orderId: orderRef.id, created: false };
     }
 
-    // Read stock docs BEFORE any writes (Firestore requires all reads first).
-    const stockReads: { ref: FirebaseFirestore.DocumentReference; field: string | null; current: number; qty: number }[] = [];
+    // Decrement stock on a `paid` order. INVENTORY is the single source of truth
+    // (POS/events/general sales use it too); the catalog carries a mirrored
+    // display count. Read all docs BEFORE writing (Firestore requires reads first).
+    const stockOps: {
+      invRef: FirebaseFirestore.DocumentReference | null;
+      catRef: FirebaseFirestore.DocumentReference;
+      catField: string | null;
+      invCurrent: number;
+      catCurrent: number;
+      qty: number;
+    }[] = [];
     if (params.status === 'paid') {
       for (const item of params.items) {
-        const ref = db.collection('catalog').doc(item.id);
-        const snap = await tx.get(ref);
-        if (snap.exists) {
-          const data = snap.data() as Record<string, unknown>;
-          const field = data.stock !== undefined ? 'stock' : data.quantity !== undefined ? 'quantity' : null;
-          stockReads.push({ ref, field, current: Number((field && data[field]) ?? 0), qty: item.quantity });
+        const catRef = db.collection('catalog').doc(item.id);
+        const catSnap = await tx.get(catRef);
+        const catData = catSnap.exists ? (catSnap.data() as Record<string, unknown>) : {};
+        const catField = catData.stock !== undefined ? 'stock' : catData.quantity !== undefined ? 'quantity' : 'stock';
+        const invRef = item.inventoryId ? db.collection('inventory').doc(item.inventoryId) : null;
+        let invCurrent = 0;
+        if (invRef) {
+          const invSnap = await tx.get(invRef);
+          invCurrent = invSnap.exists ? Number((invSnap.data() as Record<string, unknown>).quantity ?? 0) : 0;
         }
+        stockOps.push({
+          invRef,
+          catRef,
+          catField: catSnap.exists ? catField : null,
+          invCurrent,
+          catCurrent: Number((catData[catField] as number) ?? 0),
+          qty: item.quantity,
+        });
       }
     }
-    for (const s of stockReads) {
-      if (s.field) tx.update(s.ref, { [s.field]: Math.max(0, s.current - s.qty) });
+    for (const s of stockOps) {
+      // Authoritative decrement on inventory.
+      if (s.invRef) {
+        const next = Math.max(0, s.invCurrent - s.qty);
+        tx.update(s.invRef, { quantity: next, _live: true });
+        // Mirror the same count onto the catalog display field.
+        if (s.catField) tx.update(s.catRef, { [s.catField]: next });
+      } else if (s.catField) {
+        // No linked inventory doc: fall back to decrementing catalog directly.
+        tx.update(s.catRef, { [s.catField]: Math.max(0, s.catCurrent - s.qty) });
+      }
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();

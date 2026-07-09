@@ -108,11 +108,13 @@ type OnlineOrder = {
   shippingAddress: { line1: string; line2?: string; city: string; state: string; postalCode: string; country: string }
   paymentProvider: string
   paymentRef: string
-  status: 'pending' | 'paid' | 'failed' | 'shipped' | 'cancelled'
+  status: 'paid' | 'shipped' | 'delivered' | 'cancelled' | 'pending' | 'failed'
+  live?: boolean // true = real (live-mode) Stripe payment; false/undefined = test mode
   stockRestored?: boolean // true once this order's stock has been returned to inventory
   createdAt?: { seconds: number } | null
   paidAt?: { seconds: number } | null
   shippedAt?: { seconds: number } | null
+  deliveredAt?: { seconds: number } | null
 }
 
 /** Summer Reading Program registration (written to the `summerReads` collection). */
@@ -391,7 +393,7 @@ export default function DashboardPage() {
   )
   const [orders, setOrders] = useState<OnlineOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
-  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped'>('all')
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
   const [expandedOrder, setExpandedOrder] = useState<OnlineOrder | null>(null)
   const [summerReaders, setSummerReaders] = useState<SummerReader[]>([])
   const [summerLoading, setSummerLoading] = useState(false)
@@ -932,9 +934,10 @@ export default function DashboardPage() {
       .slice(0, 6)
   }, [events])
 
-  // Online store orders (Stripe) revenue + count. Paid or shipped orders count as revenue.
+  // Online store orders (Stripe) revenue + count. Paid, shipped or delivered
+  // orders count as revenue (a fulfilled sale); cancelled/failed do not.
   const onlineOrderStats = useMemo(() => {
-    const countable = orders.filter((o) => o.status === 'paid' || o.status === 'shipped')
+    const countable = orders.filter((o) => o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered')
     const revenue = countable.reduce((sum, o) => sum + (o.total || 0), 0)
     return { count: orders.length, revenue }
   }, [orders])
@@ -2928,7 +2931,12 @@ export default function DashboardPage() {
     setOrdersLoading(true)
     try {
       const snap = await getDocs(collection(db, 'orders'))
-      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OnlineOrder, 'id'>) }))
+      const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OnlineOrder, 'id'>) }))
+      // Separate live from test-mode orders. Stripe stamps live: pi.livemode on
+      // each order (false in test mode). In demo mode we show test orders; in
+      // live mode we show only real (live-mode) orders, so test orders never
+      // appear alongside genuine sales.
+      const rows = all.filter((o) => (demoMode ? o.live !== true : o.live === true))
       // Newest first by createdAt seconds (fallback: keep order).
       rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
       setOrders(rows)
@@ -2946,7 +2954,7 @@ export default function DashboardPage() {
       loadOrders()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, userRole])
+  }, [activeView, userRole, demoMode])
 
   // ─── Summer Reading Program registrations ───
   const loadSummerReaders = async () => {
@@ -2979,6 +2987,17 @@ export default function DashboardPage() {
       setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status: 'shipped' } : cur))
     } catch (error) {
       console.error('Failed to mark order shipped:', error)
+      alert('Could not update the order. Please try again.')
+    }
+  }
+
+  const markOrderDelivered = async (order: OnlineOrder) => {
+    try {
+      await updateDoc(doc(db, 'orders', order.id), { status: 'delivered', deliveredAt: serverTimestamp() })
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: 'delivered' } : o)))
+      setExpandedOrder((cur) => (cur && cur.id === order.id ? { ...cur, status: 'delivered' } : cur))
+    } catch (error) {
+      console.error('Failed to mark order delivered:', error)
       alert('Could not update the order. Please try again.')
     }
   }
@@ -3188,11 +3207,12 @@ export default function DashboardPage() {
     const map: Record<OnlineOrder['status'], string> = {
       paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
       shipped: 'bg-blue-100 text-blue-700 border-blue-200',
+      delivered: 'bg-green-100 text-green-800 border-green-300',
       pending: 'bg-amber-100 text-amber-700 border-amber-200',
       failed: 'bg-red-100 text-red-700 border-red-200',
       cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
     }
-    return `rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${map[status]}`
+    return `rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${map[status] ?? map.pending}`
   }
 
   const fmtDate = (ts?: { seconds: number } | null) =>
@@ -3201,7 +3221,7 @@ export default function DashboardPage() {
   const renderOrders = () => {
     const filtered = orders.filter((o) => (orderStatusFilter === 'all' ? true : o.status === orderStatusFilter))
     const paidCount = orders.filter((o) => o.status === 'paid').length
-    const revenue = orders.filter((o) => o.status === 'paid' || o.status === 'shipped').reduce((s, o) => s + o.total, 0)
+    const revenue = orders.filter((o) => o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered').reduce((s, o) => s + o.total, 0)
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
@@ -3221,7 +3241,7 @@ export default function DashboardPage() {
         <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              {(['all', 'paid', 'shipped'] as const).map((f) => (
+              {(['all', 'paid', 'shipped', 'delivered', 'cancelled'] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
@@ -6655,9 +6675,19 @@ export default function DashboardPage() {
                 </button>
               )}
               {expandedOrder.status === 'shipped' && (
-                <div className="flex items-center justify-center gap-2 rounded-full bg-blue-50 px-6 py-3 text-sm font-semibold text-blue-700">
+                <button
+                  type="button"
+                  onClick={() => markOrderDelivered(expandedOrder)}
+                  className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5"
+                >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  Shipped {fmtDate(expandedOrder.shippedAt)}
+                  Mark as Delivered
+                </button>
+              )}
+              {expandedOrder.status === 'delivered' && (
+                <div className="flex items-center justify-center gap-2 rounded-full bg-emerald-50 px-6 py-3 text-sm font-semibold text-emerald-700">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Delivered {fmtDate(expandedOrder.deliveredAt)}
                 </div>
               )}
 
@@ -6671,6 +6701,7 @@ export default function DashboardPage() {
                 >
                   <option value="paid">Paid</option>
                   <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
                 <button

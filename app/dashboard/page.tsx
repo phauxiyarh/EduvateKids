@@ -1839,6 +1839,24 @@ export default function DashboardPage() {
     [...new Set(inventory.map((i) => i.category).filter(Boolean))].sort(),
     [inventory]
   )
+  // Inventory items that are NOT yet represented in the catalog (matched by
+  // shared SKU or by title). These are the only items offered in the "Add from
+  // inventory" picker, so a book already in the catalog can't be added twice.
+  // Deleting a catalog item makes its inventory item eligible again.
+  const inventoryNotInCatalog = useMemo(() => {
+    const catSkus = new Set(
+      catalogItems.map((c) => (c.sku || '').trim().toLowerCase()).filter(Boolean)
+    )
+    const catTitles = new Set(
+      catalogItems.map((c) => c.title.trim().toLowerCase()).filter(Boolean)
+    )
+    return inventory.filter((i) => {
+      const sku = (i.sku || '').trim().toLowerCase()
+      const title = i.title.trim().toLowerCase()
+      const inCatalog = (sku && catSkus.has(sku)) || (title && catTitles.has(title))
+      return !inCatalog
+    })
+  }, [inventory, catalogItems])
 
   const handleAddToCart = (itemId: string, qtyOverride?: number) => {
     const item = inventory.find((stock) => stock.id === itemId)
@@ -5335,7 +5353,7 @@ export default function DashboardPage() {
         )}
 
         <div className="grid gap-5 md:grid-cols-2">
-          {!isEdit && inventory.length > 0 && (
+          {!isEdit && inventoryNotInCatalog.length > 0 && (
             <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-primary/25 bg-primary/5 p-4">
               <label className="text-xs font-bold uppercase tracking-wider text-primaryDark mb-2 block">Add from inventory</label>
               <select
@@ -5344,7 +5362,7 @@ export default function DashboardPage() {
                 className="w-full rounded-xl border-2 border-primary/20 bg-white px-4 py-3 text-sm hover:border-primary/40 transition-colors"
               >
                 <option value="">Select an inventory item to auto-fill…</option>
-                {[...inventory]
+                {[...inventoryNotInCatalog]
                   .sort((a, b) => a.title.localeCompare(b.title))
                   .map((i) => (
                     <option key={i.id} value={i.id}>
@@ -5352,7 +5370,12 @@ export default function DashboardPage() {
                     </option>
                   ))}
               </select>
-              <p className="mt-1.5 text-[11px] text-muted">Fills title, publisher, category, price and SKU from the stock record. You still add the description and images.</p>
+              <p className="mt-1.5 text-[11px] text-muted">Only inventory items not already in the catalog are listed. Fills title, publisher, category, price and SKU; you still add the description and images.</p>
+            </div>
+          )}
+          {!isEdit && inventory.length > 0 && inventoryNotInCatalog.length === 0 && (
+            <div className="md:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+              Every inventory item is already in the catalog. Add a new inventory item first, or fill this form manually.
             </div>
           )}
           <div className="md:col-span-2">

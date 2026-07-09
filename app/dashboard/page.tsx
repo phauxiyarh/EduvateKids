@@ -28,6 +28,7 @@ import { auth, db, functions } from '../../lib/firebase'
 import { isAdminHostAllowed } from '../../lib/adminAccess'
 import { uploadCatalogImage } from '../../lib/uploadImage'
 import { BarcodeScanner } from '../components/BarcodeScanner'
+import { BookPlaceholder } from '../components/BookPlaceholder'
 import logo from '../../assets/logo.png'
 import bg1 from '../../assets/bg1.png'
 import design1 from '../../assets/design1.png'
@@ -1610,7 +1611,8 @@ export default function DashboardPage() {
     if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
     if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
     if (catalogCategories.length === 0) { setCatalogMessage('At least 1 category is required.'); return }
-    if (catalogImages.length === 0) { setCatalogMessage('At least 1 image is required.'); return }
+    // Images are optional — an item can be added now and given images later.
+    // Until then, a book placeholder is shown wherever the item appears.
 
     setIsUploadingCatalog(true)
     setCatalogMessage('')
@@ -1689,10 +1691,7 @@ export default function DashboardPage() {
     if (!catalogTitle.trim()) { setCatalogMessage('Title is required.'); return }
     if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
     if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
-    if (catalogExistingImages.length + catalogImages.length === 0) {
-      setCatalogMessage('At least 1 image is required.')
-      return
-    }
+    // Images are optional; a placeholder is shown until they are added.
 
     setIsUploadingCatalog(true)
     setCatalogMessage('')
@@ -5483,7 +5482,7 @@ export default function DashboardPage() {
 
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
-              Images * (min 1, max 5) - {catalogExistingImages.length + catalogImages.length}/5 selected
+              Images (optional, up to 5) - {catalogExistingImages.length + catalogImages.length}/5 selected. You can add images later; a book placeholder shows until then.
             </label>
 
             {/* Existing images (edit mode) */}
@@ -5725,10 +5724,7 @@ export default function DashboardPage() {
                     )}
                   </>
                 ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2">
-                    <svg className="h-12 w-12 text-muted/30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    <span className="text-xs text-muted/60 font-medium">No images</span>
-                  </div>
+                  <BookPlaceholder title={item.title} className="h-full w-full" />
                 )}
               </div>
 

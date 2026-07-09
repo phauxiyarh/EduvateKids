@@ -8,6 +8,7 @@ import { db } from '../../lib/firebase'
 import { useCart } from '../../lib/cart'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
+import { BookPlaceholder } from '../components/BookPlaceholder'
 import logo from '../../assets/logo.png'
 
 type CatalogItem = {
@@ -384,9 +385,7 @@ export default function CatalogPage() {
                       )}
                     </>
                   ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <PhotoIcon className="h-12 w-12 text-primary/25" />
-                    </div>
+                    <BookPlaceholder title={item.title} className="h-full w-full" />
                   )}
                 </div>
 
@@ -538,9 +537,7 @@ export default function CatalogPage() {
                     )}
                   </>
                 ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <PhotoIcon className="h-20 w-20 text-primary/25" />
-                  </div>
+                  <BookPlaceholder title={expandedItem.title} className="h-full w-full" />
                 )}
               </div>
 

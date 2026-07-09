@@ -502,6 +502,26 @@ export default function DashboardPage() {
   const [isUploadingCatalog, setIsUploadingCatalog] = useState(false)
   const [catalogMessage, setCatalogMessage] = useState('')
   const [catalogSliderIndex, setCatalogSliderIndex] = useState<Record<string, number>>({})
+  // When adding a catalog item, an inventory item can be selected to auto-fill
+  // publisher, category, price and SKU (stock lives in inventory, so quantity and
+  // the secondary selling price are not shown on the catalog form).
+  const [catalogFromInventoryId, setCatalogFromInventoryId] = useState('')
+
+  // Fill the catalog form from a chosen inventory item.
+  const selectInventoryForCatalog = (invId: string) => {
+    setCatalogFromInventoryId(invId)
+    const inv = inventory.find((i) => i.id === invId)
+    if (!inv) return
+    setCatalogTitle(inv.title)
+    setCatalogPublisher(inv.publisher)
+    setCatalogCategories([inv.category])
+    // Main price = the item's selling price (fallback to RRP).
+    setCatalogPrice(String(inv.sellingPrice || inv.rrp || ''))
+    setCatalogSellingPrice(String(inv.sellingPrice || ''))
+    setCatalogQty(String(inv.quantity ?? ''))
+    // Prefer the item's SKU; if none, its ISBN, so the catalog links to stock.
+    setCatalogSku((inv.sku || inv.isbn || '').trim())
+  }
 
   useEffect(() => {
     // Admin backend only permitted from the canonical host; bounce others home.
@@ -1134,7 +1154,7 @@ export default function DashboardPage() {
             rowData[key] = rowValues[colIndex] as never
           })
         } else {
-          ;[rowData.title, rowData.category, rowData.publisher, rowData.rrp, rowData.discount, rowData.quantity, rowData.sellingPrice, rowData.weight] =
+          ;[rowData.title, rowData.category, rowData.publisher, rowData.sku, rowData.isbn, rowData.rrp, rowData.discount, rowData.quantity, rowData.sellingPrice, rowData.weight] =
             rowValues as never[]
         }
 
@@ -1191,7 +1211,11 @@ export default function DashboardPage() {
           currentInventory[matchIndex] = {
             ...existing,
             ...item,
-            quantity: existing.quantity + item.quantity
+            quantity: existing.quantity + item.quantity,
+            // Keep an existing binding if the uploaded row left SKU/ISBN blank,
+            // so re-uploading a sheet without those columns never unbinds a book.
+            sku: item.sku || existing.sku,
+            isbn: item.isbn || existing.isbn,
           }
           updated += 1
         } else {
@@ -1436,6 +1460,7 @@ export default function DashboardPage() {
     setCatalogImages([])
     setCatalogImagePreviews([])
     setCatalogExistingImages([])
+    setCatalogFromInventoryId('')
   }
 
   // Open the catalog create form prefilled from an inventory item that lacks a
@@ -5291,6 +5316,26 @@ export default function DashboardPage() {
         )}
 
         <div className="grid gap-5 md:grid-cols-2">
+          {!isEdit && inventory.length > 0 && (
+            <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-primary/25 bg-primary/5 p-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-primaryDark mb-2 block">Add from inventory</label>
+              <select
+                value={catalogFromInventoryId}
+                onChange={(e) => selectInventoryForCatalog(e.target.value)}
+                className="w-full rounded-xl border-2 border-primary/20 bg-white px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+              >
+                <option value="">Select an inventory item to auto-fill…</option>
+                {[...inventory]
+                  .sort((a, b) => a.title.localeCompare(b.title))
+                  .map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.title}{i.publisher ? ` — ${i.publisher}` : ''}{i.sku ? ` (${i.sku})` : i.isbn ? ` (${i.isbn})` : ''}
+                    </option>
+                  ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-muted">Fills title, publisher, category, price and SKU from the stock record. You still add the description and images.</p>
+            </div>
+          )}
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
             <input
@@ -5411,28 +5456,10 @@ export default function DashboardPage() {
             />
             <p className="mt-1 text-[11px] text-muted">Shared SKU links this product to an inventory stock record.</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Quantity</label>
-              <input
-                type="number"
-                value={catalogQty}
-                onChange={(e) => setCatalogQty(e.target.value)}
-                placeholder="e.g., 20"
-                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Selling Price ($)</label>
-              <input
-                type="number"
-                value={catalogSellingPrice}
-                onChange={(e) => setCatalogSellingPrice(e.target.value)}
-                placeholder="defaults to price"
-                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-              />
-            </div>
-          </div>
+          {/* Quantity and secondary selling price are intentionally not shown on
+              the catalog form: stock and pricing live on the inventory record
+              (the storefront shows the single "Price" above). These values are
+              still carried from the selected inventory item behind the scenes. */}
 
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">

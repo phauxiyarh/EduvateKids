@@ -105,7 +105,7 @@ export default function CatalogPage() {
 
   const headerReveal = useReveal<HTMLDivElement>()
   const gridReveal = useReveal<HTMLDivElement>()
-  const { addItem } = useCart()
+  const { addItem, items: cartItems, setQuantity } = useCart()
 
   useEffect(() => {
     getDocs(collection(db, 'catalog')).then((snap) => {
@@ -583,9 +583,46 @@ export default function CatalogPage() {
                   </p>
                 </div>
 
-                <p className="mt-6 text-sm text-muted">
-                  For purchasing, visit us at our events or contact us directly.
-                </p>
+                {expandedItem.price > 0 && (() => {
+                  const inCart = cartItems.find((c) => c.id === expandedItem.id)
+                  if (!inCart) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => addItem({ id: expandedItem.id, title: expandedItem.title, price: expandedItem.price, image: expandedItem.images[0] })}
+                        className="btn-shine mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+                        aria-label={`Add ${expandedItem.title} to cart`}
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        Add to Cart
+                      </button>
+                    )
+                  }
+                  return (
+                    <div className="mt-6 flex items-center justify-between gap-4 rounded-full border-2 border-primary/20 bg-primary/5 p-1.5">
+                      <span className="pl-4 text-sm font-semibold text-primaryDark">In your cart</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setQuantity(expandedItem.id, inCart.quantity - 1)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-primaryDark shadow-sm transition hover:bg-primary/10"
+                          aria-label="Decrease quantity"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>
+                        </button>
+                        <span className="w-9 text-center text-base font-bold text-primaryDark">{inCart.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuantity(expandedItem.id, inCart.quantity + 1)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary text-white shadow-sm transition hover:-translate-y-0.5"
+                          aria-label="Increase quantity"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>

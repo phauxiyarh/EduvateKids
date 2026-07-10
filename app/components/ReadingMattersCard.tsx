@@ -132,36 +132,43 @@ export function ReadingMattersCard() {
            top and swells, and the leaf clusters bloom in for a "filling out"
            feel. At cycle end it recedes back to a stub, then repeats. */
 
+        /* Base state = the tiny/hidden starting frame, so the full-size tree is
+           NEVER painted before the animation runs (no flash-of-full-tree). The
+           animation's "both" fill mode then holds this exact frame at 0%. */
+        .reading-card :global(.rm-trunk) { transform: scaleY(0.06); }
+        .reading-card :global(.rm-crown) { opacity: 0; transform: translateY(24px) scale(0.02); }
+        .reading-card :global(.rm-leaf) { opacity: 0; transform: scale(0); }
+
         /* trunk: rises out of the ground, pivoting on its foot at (260,164) */
         @keyframes rm-trunkcycle {
           0%   { transform: scaleY(0.06); }
-          6%   { transform: scaleY(0.5); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
-          24%  { transform: scaleY(1.03); }
-          30%  { transform: scaleY(1); }
+          10%  { transform: scaleY(0.5); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          30%  { transform: scaleY(1.03); }
+          38%  { transform: scaleY(1); }
           90%  { transform: scaleY(1); }
           100% { transform: scaleY(0.06); }
         }
-        .reading-card.is-active :global(.rm-trunk) { animation: rm-trunkcycle 15s ease-in-out infinite; }
+        .reading-card.is-active :global(.rm-trunk) { animation: rm-trunkcycle 15s ease-in-out infinite both; }
 
         /* crown: emerges from the trunk top (260,120), rising + swelling as the
            trunk pushes it up; slightly lags the trunk so it looks pushed up */
         @keyframes rm-crowncycle {
           0%   { opacity: 0; transform: translateY(24px) scale(0.02); }
-          8%   { opacity: 0; transform: translateY(24px) scale(0.02); }
-          16%  { opacity: 1; transform: translateY(10px) scale(0.45); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
-          26%  { transform: translateY(-2px) scale(1.06); }
-          32%  { transform: translateY(0) scale(1); }
+          12%  { opacity: 0; transform: translateY(24px) scale(0.02); }
+          22%  { opacity: 1; transform: translateY(10px) scale(0.45); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          34%  { transform: translateY(-2px) scale(1.06); }
+          40%  { transform: translateY(0) scale(1); }
           90%  { opacity: 1; transform: translateY(0) scale(1); }
           100% { opacity: 0; transform: translateY(24px) scale(0.02); }
         }
-        .reading-card.is-active :global(.rm-crown) { animation: rm-crowncycle 15s ease-in-out infinite; }
+        .reading-card.is-active :global(.rm-crown) { animation: rm-crowncycle 15s ease-in-out infinite both; }
 
         /* individual leaf clusters pop in (staggered via inline delays) so the
            canopy visibly fills out rather than just scaling as one blob */
         @keyframes rm-leafcycle {
-          0%,12% { opacity: 0; transform: scale(0); }
-          20%    { opacity: 1; transform: scale(1.12); }
-          26%    { transform: scale(1); }
+          0%,16% { opacity: 0; transform: scale(0); }
+          26%    { opacity: 1; transform: scale(1.12); }
+          34%    { transform: scale(1); }
           90%    { opacity: 1; transform: scale(1); }
           100%   { opacity: 0; transform: scale(0); }
         }

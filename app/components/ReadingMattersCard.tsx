@@ -66,9 +66,11 @@ export function ReadingMattersCard() {
         /* All animated SVG elements pivot around their own box, not the viewBox. */
         .reading-card :global(svg [class*='rm-']) { transform-box: fill-box; transform-origin: 50% 50%; }
         .reading-card :global(.rm-canopy) { transform-origin: 50% 92%; }
-        /* Pin the rays, tree, and award to view-box coordinates so non-uniform
-           child shapes never shift the pivot. */
-        .reading-card :global(.rm-tree) { transform-box: view-box; transform-origin: 260px 164px; }
+        /* Tree pivots on the base of its own bounding box (bottom-centre = the
+           trunk foot on the ground) so it grows straight up from the ground.
+           fill-box + percentage avoids the browser-inconsistent view-box+px origin. */
+        .reading-card :global(.rm-tree) { transform-box: fill-box; transform-origin: 50% 100%; }
+        /* Pin the rays and award to view-box coordinates. */
         .reading-card :global(.rm-rays) { transform-box: view-box; transform-origin: 298px 40px; }
         .reading-card :global(.rm-awardgrp) { transform-box: view-box; transform-origin: 153px 37px; }
 

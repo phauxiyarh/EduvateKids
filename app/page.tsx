@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from './components/EventNavDropdown'
 import { HeaderCart } from './components/HeaderCart'
 import { BookPlaceholder } from './components/BookPlaceholder'
+import { ReadingMattersCard } from './components/ReadingMattersCard'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import logo from '../assets/logo.png'
@@ -437,43 +438,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="glass-card card-hover rounded-2xl p-5 sm:p-8 shadow-soft hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(124,58,237,0.18)]">
-              <div className="flex items-center justify-between text-sm font-semibold">
-                <span>Why Reading Matters</span>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primaryDark">
-                  Faith · Language · Character
-                </span>
-              </div>
-              <div className="relative mt-6 rounded-2xl bg-cream p-5 shadow-soft">
-                <p className="text-sm text-muted">
-                  Reading nurtures empathy, strengthens language, and helps
-                  children connect to faith through stories. A few pages a day
-                  builds confidence, curiosity, and lifelong learning habits.
-                </p>
-                <div className="mt-4 grid gap-3 text-xs">
-                  {[
-                    'Builds Islamic identity through stories.',
-                    'Expands vocabulary and comprehension.',
-                    'Creates family moments and shared reflection.'
-                  ].map((item) => (
-                    <div key={item} className="flex items-start gap-2">
-                      <span className="text-primary">✦</span>
-                      <span className="text-muted">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-8 grid grid-cols-3 gap-4 text-center">
-                {[['400+', 'Curated Titles'], ['50+', 'Learning Kits'], ['10+', 'Events Monthly']].map(
-                  ([value, label]) => (
-                    <div key={label} className="rounded-2xl bg-white/80 px-3 py-2 shadow-soft">
-                      <h3 className="text-xl font-semibold text-primaryDark">{value}</h3>
-                      <p className="text-xs text-muted">{label}</p>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
+            <ReadingMattersCard />
           </div>
         </section>
 

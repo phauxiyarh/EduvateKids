@@ -72,84 +72,154 @@ export function ReadingMattersCard() {
         .reading-card :global(.rm-rays) { transform-box: view-box; transform-origin: 298px 40px; }
         .reading-card :global(.rm-awardgrp) { transform-box: view-box; transform-origin: 153px 37px; }
 
-        @keyframes rm-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes rm-fade { from { opacity: 0; } to { opacity: 1; } }
-        /* Hide the finished scene until it scrolls into view (no flash-of-final-frame). */
+        /* Hide the scene until it scrolls into view, then everything runs on one
+           synchronized 15s day-cycle: dim -> kids read -> world brightens ->
+           stars + sun appear -> certificate -> peak brightness + big star ->
+           dim again, and repeat. Every keyframe below shares the 15s period so
+           the beats stay in sync. */
         .reading-card:not(.is-active) :global(.rm-scene) { opacity: 0; }
-        @keyframes rm-book-in { from { opacity: 0; transform: scale(.6) rotate(-5deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
-        @keyframes rm-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
-        @keyframes rm-sway { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-1.6deg); } 70% { transform: rotate(1.6deg); } }
-        @keyframes rm-rays { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        /* tree growth: a thin shoot first, canopy fills out, gentle settle */
-        @keyframes rm-grow {
-          0% { transform: scale(.12,.04); animation-timing-function: cubic-bezier(.4,0,.85,.55); }
-          45% { transform: scale(.55,.72); }
-          70% { transform: scale(1.05,1.08); }
-          85% { transform: scale(.97,.96); }
-          100% { transform: scale(1); }
-        }
-        @keyframes rm-glowpulse { 0%,100% { opacity: .35; } 50% { opacity: .6; } }
-        @keyframes rm-twinkle {
-          0% { opacity: 0; transform: translateY(5px) scale(.5) rotate(0); }
-          35% { opacity: 1; transform: translateY(0) scale(1.05) rotate(25deg); }
-          70% { opacity: .7; transform: translateY(-5px) scale(.9) rotate(45deg); }
-          100% { opacity: 0; transform: translateY(-10px) scale(.6) rotate(60deg); }
-        }
-        @keyframes rm-draw { to { stroke-dashoffset: 0; } }
-        @keyframes rm-award { 0% { opacity: 0; transform: scale(0) rotate(-8deg); } 55% { opacity: 1; transform: scale(1.14) rotate(3deg); } 75% { transform: scale(.96); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
-        @keyframes rm-shine { from { transform: translateX(-34px) rotate(18deg); } to { transform: translateX(72px) rotate(18deg); } }
-        @keyframes rm-burst { 0% { opacity: 0; transform: scale(0); } 40% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.5); } }
-        @keyframes rm-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .reading-card.is-active :global(.rm-scene) { animation: rm-fadein .6s ease-out both; }
 
-        /* Idle loops run only once the scene is in view (no off-screen CPU). */
+        /* ATMOSPHERE: a dark overlay that lifts as the day brightens. */
+        @keyframes rm-atmos {
+          0%   { opacity: .55; }   /* dim dawn */
+          15%  { opacity: .5; }
+          40%  { opacity: .22; }   /* brightening */
+          62%  { opacity: .06; }
+          78%  { opacity: 0; }     /* peak brightness */
+          90%  { opacity: .06; }
+          100% { opacity: .55; }   /* fade back to dim -> loop */
+        }
+        .reading-card.is-active :global(.rm-atmos) { animation: rm-atmos 15s ease-in-out infinite; }
+
+        /* BREATHING kids (steady idle within the cycle). */
+        @keyframes rm-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
         .reading-card.is-active :global(.rm-child) { animation: rm-breathe 4.6s ease-in-out infinite; }
         .reading-card.is-active :global(.rm-child-2) { animation-delay: -1.7s; }
-        /* tree first grows from a sprout, then eases into a perpetual sway */
-        .reading-card.is-active :global(.rm-tree) { animation: rm-grow 1.7s cubic-bezier(.25,.9,.35,1) .25s both; }
-        .reading-card.is-active :global(.rm-canopy) { animation: rm-sway 6.5s ease-in-out 2.1s infinite; }
-        .reading-card.is-active :global(.rm-rays) { animation: rm-rays 20s linear infinite; }
-        .reading-card.is-active :global(.rm-glow) { animation: rm-glowpulse 6s ease-in-out infinite; }
-        .reading-card.is-active :global(.rm-spark) { animation: rm-twinkle 3.2s ease-in-out infinite; }
 
-        /* Staged one-shot entrance. */
-        .reading-card.is-active :global(.rm-scene) { animation: rm-fade .6s ease-out both; }
-        .reading-card.is-active :global(.rm-girl) { animation: rm-enter .7s cubic-bezier(.22,1,.36,1) .1s both; }
-        .reading-card.is-active :global(.rm-boy) { animation: rm-enter .7s cubic-bezier(.22,1,.36,1) .25s both; }
-        .reading-card.is-active :global(.rm-book) { animation: rm-book-in .5s cubic-bezier(.34,1.56,.64,1) .6s both; }
-        .reading-card.is-active :global(.rm-page) { stroke-dasharray: 40; stroke-dashoffset: 40; animation: rm-draw .9s ease-out 1.1s forwards; }
-        /* the reading award stays hidden until its delayed pop (so it truly appears LATER) */
+        /* rising knowledge sparkles — fade in with the brightening, drift up. */
+        @keyframes rm-sparkcycle {
+          0%,18% { opacity: 0; transform: translateY(6px) scale(.5) rotate(0); }
+          40%    { opacity: 1; transform: translateY(0) scale(1) rotate(20deg); }
+          78%    { opacity: 1; transform: translateY(-6px) scale(1.05) rotate(40deg); }
+          92%    { opacity: 0; transform: translateY(-12px) scale(.6) rotate(55deg); }
+          100%   { opacity: 0; }
+        }
+        .reading-card.is-active :global(.rm-spark) { animation: rm-sparkcycle 15s ease-in-out infinite; }
+
+        /* BOOK opens early in the cycle and closes at the end. */
+        @keyframes rm-bookcycle {
+          0%   { opacity: 0; transform: scale(.55) rotate(-6deg); }
+          8%   { opacity: 1; transform: scale(1) rotate(0); }
+          90%  { opacity: 1; transform: scale(1) rotate(0); }
+          100% { opacity: 0; transform: scale(.55) rotate(-6deg); }
+        }
+        .reading-card.is-active :global(.rm-book) { animation: rm-bookcycle 15s ease-in-out infinite; }
+        /* page text writes on as the child starts reading, clears at cycle end */
+        @keyframes rm-pagecycle { 0% { stroke-dashoffset: 40; } 10% { stroke-dashoffset: 40; } 22% { stroke-dashoffset: 0; } 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 40; } }
+        .reading-card.is-active :global(.rm-page) { stroke-dasharray: 40; animation: rm-pagecycle 15s ease-in-out infinite; }
+
+        /* TREE grows as the world wakes, sways, then settles before the reset. */
+        @keyframes rm-treecycle {
+          0%   { transform: scale(.08,.03); }
+          6%   { transform: scale(.35,.5); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          22%  { transform: scale(1.04,1.06); }
+          30%  { transform: scale(1); }
+          90%  { transform: scale(1); }
+          100% { transform: scale(.08,.03); }
+        }
+        .reading-card.is-active :global(.rm-tree) { animation: rm-treecycle 15s ease-in-out infinite; }
+        @keyframes rm-sway { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-1.6deg); } 70% { transform: rotate(1.6deg); } }
+        .reading-card.is-active :global(.rm-canopy) { animation: rm-sway 6.5s ease-in-out infinite; }
+
+        /* SUN: rises + grows in the second half, sinks at the end; rays keep turning. */
+        @keyframes rm-suncycle {
+          0%   { opacity: 0; transform: translateY(14px) scale(.5); }
+          40%  { opacity: 0; transform: translateY(14px) scale(.5); }
+          55%  { opacity: 1; transform: translateY(0) scale(1); }
+          78%  { opacity: 1; transform: translateY(-2px) scale(1.12); }  /* peak */
+          92%  { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(14px) scale(.5); }
+        }
+        .reading-card.is-active :global(.rm-sun) { transform-box: view-box; transform-origin: 298px 40px; animation: rm-suncycle 15s ease-in-out infinite; }
+        @keyframes rm-rays { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .reading-card.is-active :global(.rm-rays) { animation: rm-rays 16s linear infinite; }
+
+        /* STARS twinkle in as the sky darkens-to-bright transition; brightest at peak. */
+        @keyframes rm-starcycle {
+          0%   { opacity: 0; transform: scale(.4); }
+          30%  { opacity: 0; transform: scale(.4); }
+          42%  { opacity: 1; transform: scale(1); }
+          62%  { opacity: .85; transform: scale(.92); }
+          78%  { opacity: 1; transform: scale(1.1); }   /* peak */
+          92%  { opacity: .5; transform: scale(.8); }
+          100% { opacity: 0; transform: scale(.4); }
+        }
+        .reading-card.is-active :global(.rm-star) { transform-box: fill-box; transform-origin: center; animation: rm-starcycle 15s ease-in-out infinite; }
+        /* the BIG hero star only blooms at peak brightness */
+        @keyframes rm-bigstar {
+          0%,66% { opacity: 0; transform: scale(0) rotate(-20deg); }
+          74%    { opacity: 1; transform: scale(1.15) rotate(0); }
+          82%    { opacity: 1; transform: scale(1) rotate(0); }
+          90%    { opacity: 0; transform: scale(.7) rotate(15deg); }
+          100%   { opacity: 0; transform: scale(0); }
+        }
+        .reading-card.is-active :global(.rm-bigstar) { transform-box: fill-box; transform-origin: center; animation: rm-bigstar 15s ease-in-out infinite; }
+
+        /* CERTIFICATE / award pops in during the bright phase, holds, then leaves. */
+        @keyframes rm-awardcycle {
+          0%,58% { opacity: 0; transform: scale(0) rotate(-8deg); }
+          64%    { opacity: 1; transform: scale(1.14) rotate(3deg); }
+          68%    { transform: scale(.97); }
+          72%    { opacity: 1; transform: scale(1) rotate(0); }
+          88%    { opacity: 1; transform: scale(1) rotate(0); }
+          96%    { opacity: 0; transform: scale(.85) rotate(6deg); }
+          100%   { opacity: 0; transform: scale(0); }
+        }
         .reading-card :global(.rm-awardgrp) { opacity: 0; }
-        .reading-card.is-active :global(.rm-awardgrp) { animation: rm-award .85s cubic-bezier(.34,1.56,.64,1) 2.7s forwards; }
-        .reading-card.is-active :global(.rm-shine) { animation: rm-shine .6s cubic-bezier(.4,0,.2,1) 3.65s both; }
-        .reading-card.is-active :global(.rm-burst) { animation: rm-burst .55s ease-out both; }
+        .reading-card.is-active :global(.rm-awardgrp) { animation: rm-awardcycle 15s ease-in-out infinite; }
+        @keyframes rm-shine { 0%,70% { opacity: 0; transform: translateX(-34px) rotate(18deg); } 72% { opacity: .5; } 80% { opacity: .5; transform: translateX(72px) rotate(18deg); } 81%,100% { opacity: 0; } }
+        .reading-card.is-active :global(.rm-shine) { animation: rm-shine 15s ease-out infinite; }
+        @keyframes rm-burst { 0%,66% { opacity: 0; transform: scale(0); } 72% { opacity: 1; transform: scale(1); } 80% { opacity: 0; transform: scale(.5); } 100% { opacity: 0; } }
+        .reading-card.is-active :global(.rm-burst) { animation: rm-burst 15s ease-out infinite; }
 
-        /* Marquee (pauses on hover for readability). */
+        /* GLOW halo strengthens toward peak brightness. */
+        @keyframes rm-glowcycle { 0%,40% { opacity: .12; } 78% { opacity: .7; } 100% { opacity: .12; } }
+        .reading-card.is-active :global(.rm-glow) { animation: rm-glowcycle 15s ease-in-out infinite; }
+
+        @keyframes rm-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .rm-track { display: flex; width: max-content; animation: rm-marquee 26s linear infinite; }
         .reading-card:hover .rm-track { animation-play-state: paused; }
-        /* Hover brings the light up (static halo layer; the pulsing one can't take a hover override). */
         .reading-card :global(.rm-glow2) { opacity: 0; transition: opacity .4s; }
-        .reading-card:hover :global(.rm-glow2) { opacity: .45; }
+        .reading-card:hover :global(.rm-glow2) { opacity: .3; }
+
+        @keyframes rm-fadein { from { opacity: 0; } to { opacity: 1; } }
 
         @media (prefers-reduced-motion: reduce) {
           .reading-card :global(.rm-scene),
-          .reading-card :global(.rm-girl),
-          .reading-card :global(.rm-boy),
+          .reading-card :global(.rm-atmos),
           .reading-card :global(.rm-child),
           .reading-card :global(.rm-child-2),
           .reading-card :global(.rm-book),
           .reading-card :global(.rm-tree),
           .reading-card :global(.rm-canopy),
+          .reading-card :global(.rm-sun),
           .reading-card :global(.rm-rays),
           .reading-card :global(.rm-glow),
-          .reading-card :global(.rm-spark),
+          .reading-card :global(.rm-star),
+          .reading-card :global(.rm-bigstar),
           .reading-card :global(.rm-awardgrp),
           .reading-card :global(.rm-shine),
           .reading-card :global(.rm-burst),
           .rm-track { animation: none !important; }
-          .reading-card :global(.rm-page) { stroke-dashoffset: 0 !important; animation: none !important; }
-          .reading-card :global(.rm-awardgrp) { opacity: 1 !important; } /* show the award statically */
-          .reading-card :global(.rm-spark) { opacity: 1 !important; }
-          .reading-card :global(.rm-shine), .reading-card :global(.rm-burst) { opacity: 0 !important; }
+          /* static, fully-lit final frame */
+          .reading-card :global(.rm-atmos) { opacity: 0 !important; }
+          .reading-card :global(.rm-page) { stroke-dashoffset: 0 !important; }
+          .reading-card :global(.rm-book), .reading-card :global(.rm-sun),
+          .reading-card :global(.rm-star), .reading-card :global(.rm-awardgrp),
+          .reading-card :global(.rm-spark) { opacity: 1 !important; transform: none !important; }
+          .reading-card :global(.rm-bigstar), .reading-card :global(.rm-shine),
+          .reading-card :global(.rm-burst) { opacity: 0 !important; }
           .rm-track { flex-wrap: wrap; width: 100%; justify-content: center; gap: .25rem 1rem; }
           .rm-track span:nth-child(n+4) { display: none; }
         }
@@ -173,7 +243,7 @@ export function ReadingMattersCard() {
               <stop offset="0%" stopColor="#F9E7B8" stopOpacity="0.4" />
               <stop offset="100%" stopColor="#F9E7B8" stopOpacity="0" />
             </radialGradient>
-            <radialGradient id="rm-sun" cx="0.5" cy="0.5" r="0.5">
+            <radialGradient id="rm-sunrad" cx="0.5" cy="0.5" r="0.5">
               <stop offset="0%" stopColor="#F6D68A" /><stop offset="100%" stopColor="#F6D68A" stopOpacity="0" />
             </radialGradient>
             <radialGradient id="rm-suncore" cx="0.4" cy="0.35" r="0.7">
@@ -214,6 +284,12 @@ export function ReadingMattersCard() {
             <linearGradient id="rm-minaret" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#1A7A3C" /><stop offset="100%" stopColor="#0A4423" />
             </linearGradient>
+            {/* dusk veil — deep blue overhead easing to a warm horizon */}
+            <linearGradient id="rm-dusk" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#243B6B" />
+              <stop offset="55%" stopColor="#3E5687" />
+              <stop offset="100%" stopColor="#8A7A6B" />
+            </linearGradient>
             <clipPath id="rm-cert"><rect x="-34" y="-14" width="46" height="34" rx="3" /></clipPath>
           </defs>
 
@@ -222,18 +298,41 @@ export function ReadingMattersCard() {
           <rect width="340" height="200" fill="url(#rm-warm)" />
 
           <g className="rm-scene">
-            {/* sun bloom + rays + core */}
-            <circle className="rm-glow" cx="298" cy="40" r="44" fill="url(#rm-sun)" />
-            <circle className="rm-glow2" cx="298" cy="40" r="44" fill="url(#rm-sun)" />
-            <g className="rm-rays" opacity="0.85">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <rect key={i}
-                  x={i % 2 ? '296.8' : '296.3'} y={i === 0 ? '2' : i % 2 ? '9' : '5'}
-                  width={i % 2 ? '2.4' : '3.4'} height={i === 0 ? '16' : i % 2 ? '8' : '13'} rx="1.2"
-                  fill="#E0B45A" transform={`rotate(${i * 30} 298 40)`} />
+            {/* sky glow disc — always present, its opacity is the atmosphere's warmth */}
+            <circle className="rm-glow" cx="298" cy="40" r="52" fill="url(#rm-sunrad)" />
+            <circle className="rm-glow2" cx="298" cy="40" r="44" fill="url(#rm-sunrad)" />
+
+            {/* stars — appear as the sky brightens, brightest at peak */}
+            <g>
+              {[
+                { x: 96, y: 30, r: 2.2 }, { x: 132, y: 20, r: 1.6 }, { x: 60, y: 48, r: 1.8 },
+                { x: 172, y: 26, r: 2 }, { x: 210, y: 18, r: 1.5 }, { x: 250, y: 34, r: 1.7 },
+                { x: 118, y: 52, r: 1.4 }, { x: 200, y: 44, r: 1.9 },
+              ].map((s, i) => (
+                <path key={i} className="rm-star"
+                  style={{ animationDelay: `${-(i * 0.4)}s` }}
+                  d={`M${s.x} ${s.y - s.r * 2.2} l${s.r * 0.75} ${s.r * 1.6} ${s.r * 1.6} ${s.r * 0.75} -${s.r * 1.6} ${s.r * 0.75} -${s.r * 0.75} ${s.r * 1.6} -${s.r * 0.75} -${s.r * 1.6} -${s.r * 1.6} -${s.r * 0.75} ${s.r * 1.6} -${s.r * 0.75}z`}
+                  fill="#FBE7B0" />
               ))}
             </g>
-            <circle cx="298" cy="40" r="14" fill="url(#rm-suncore)" />
+
+            {/* sun bloom + rays + core (rises + grows in the second half) */}
+            <g className="rm-sun">
+              <g className="rm-rays" opacity="0.85">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <rect key={i}
+                    x={i % 2 ? '296.8' : '296.3'} y={i === 0 ? '2' : i % 2 ? '9' : '5'}
+                    width={i % 2 ? '2.4' : '3.4'} height={i === 0 ? '16' : i % 2 ? '8' : '13'} rx="1.2"
+                    fill="#E0B45A" transform={`rotate(${i * 30} 298 40)`} />
+                ))}
+              </g>
+              <circle cx="298" cy="40" r="14" fill="url(#rm-suncore)" />
+            </g>
+
+            {/* the big hero star that blooms at peak brightness */}
+            <path className="rm-bigstar"
+              d="M156 34 l3 7 7.6 1.1 -5.5 5.4 1.3 7.6 -6.4 -3.6 -6.4 3.6 1.3 -7.6 -5.5 -5.4 7.6 -1.1z"
+              fill="#FFEFB4" stroke="#F6D68A" strokeWidth="1" />
 
             {/* distant hills */}
             <path d="M0 152 Q70 132 150 150 T340 148 L340 163 L0 163 Z" fill="#CFE5D6" opacity="0.7" />
@@ -320,8 +419,8 @@ export function ReadingMattersCard() {
                   <path d="M0 -9 l1 2 2 .3 -1.5 1.5 .4 2.2 -1.9 -1 -1.9 1 .4 -2.2 -1.5 -1.5 2 -.3z" fill="#FFF3D6" opacity="0.9" />
                 </g>
                 {/* sparkle burst around the trophy */}
-                {[{x:44,y:-14,d:'3.5s'},{x:14,y:-16,d:'3.65s'},{x:36,y:16,d:'3.75s'},{x:52,y:4,d:'3.6s'}].map((s,i)=>(
-                  <path key={i} className="rm-burst" style={{ animationDelay: s.d }} d={`M${s.x} ${s.y-4} l1.2 2.6 2.6 1.2 -2.6 1.2 -1.2 2.6 -1.2 -2.6 -2.6 -1.2 2.6 -1.2z`} fill="#E0B45A" />
+                {[{x:44,y:-14},{x:14,y:-16},{x:36,y:16},{x:52,y:4}].map((s,i)=>(
+                  <path key={i} className="rm-burst" d={`M${s.x} ${s.y-4} l1.2 2.6 2.6 1.2 -2.6 1.2 -1.2 2.6 -1.2 -2.6 -2.6 -1.2 2.6 -1.2z`} fill="#E0B45A" />
                 ))}
               </g>
             </g>
@@ -435,6 +534,10 @@ export function ReadingMattersCard() {
                 </g>
               ))}
             </g>
+
+            {/* atmosphere: a cool dusk veil that lifts as the day brightens, then
+               settles back — this is what drives the dim → bright → dim loop */}
+            <rect className="rm-atmos" width="340" height="200" fill="url(#rm-dusk)" style={{ mixBlendMode: 'multiply' }} />
           </g>
 
           {/* vignette */}

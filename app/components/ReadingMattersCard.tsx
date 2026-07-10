@@ -1,10 +1,11 @@
 'use client'
 
 /**
- * "Why Reading Matters" hero card — a premium, animated illustration of a Muslim
- * child reading and growing, with floating knowledge sparkles, a rising sprout,
- * benefit rows, and count-up stats. Self-contained SVG + scoped CSS keyframes,
- * brand-coloured, and fully reduced-motion aware.
+ * "Why Reading Matters" hero card — a premium, animated illustration of two happy
+ * Muslim children (a girl in hijab and a boy) reading together, with a success
+ * banner (trophy + certificate), floating knowledge sparkles, a swaying tree and
+ * a little mosque. The three benefits scroll as an animated marquee inside the
+ * scene. Count-up stats below. Self-contained SVG + scoped CSS, reduced-motion aware.
  */
 import { useEffect, useRef, useState } from 'react'
 
@@ -20,7 +21,7 @@ function useCountUp(target: number, run: boolean, duration = 1400) {
     const start = performance.now()
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - t, 3) // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3)
       setValue(Math.round(target * eased))
       if (t < 1) raf = requestAnimationFrame(tick)
     }
@@ -51,10 +52,12 @@ export function ReadingMattersCard() {
   const events = useCountUp(10, inView)
 
   const benefits = [
-    { text: 'Builds Islamic identity through stories.', icon: 'M12 3l2.09 6.26L20 9.27l-5 3.64L16.18 20 12 16.9 7.82 20 9 12.91l-5-3.64 5.91.01L12 3z' },
-    { text: 'Expands vocabulary and comprehension.', icon: 'M12 6.5C10.5 5.3 8.5 4.8 6 4.8c-.9 0-1.7.1-2.5.3v13c.8-.2 1.6-.3 2.5-.3 2.5 0 4.5.5 6 1.7 1.5-1.2 3.5-1.7 6-1.7.9 0 1.7.1 2.5.3v-13c-.8-.2-1.6-.3-2.5-.3-2.5 0-4.5.5-6 1.7zM12 6.5v12.3' },
-    { text: 'Creates family moments and shared reflection.', icon: 'M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4z' },
+    'Builds Islamic identity through stories',
+    'Expands vocabulary and comprehension',
+    'Creates family moments and shared reflection',
   ]
+  // Duplicate the list so the marquee loops seamlessly.
+  const marquee = [...benefits, ...benefits]
 
   return (
     <div ref={ref} className="glass-card card-hover relative overflow-hidden rounded-3xl p-5 sm:p-7 shadow-soft hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(26,122,60,0.18)]">
@@ -62,18 +65,21 @@ export function ReadingMattersCard() {
         @keyframes rm-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
         @keyframes rm-sway { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
         @keyframes rm-twinkle { 0%,100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.15); } }
-        @keyframes rm-rise { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes rm-draw { to { stroke-dashoffset: 0; } }
         @keyframes rm-spin { to { transform: rotate(360deg); } }
+        @keyframes rm-pop { 0% { transform: scale(0) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.12) rotate(4deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+        @keyframes rm-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .rm-float { animation: rm-float 4s ease-in-out infinite; }
         .rm-sway { animation: rm-sway 5s ease-in-out infinite; transform-origin: bottom center; }
         .rm-twinkle { animation: rm-twinkle 2.4s ease-in-out infinite; }
         .rm-spin { animation: rm-spin 18s linear infinite; transform-origin: center; }
-        .rm-rise { animation: rm-rise .6s ease-out both; }
+        .rm-pop { animation: rm-pop .7s cubic-bezier(.22,1,.36,1) .5s both; transform-origin: center; }
         .rm-page { stroke-dasharray: 60; stroke-dashoffset: 60; animation: rm-draw 1.1s ease-out .3s forwards; }
+        .rm-track { display: flex; width: max-content; animation: rm-marquee 16s linear infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .rm-float, .rm-sway, .rm-twinkle, .rm-spin, .rm-rise { animation: none !important; }
+          .rm-float, .rm-sway, .rm-twinkle, .rm-spin, .rm-pop, .rm-track { animation: none !important; }
           .rm-page { stroke-dashoffset: 0 !important; animation: none !important; }
+          .rm-track { flex-wrap: wrap; }
         }
       `}</style>
 
@@ -84,10 +90,9 @@ export function ReadingMattersCard() {
         </span>
       </div>
 
-      {/* Animated scene: a child reading under a growing tree, with a little
-          mosque, a rising sprout of knowledge, and floating sparkles. */}
+      {/* Animated scene */}
       <div className="relative mt-5 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 via-amber-50/40 to-white p-4">
-        <svg viewBox="0 0 340 190" className="w-full" role="img" aria-label="A child reading and growing in knowledge">
+        <svg viewBox="0 0 340 200" className="w-full" role="img" aria-label="A Muslim girl and boy reading happily and earning a reading award">
           <defs>
             <linearGradient id="rm-sky" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#EAF6EE" />
@@ -97,120 +102,152 @@ export function ReadingMattersCard() {
               <stop offset="0%" stopColor="#2FA25A" />
               <stop offset="100%" stopColor="#0D5C2E" />
             </linearGradient>
+            <linearGradient id="rm-book2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#5A9BEA" />
+              <stop offset="100%" stopColor="#265596" />
+            </linearGradient>
             <radialGradient id="rm-sun" cx="0.5" cy="0.5" r="0.5">
               <stop offset="0%" stopColor="#F6D68A" />
               <stop offset="100%" stopColor="#F6D68A" stopOpacity="0" />
             </radialGradient>
           </defs>
 
-          <rect width="340" height="190" fill="url(#rm-sky)" />
-          {/* warm sun glow, slowly rotating rays */}
-          <circle cx="288" cy="44" r="46" fill="url(#rm-sun)" />
+          <rect width="340" height="200" fill="url(#rm-sky)" />
+
+          {/* sun with rotating rays */}
+          <circle cx="298" cy="40" r="44" fill="url(#rm-sun)" />
           <g className="rm-spin" opacity="0.5">
             {Array.from({ length: 8 }).map((_, i) => (
-              <rect key={i} x="286" y="10" width="4" height="12" rx="2" fill="#E0B45A"
-                transform={`rotate(${i * 45} 288 44)`} />
+              <rect key={i} x="296" y="8" width="4" height="11" rx="2" fill="#E0B45A" transform={`rotate(${i * 45} 298 40)`} />
             ))}
           </g>
-          <circle cx="288" cy="44" r="15" fill="#F0C766" />
+          <circle cx="298" cy="40" r="14" fill="#F0C766" />
 
-          {/* little mosque on the horizon */}
+          {/* mosque */}
           <g opacity="0.85">
-            <rect x="20" y="120" width="46" height="34" rx="3" fill="#B8D4C0" />
-            <path d="M43 100c8 6 12 11 12 16 0 6-5 9-12 9s-12-3-12-9c0-5 4-10 12-16z" fill="#1A7A3C" />
-            <rect x="17" y="108" width="4" height="46" rx="2" fill="#0D5C2E" />
-            <circle cx="19" cy="106" r="3" fill="#C9963A" />
-            <rect x="66" y="108" width="4" height="46" rx="2" fill="#0D5C2E" />
-            <circle cx="68" cy="106" r="3" fill="#C9963A" />
+            <rect x="16" y="126" width="42" height="30" rx="3" fill="#B8D4C0" />
+            <path d="M37 108c7 5 11 10 11 15 0 5-4 8-11 8s-11-3-11-8c0-5 4-10 11-15z" fill="#1A7A3C" />
+            <rect x="13" y="114" width="4" height="42" rx="2" fill="#0D5C2E" />
+            <circle cx="15" cy="112" r="3" fill="#C9963A" />
+            <rect x="58" y="114" width="4" height="42" rx="2" fill="#0D5C2E" />
+            <circle cx="60" cy="112" r="3" fill="#C9963A" />
           </g>
 
-          {/* growing tree (gentle sway) */}
+          {/* swaying tree */}
           <g className="rm-sway">
-            <rect x="250" y="118" width="8" height="40" rx="3" fill="#8a5a33" />
-            <circle cx="254" cy="108" r="26" fill="#2FA25A" />
-            <circle cx="236" cy="116" r="16" fill="#1A7A3C" />
-            <circle cx="272" cy="116" r="16" fill="#37B0A9" />
-            <circle cx="248" cy="96" r="14" fill="#3fbf6a" />
+            <rect x="256" y="120" width="8" height="40" rx="3" fill="#8a5a33" />
+            <circle cx="260" cy="110" r="24" fill="#2FA25A" />
+            <circle cx="244" cy="118" r="15" fill="#1A7A3C" />
+            <circle cx="276" cy="118" r="15" fill="#37B0A9" />
+            <circle cx="254" cy="99" r="13" fill="#3fbf6a" />
           </g>
 
           {/* ground */}
-          <path d="M0 158 h340 v32 h-340 z" fill="#DCEBE1" />
-          <path d="M0 158 q170 -14 340 0" fill="none" stroke="#B8D4C0" strokeWidth="2" />
+          <path d="M0 162 h340 v38 h-340 z" fill="#DCEBE1" />
+          <path d="M0 162 q170 -14 340 0" fill="none" stroke="#B8D4C0" strokeWidth="2" />
 
-          {/* rising sprout of knowledge in front */}
-          <g className="rm-float">
-            <path d="M120 158 v-16" stroke="#1A7A3C" strokeWidth="3" strokeLinecap="round" />
-            <path d="M120 150 c0 -9 6 -14 15 -14 c0 8 -7 14 -15 14z" fill="#2FA25A" />
-            <path d="M120 154 c0 -9 -6 -14 -15 -14 c0 8 7 14 15 14z" fill="#37B0A9" />
-          </g>
-
-          {/* child sitting, reading an open book */}
-          <g>
-            {/* body */}
-            <path d="M150 158 q0 -30 22 -30 q22 0 22 30 z" fill="#5B7C9D" />
-            {/* head + simple cap */}
-            <circle cx="172" cy="120" r="13" fill="#F3C9A6" />
-            <path d="M159 116 q13 -14 26 0 q-13 -5 -26 0z" fill="#2B2B2B" />
-            <path d="M159 116 q13 -8 26 0" fill="none" stroke="#C9963A" strokeWidth="2" />
-            {/* arms holding the book */}
-            <path d="M154 150 q8 6 18 4" fill="none" stroke="#F3C9A6" strokeWidth="6" strokeLinecap="round" />
-            <path d="M190 150 q-8 6 -18 4" fill="none" stroke="#F3C9A6" strokeWidth="6" strokeLinecap="round" />
-            {/* open book */}
-            <g className="rm-float">
-              <path d="M150 150 l22 -6 v20 l-22 6 z" fill="url(#rm-book)" />
-              <path d="M194 150 l-22 -6 v20 l22 6 z" fill="#1A7A3C" />
-              <path d="M172 144 v20" stroke="#0b3d1f" strokeWidth="1.5" />
-              {/* drawn text lines on the pages */}
-              <path className="rm-page" d="M156 152 l12 -3" stroke="#ffffff" strokeWidth="1.5" opacity="0.85" />
-              <path className="rm-page" d="M156 157 l12 -3" stroke="#ffffff" strokeWidth="1.5" opacity="0.7" />
-              <path className="rm-page" d="M176 149 l12 3" stroke="#ffffff" strokeWidth="1.5" opacity="0.85" />
-              <path className="rm-page" d="M176 154 l12 3" stroke="#ffffff" strokeWidth="1.5" opacity="0.7" />
+          {/* success banner: a certificate + trophy that pops in */}
+          <g className="rm-pop">
+            <g transform="translate(150,26)">
+              {/* certificate */}
+              <rect x="-34" y="-14" width="46" height="34" rx="3" fill="#FFFDF6" stroke="#E0B45A" strokeWidth="2" />
+              <path d="M-28 -6 h34 M-28 0 h34 M-28 6 h22" stroke="#C9963A" strokeWidth="1.5" opacity="0.7" />
+              <circle cx="-6" cy="12" r="6" fill="#C9963A" />
+              <path d="M-9 15 l-2 8 3 -2 3 2 -2 -8z" fill="#C9963A" />
+              {/* trophy */}
+              <g transform="translate(28,0)">
+                <path d="M-8 -12 h16 v6 a8 8 0 01-16 0z" fill="#E0B45A" />
+                <path d="M-8 -10 h-4 a4 4 0 004 5M8 -10 h4 a4 4 0 01-4 5" fill="none" stroke="#E0B45A" strokeWidth="2" />
+                <rect x="-2" y="-2" width="4" height="6" fill="#C9963A" />
+                <rect x="-6" y="4" width="12" height="3" rx="1.5" fill="#C9963A" />
+              </g>
             </g>
           </g>
 
-          {/* floating knowledge sparkles rising from the book */}
+          {/* ── GIRL (hijab), reading, happy ── */}
+          <g transform="translate(118,0)">
+            {/* body / dress */}
+            <path d="M2 162 q0 -30 20 -30 q20 0 20 30 z" fill="#7C5CBF" />
+            {/* hijab */}
+            <path d="M8 128 a14 14 0 0128 0 q0 12 -4 18 l-6 -2 q2 -8 2 -16 a10 10 0 00-14 0 q0 8 2 16 l-6 2 q-4 -6 -4 -18z" fill="#C65B6B" />
+            {/* face */}
+            <circle cx="22" cy="126" r="11" fill="#F3C9A6" />
+            <path d="M12 124 a10 10 0 0120 0 q0 10 -10 14 q-10 -4 -10 -14z" fill="none" />
+            {/* happy eyes + smile */}
+            <circle cx="18" cy="126" r="1.5" fill="#3a2b22" />
+            <circle cx="26" cy="126" r="1.5" fill="#3a2b22" />
+            <path d="M18 131 q4 4 8 0" fill="none" stroke="#8a4a3a" strokeWidth="1.6" strokeLinecap="round" />
+            {/* rosy cheeks */}
+            <circle cx="15" cy="130" r="2" fill="#EFA9A9" opacity="0.6" />
+            <circle cx="29" cy="130" r="2" fill="#EFA9A9" opacity="0.6" />
+            {/* open book (purple/green) */}
+            <g className="rm-float">
+              <path d="M0 152 l22 -6 v18 l-22 6 z" fill="url(#rm-book)" />
+              <path d="M44 152 l-22 -6 v18 l22 6 z" fill="#1A7A3C" />
+              <path d="M22 146 v18" stroke="#0b3d1f" strokeWidth="1.4" />
+              <path className="rm-page" d="M6 154 l12 -3" stroke="#fff" strokeWidth="1.4" opacity="0.85" />
+              <path className="rm-page" d="M6 159 l12 -3" stroke="#fff" strokeWidth="1.4" opacity="0.7" />
+              <path className="rm-page" d="M26 151 l12 3" stroke="#fff" strokeWidth="1.4" opacity="0.85" />
+              <path className="rm-page" d="M26 156 l12 3" stroke="#fff" strokeWidth="1.4" opacity="0.7" />
+            </g>
+          </g>
+
+          {/* ── BOY (cap), reading, happy ── */}
+          <g transform="translate(196,8)">
+            <path d="M2 154 q0 -28 19 -28 q19 0 19 28 z" fill="#2F9E98" />
+            {/* head + kufi cap */}
+            <circle cx="21" cy="120" r="11" fill="#EBB98C" />
+            <path d="M10 116 q11 -13 22 0 q-11 -5 -22 0z" fill="#0D5C2E" />
+            <path d="M10 116 q11 -7 22 0" fill="none" stroke="#C9963A" strokeWidth="1.6" />
+            {/* happy eyes + smile */}
+            <circle cx="17" cy="121" r="1.5" fill="#3a2b22" />
+            <circle cx="25" cy="121" r="1.5" fill="#3a2b22" />
+            <path d="M17 126 q4 4 8 0" fill="none" stroke="#8a4a3a" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="14" cy="125" r="2" fill="#EFA9A9" opacity="0.55" />
+            <circle cx="28" cy="125" r="2" fill="#EFA9A9" opacity="0.55" />
+            {/* open book (blue) */}
+            <g className="rm-float" style={{ animationDelay: '.5s' }}>
+              <path d="M0 148 l20 -6 v17 l-20 6 z" fill="url(#rm-book2)" />
+              <path d="M40 148 l-20 -6 v17 l20 6 z" fill="#265596" />
+              <path d="M20 142 v17" stroke="#173a63" strokeWidth="1.4" />
+              <path className="rm-page" d="M5 150 l11 -3" stroke="#fff" strokeWidth="1.4" opacity="0.85" />
+              <path className="rm-page" d="M5 155 l11 -3" stroke="#fff" strokeWidth="1.4" opacity="0.7" />
+              <path className="rm-page" d="M24 147 l11 3" stroke="#fff" strokeWidth="1.4" opacity="0.85" />
+              <path className="rm-page" d="M24 152 l11 3" stroke="#fff" strokeWidth="1.4" opacity="0.7" />
+            </g>
+          </g>
+
+          {/* knowledge sparkles rising between the kids */}
           {[
-            { x: 176, y: 118, d: '0s', c: '#C9963A' },
-            { x: 196, y: 100, d: '.6s', c: '#2FA25A' },
-            { x: 210, y: 122, d: '1.1s', c: '#37B0A9' },
-            { x: 158, y: 104, d: '.9s', c: '#C9963A' },
+            { x: 168, y: 96, d: '0s', c: '#C9963A' },
+            { x: 186, y: 78, d: '.6s', c: '#2FA25A' },
+            { x: 150, y: 84, d: '.9s', c: '#37B0A9' },
+            { x: 200, y: 100, d: '1.2s', c: '#C9963A' },
           ].map((s, i) => (
-            <path key={i} className="rm-twinkle"
-              style={{ animationDelay: s.d }}
+            <path key={i} className="rm-twinkle" style={{ animationDelay: s.d }}
               d={`M${s.x} ${s.y - 5} l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6z`}
               fill={s.c} />
           ))}
         </svg>
 
-        <p className="mt-1 text-sm leading-relaxed text-inkMuted" style={{ color: '#5C6B5E' }}>
-          A few pages a day nurture empathy, strengthen language, and connect
-          children to their faith through stories, building confidence, curiosity,
-          and lifelong learning habits.
-        </p>
-      </div>
-
-      {/* benefits */}
-      <div className="mt-5 grid gap-2.5">
-        {benefits.map((b, i) => (
-          <div
-            key={b.text}
-            className={inView ? 'rm-rise' : ''}
-            style={{ animationDelay: `${0.15 + i * 0.12}s` }}
-          >
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-white/70 px-3 py-2.5">
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-sm">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.9} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={b.icon} />
-                </svg>
+        {/* animated marquee of benefits, inside the scene */}
+        <div className="relative mt-2 overflow-hidden">
+          <div className="rm-track gap-6">
+            {marquee.map((b, i) => (
+              <span key={i} className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-emerald-800">
+                <svg className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.6 5.7 21l2.3-7.2-6-4.6h7.6z" /></svg>
+                {b}
               </span>
-              <span className="text-sm font-medium text-primaryDark">{b.text}</span>
-            </div>
+            ))}
           </div>
-        ))}
+          {/* soft fade edges */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent" />
+        </div>
       </div>
 
       {/* animated stats */}
-      <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+      <div className="mt-5 grid grid-cols-3 gap-3 text-center">
         {[
           { value: titles, suffix: '+', label: 'Curated Titles' },
           { value: kits, suffix: '+', label: 'Learning Kits' },

@@ -406,8 +406,8 @@ export default function HomePage() {
                 A leading Muslim bookstore for{' '}
                 <span className="gradient-text">families, schools, and communities.</span>
               </h1>
-              <p className="mt-3 text-lg font-semibold text-primaryDark/80">
-                Curated stories that inspire faith, curiosity, and character.
+              <p className="mt-3 font-display text-lg font-bold italic text-emerald-700 sm:text-xl">
+                Rooted in Faith. Growing in Knowledge.
               </p>
               <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
                 Eduvate Kids curates Islamic children&apos;s literature, crafts, and
@@ -1039,8 +1039,9 @@ export default function HomePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Islamic Bookstore</p>
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-white/70">
-                Curating Islamic children&apos;s literature and learning tools for families, educators, and communities across North America.
+              <p className="mt-3 font-display text-sm font-semibold italic text-emerald-300">Rooted in Faith. Growing in Knowledge.</p>
+              <p className="mt-3 text-sm leading-relaxed text-white/70">
+                Curating Islamic children&apos;s literature and learning tools for families, educators, and communities.
               </p>
               <div className="mt-6 flex gap-3">
                 <a

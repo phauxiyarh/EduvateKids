@@ -485,7 +485,10 @@ export default function FAQsPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <Link className="flex items-center gap-3" href="/">
               <Image src={logo} alt="Eduvate Kids logo" width={40} height={40} className="w-10 h-10" />
-              <span className="font-display text-xl font-bold">Eduvate Kids</span>
+              <span className="flex flex-col leading-tight">
+                <span className="font-display text-xl font-bold">Eduvate Kids</span>
+                <span className="font-display text-xs font-semibold italic text-emerald-300">Rooted in Faith. Growing in Knowledge.</span>
+              </span>
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
               <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>

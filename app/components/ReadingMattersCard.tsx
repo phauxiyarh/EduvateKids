@@ -117,8 +117,9 @@ export function ReadingMattersCard() {
         .reading-card.is-active :global(.rm-boy) { animation: rm-enter .7s cubic-bezier(.22,1,.36,1) .25s both; }
         .reading-card.is-active :global(.rm-book) { animation: rm-book-in .5s cubic-bezier(.34,1.56,.64,1) .6s both; }
         .reading-card.is-active :global(.rm-page) { stroke-dasharray: 40; stroke-dashoffset: 40; animation: rm-draw .9s ease-out 1.1s forwards; }
-        /* the reading award appears AFTER the kids are reading and the tree has grown */
-        .reading-card.is-active :global(.rm-awardgrp) { animation: rm-award .85s cubic-bezier(.34,1.56,.64,1) 2.7s both; }
+        /* the reading award stays hidden until its delayed pop (so it truly appears LATER) */
+        .reading-card :global(.rm-awardgrp) { opacity: 0; }
+        .reading-card.is-active :global(.rm-awardgrp) { animation: rm-award .85s cubic-bezier(.34,1.56,.64,1) 2.7s forwards; }
         .reading-card.is-active :global(.rm-shine) { animation: rm-shine .6s cubic-bezier(.4,0,.2,1) 3.65s both; }
         .reading-card.is-active :global(.rm-burst) { animation: rm-burst .55s ease-out both; }
 
@@ -146,6 +147,8 @@ export function ReadingMattersCard() {
           .reading-card :global(.rm-burst),
           .rm-track { animation: none !important; }
           .reading-card :global(.rm-page) { stroke-dashoffset: 0 !important; animation: none !important; }
+          .reading-card :global(.rm-awardgrp) { opacity: 1 !important; } /* show the award statically */
+          .reading-card :global(.rm-spark) { opacity: 1 !important; }
           .reading-card :global(.rm-shine), .reading-card :global(.rm-burst) { opacity: 0 !important; }
           .rm-track { flex-wrap: wrap; width: 100%; justify-content: center; gap: .25rem 1rem; }
           .rm-track span:nth-child(n+4) { display: none; }
@@ -338,25 +341,38 @@ export function ReadingMattersCard() {
                 <circle cx="22" cy="125" r="15" fill="url(#rm-hijab)" />
                 <circle cx="22" cy="127" r="10.3" fill="url(#rm-skin-g)" />
                 <path d="M11 119 A13 13 0 0 1 33 119" fill="none" stroke="#ffffff" strokeWidth="1.4" strokeLinecap="round" opacity="0.32" />
-                {/* soft brows + content downward-gaze eyes + smile */}
-                <path d="M15.8 123.2 q2.3 -1.2 4.4 0" fill="none" stroke="#7A5340" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-                <path d="M23.8 123.2 q2.3 -1.2 4.4 0" fill="none" stroke="#7A5340" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-                <path d="M15.6 126.6 q2.4 2.6 4.8 0" fill="none" stroke="#3A2B22" strokeWidth="1.6" strokeLinecap="round" />
-                <path d="M23.6 126.6 q2.4 2.6 4.8 0" fill="none" stroke="#3A2B22" strokeWidth="1.6" strokeLinecap="round" />
-                <path d="M17.6 132 q4.4 3.8 8.8 0" fill="none" stroke="#8a4a3a" strokeWidth="1.6" strokeLinecap="round" />
-                <ellipse cx="15.3" cy="130.8" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.45" />
-                <ellipse cx="28.7" cy="130.8" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.45" />
-                {/* open book (green) held in hands */}
+                {/* soft brows + round open eyes (pupil + catch-light) + gentle smile */}
+                <path d="M15.8 122.6 q2.4 -1.3 4.6 0" fill="none" stroke="#7A5340" strokeWidth="1" strokeLinecap="round" opacity="0.55" />
+                <path d="M23.6 122.6 q2.4 -1.3 4.6 0" fill="none" stroke="#7A5340" strokeWidth="1" strokeLinecap="round" opacity="0.55" />
+                <ellipse cx="18.3" cy="126.4" rx="1.9" ry="2.3" fill="#ffffff" />
+                <ellipse cx="25.7" cy="126.4" rx="1.9" ry="2.3" fill="#ffffff" />
+                <circle cx="18.6" cy="126.8" r="1.35" fill="#3A2B22" />
+                <circle cx="26" cy="126.8" r="1.35" fill="#3A2B22" />
+                <circle cx="18.1" cy="126.2" r="0.5" fill="#ffffff" />
+                <circle cx="25.5" cy="126.2" r="0.5" fill="#ffffff" />
+                <path d="M17.8 131.4 q4.2 3.4 8.4 0" fill="none" stroke="#8a4a3a" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M19 132.6 q3 1.4 6 0" fill="none" stroke="#c96b6b" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
+                <ellipse cx="15.3" cy="130" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.45" />
+                <ellipse cx="28.7" cy="130" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.45" />
+                {/* realistic open book: two gently-curved pages meeting at a spine valley */}
                 <g className="rm-book">
-                  <path d="M2 146 l20 -6 v16 l-20 6 z" fill="url(#rm-bookg)" />
-                  <path d="M42 146 l-20 -6 v16 l20 6 z" fill="#1A7A3C" />
-                  <circle cx="7" cy="150" r="2.8" fill="url(#rm-skin-g)" />
-                  <circle cx="37" cy="150" r="2.8" fill="url(#rm-skin-g)" />
-                  <path d="M22 140 v16" stroke="#0b3d1f" strokeWidth="1.3" />
-                  <path className="rm-page" d="M7 148 l11 -3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.85" />
-                  <path className="rm-page" d="M7 152.5 l11 -3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
-                  <path className="rm-page" d="M26 145 l11 3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.85" />
-                  <path className="rm-page" d="M26 149.5 l11 3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
+                  {/* cover underside (peeks below the pages) */}
+                  <path d="M1 148 Q22 141 43 148 L43 152 Q22 145 1 152 Z" fill="#0b3d1f" />
+                  {/* left + right pages, curved with a soft page edge */}
+                  <path d="M22 141 Q11 141 2 147 L2 158 Q11 152 22 152 Z" fill="url(#rm-bookg)" />
+                  <path d="M22 141 Q33 141 42 147 L42 158 Q33 152 22 152 Z" fill="#1A7A3C" />
+                  <path d="M22 141 Q11 141 2 147" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.35" />
+                  <path d="M22 141 Q33 141 42 147" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.25" />
+                  {/* spine valley */}
+                  <path d="M22 141 V152" stroke="#083019" strokeWidth="1.4" strokeLinecap="round" />
+                  {/* text lines following the page curve */}
+                  <path className="rm-page" d="M6 148 Q13 145 19 145" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.9" />
+                  <path className="rm-page" d="M5 151 Q13 148 19 148" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
+                  <path className="rm-page" d="M25 145 Q31 145 38 148" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.9" />
+                  <path className="rm-page" d="M25 148 Q31 148 39 151" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
+                  {/* hands resting on the page edges */}
+                  <ellipse cx="5" cy="153" rx="3" ry="2.4" fill="url(#rm-skin-g)" />
+                  <ellipse cx="39" cy="153" rx="3" ry="2.4" fill="url(#rm-skin-g)" />
                 </g>
               </g></g>
             </g>
@@ -375,22 +391,30 @@ export function ReadingMattersCard() {
                 <path d="M10 116 q11 -7 22 0" fill="none" stroke="#C9963A" strokeWidth="1.4" strokeLinecap="round" />
                 <path d="M10 118 q11 -6 22 0" fill="none" stroke="#C9963A" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
                 <path d="M12 111 A11 11 0 0 1 30 111" fill="none" stroke="#2FA25A" strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
-                <path d="M15.4 120.6 q2.4 2.6 4.8 0" fill="none" stroke="#3A2B22" strokeWidth="1.6" strokeLinecap="round" />
-                <path d="M23.6 120.6 q2.4 2.6 4.8 0" fill="none" stroke="#3A2B22" strokeWidth="1.6" strokeLinecap="round" />
-                <path d="M16.6 126 q4.4 3.8 8.8 0" fill="none" stroke="#8a4a3a" strokeWidth="1.6" strokeLinecap="round" />
-                <ellipse cx="14.3" cy="124.5" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.42" />
-                <ellipse cx="27.7" cy="124.5" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.42" />
-                {/* open book (gold, echoes the award) */}
+                {/* round open eyes (pupil + catch-light) + happy smile */}
+                <ellipse cx="17.7" cy="120.4" rx="1.9" ry="2.3" fill="#ffffff" />
+                <ellipse cx="25.3" cy="120.4" rx="1.9" ry="2.3" fill="#ffffff" />
+                <circle cx="18" cy="120.8" r="1.35" fill="#3A2B22" />
+                <circle cx="25.6" cy="120.8" r="1.35" fill="#3A2B22" />
+                <circle cx="17.5" cy="120.2" r="0.5" fill="#ffffff" />
+                <circle cx="25.1" cy="120.2" r="0.5" fill="#ffffff" />
+                <path d="M16.8 125.4 q4.2 3.4 8.4 0" fill="none" stroke="#8a4a3a" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M18 126.6 q3 1.4 6 0" fill="none" stroke="#b85f4f" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
+                <ellipse cx="14.3" cy="123.8" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.42" />
+                <ellipse cx="27.7" cy="123.8" rx="2.1" ry="1.5" fill="#E8927C" opacity="0.42" />
+                {/* realistic open book (gold, echoes the award) */}
                 <g className="rm-book">
-                  <path d="M1 140 l19 -6 v15 l-19 6 z" fill="url(#rm-bookgold)" />
-                  <path d="M39 140 l-19 -6 v15 l19 6 z" fill="#B27F2E" />
-                  <circle cx="6" cy="144" r="2.8" fill="url(#rm-skin-b)" />
-                  <circle cx="36" cy="144" r="2.8" fill="url(#rm-skin-b)" />
-                  <path d="M20 134 v15" stroke="#7c580f" strokeWidth="1.3" />
-                  <path className="rm-page" d="M6 142 l10 -3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.85" />
-                  <path className="rm-page" d="M6 146.5 l10 -3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
-                  <path className="rm-page" d="M24 139 l10 3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.85" />
-                  <path className="rm-page" d="M24 143.5 l10 3" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
+                  <path d="M0 142 Q20 135 40 142 L40 146 Q20 139 0 146 Z" fill="#7c580f" />
+                  <path d="M20 135 Q10 135 1 141 L1 152 Q10 146 20 146 Z" fill="url(#rm-bookgold)" />
+                  <path d="M20 135 Q30 135 39 141 L39 152 Q30 146 20 146 Z" fill="#B27F2E" />
+                  <path d="M20 135 Q10 135 1 141" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.35" />
+                  <path d="M20 135 V146" stroke="#5c4109" strokeWidth="1.4" strokeLinecap="round" />
+                  <path className="rm-page" d="M5 142 Q11 139 17 139" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.9" />
+                  <path className="rm-page" d="M4 145 Q11 142 17 142" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
+                  <path className="rm-page" d="M23 139 Q29 139 36 142" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.9" />
+                  <path className="rm-page" d="M23 142 Q29 142 37 145" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
+                  <ellipse cx="4" cy="147" rx="3" ry="2.4" fill="url(#rm-skin-b)" />
+                  <ellipse cx="36" cy="147" rx="3" ry="2.4" fill="url(#rm-skin-b)" />
                 </g>
               </g></g>
             </g>

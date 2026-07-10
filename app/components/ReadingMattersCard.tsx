@@ -119,14 +119,15 @@ export function ReadingMattersCard() {
         @keyframes rm-pagecycle { 0% { stroke-dashoffset: 40; } 10% { stroke-dashoffset: 40; } 22% { stroke-dashoffset: 0; } 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 40; } }
         .reading-card.is-active :global(.rm-page) { stroke-dasharray: 40; animation: rm-pagecycle 15s ease-in-out infinite; }
 
-        /* TREE grows as the world wakes, sways, then settles before the reset. */
+        /* TREE grows uniformly up from the ground (origin pinned at the trunk
+           base), overshoots a touch, settles, then shrinks back before reset. */
         @keyframes rm-treecycle {
-          0%   { transform: scale(.08,.03); }
-          6%   { transform: scale(.35,.5); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
-          22%  { transform: scale(1.04,1.06); }
+          0%   { transform: scale(0.05); }
+          6%   { transform: scale(0.4); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          22%  { transform: scale(1.05); }
           30%  { transform: scale(1); }
           90%  { transform: scale(1); }
-          100% { transform: scale(.08,.03); }
+          100% { transform: scale(0.05); }
         }
         .reading-card.is-active :global(.rm-tree) { animation: rm-treecycle 15s ease-in-out infinite; }
         @keyframes rm-sway { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-1.6deg); } 70% { transform: rotate(1.6deg); } }

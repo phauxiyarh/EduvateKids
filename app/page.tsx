@@ -105,10 +105,10 @@ const AGE_CATEGORIES: Record<string, { range: string; title: string }> = {
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
 
-// Short "N+" age label (matches the catalog page): 0-5 -> 3+, 6-9 -> 6+, 10+ -> 10+, Adult -> Adult.
+// Short "N+" age label (matches the catalog page): 0-5 -> 0+, 6-9 -> 6+, 10+ -> 10+, Adult -> Adult.
 function ageTagLabel(age: string): string {
   if (!age) return ''
-  const map: Record<string, string> = { '0-5': '3+', '6-9': '6+', '10+': '10+', 'Adult': 'Adult' }
+  const map: Record<string, string> = { '0-5': '0+', '6-9': '6+', '10+': '10+', 'Adult': 'Adult' }
   if (map[age]) return map[age]
   const lower = String(age).match(/\d+/)
   return lower ? `${lower[0]}+` : age

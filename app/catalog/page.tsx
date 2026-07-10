@@ -32,7 +32,7 @@ const AGE_CATEGORIES: Record<string, { range: string; title: string }> = {
 // Map an age category value to a simple lower-bound "N+" style label.
 // Known keys map directly; a raw numeric/range value is reduced to its lower bound.
 const AGE_TAG_MAP: Record<string, string> = {
-  '0-5': '3+',
+  '0-5': '0+',
   '6-9': '6+',
   '10+': '10+',
   'Adult': 'Adult'

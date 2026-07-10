@@ -170,7 +170,7 @@ const AGE_CATEGORIES: Record<AgeCategory, { range: string; title: string }> = {
 
 // Simple lower-bound "N+" label for an age category (public catalog style).
 const AGE_SHORT_LABEL: Record<AgeCategory, string> = {
-  '0-5': '3+',
+  '0-5': '0+',
   '6-9': '6+',
   '10+': '10+',
   'Adult': 'Adult'

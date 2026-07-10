@@ -159,31 +159,36 @@ type EventRecord = {
   expenses: Expense[]
 }
 
-type AgeCategory = '0-5' | '6-9' | '10+' | 'Adult'
+type AgeCategory = '0+' | '3+' | '6+' | '10+' | 'Adult'
 
 const AGE_CATEGORIES: Record<AgeCategory, { range: string; title: string }> = {
-  '0-5': { range: '0-5 years', title: 'Little Imaan Explorers' },
-  '6-9': { range: '6-9 years', title: 'Deen Explorers' },
+  '0+': { range: '0+ years', title: 'Tiny Sprouts' },
+  '3+': { range: '3+ years', title: 'Little Imaan Explorers' },
+  '6+': { range: '6+ years', title: 'Deen Explorers' },
   '10+': { range: '10+ years', title: 'Young Scholars' },
   'Adult': { range: 'Adult', title: 'Wisdom Seekers' }
 }
 
 // Simple lower-bound "N+" label for an age category (public catalog style).
 const AGE_SHORT_LABEL: Record<AgeCategory, string> = {
-  '0-5': '0+',
-  '6-9': '6+',
+  '0+': '0+',
+  '3+': '3+',
+  '6+': '6+',
   '10+': '10+',
   'Adult': 'Adult'
 }
 const ageShortLabel = (age: string): string =>
   AGE_SHORT_LABEL[age as AgeCategory] || age
 
-// Migration map for old age categories to new ones
+// Migration map for old age categories to the current set. Older items used
+// ranges (0-5 displayed as 3+, 6-9 as 6+); map them to the matching new key.
 const MIGRATE_AGE_CATEGORY = (oldCategory: string): AgeCategory => {
   const migrations: Record<string, AgeCategory> = {
-    '0-3': '0-5',
-    '4-6': '6-9',
-    '7-9': '6-9',
+    '0-3': '0+',
+    '0-5': '3+',
+    '4-6': '6+',
+    '6-9': '6+',
+    '7-9': '6+',
     '10-12': '10+',
     '13+': '10+'
   }
@@ -491,7 +496,7 @@ export default function DashboardPage() {
   const [catalogTitle, setCatalogTitle] = useState('')
   const [catalogDescription, setCatalogDescription] = useState('')
   const [catalogCategories, setCatalogCategories] = useState<InventoryCategory[]>(['Books'])
-  const [catalogAge, setCatalogAge] = useState<AgeCategory[]>(['0-5'])
+  const [catalogAge, setCatalogAge] = useState<AgeCategory[]>(['0+'])
   const [catalogPrice, setCatalogPrice] = useState('')
   const [catalogPublisher, setCatalogPublisher] = useState('')
   const [catalogSku, setCatalogSku] = useState('')
@@ -1455,7 +1460,7 @@ export default function DashboardPage() {
     setCatalogTitle('')
     setCatalogDescription('')
     setCatalogCategories(['Books'])
-    setCatalogAge(['0-5'])
+    setCatalogAge(['0+'])
     setCatalogPrice('')
     setCatalogPublisher('')
     setCatalogSku('')
@@ -5308,8 +5313,9 @@ export default function DashboardPage() {
   )
 
   const catalogAgeBadgeClasses: Record<AgeCategory, string> = {
-    '0-5': 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border border-pink-200',
-    '6-9': 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200',
+    '0+': 'bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700 border border-rose-200',
+    '3+': 'bg-gradient-to-r from-pink-100 to-pink-50 text-pink-700 border border-pink-200',
+    '6+': 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200',
     '10+': 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-700 border border-purple-200',
     'Adult': 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 border border-gray-200'
   }

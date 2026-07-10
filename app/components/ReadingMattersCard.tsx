@@ -65,14 +65,20 @@ export function ReadingMattersCard() {
       <style jsx>{`
         /* All animated SVG elements pivot around their own box, not the viewBox. */
         .reading-card :global(svg [class*='rm-']) { transform-box: fill-box; transform-origin: 50% 50%; }
-        .reading-card :global(.rm-canopy) { transform-origin: 50% 92%; }
-        /* Tree pivots on the base of its own bounding box (bottom-centre = the
-           trunk foot on the ground) so it grows straight up from the ground.
-           fill-box + percentage avoids the browser-inconsistent view-box+px origin. */
-        .reading-card :global(.rm-tree) { transform-box: fill-box; transform-origin: 50% 100%; }
-        /* Pin the rays and award to view-box coordinates. */
-        .reading-card :global(.rm-rays) { transform-box: view-box; transform-origin: 298px 40px; }
-        .reading-card :global(.rm-awardgrp) { transform-box: view-box; transform-origin: 153px 37px; }
+        .reading-card :global(svg .rm-canopy) { transform-box: fill-box; transform-origin: 50% 92%; }
+        /* Tree parts pivot on fixed view-box coordinates so the foot never moves:
+           trunk rises from its foot on the ground (260,164); the crown emerges
+           from the trunk top (260,120); each leaf blooms from its own centre.
+           NOTE: these are qualified with 'svg' so they out-specify the generic
+           'svg [class*=rm-] { transform-box: fill-box }' rule above — otherwise
+           the view-box origin gets clobbered and the pivot flies off (tree then
+           appears to grow from the sky). */
+        .reading-card :global(svg .rm-trunk) { transform-box: view-box; transform-origin: 260px 164px; }
+        .reading-card :global(svg .rm-crown) { transform-box: view-box; transform-origin: 260px 120px; }
+        .reading-card :global(svg .rm-leaf) { transform-box: fill-box; transform-origin: 50% 50%; }
+        /* Pin the rays and award to view-box coordinates (same specificity fix). */
+        .reading-card :global(svg .rm-rays) { transform-box: view-box; transform-origin: 298px 40px; }
+        .reading-card :global(svg .rm-awardgrp) { transform-box: view-box; transform-origin: 153px 37px; }
 
         /* Hide the scene until it scrolls into view, then everything runs on one
            synchronized 15s day-cycle: dim -> kids read -> world brightens ->
@@ -121,17 +127,51 @@ export function ReadingMattersCard() {
         @keyframes rm-pagecycle { 0% { stroke-dashoffset: 40; } 10% { stroke-dashoffset: 40; } 22% { stroke-dashoffset: 0; } 92% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 40; } }
         .reading-card.is-active :global(.rm-page) { stroke-dasharray: 40; animation: rm-pagecycle 15s ease-in-out infinite; }
 
-        /* TREE grows uniformly up from the ground (origin pinned at the trunk
-           base), overshoots a touch, settles, then shrinks back before reset. */
-        @keyframes rm-treecycle {
-          0%   { transform: scale(0.05); }
-          6%   { transform: scale(0.4); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
-          22%  { transform: scale(1.05); }
-          30%  { transform: scale(1); }
-          90%  { transform: scale(1); }
-          100% { transform: scale(0.05); }
+        /* TREE grows like a real sapling: the trunk rises out of the ground
+           (scaleY from a stub, foot fixed), the crown lifts up out of the trunk
+           top and swells, and the leaf clusters bloom in for a "filling out"
+           feel. At cycle end it recedes back to a stub, then repeats. */
+
+        /* trunk: rises out of the ground, pivoting on its foot at (260,164) */
+        @keyframes rm-trunkcycle {
+          0%   { transform: scaleY(0.06); }
+          6%   { transform: scaleY(0.5); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          24%  { transform: scaleY(1.03); }
+          30%  { transform: scaleY(1); }
+          90%  { transform: scaleY(1); }
+          100% { transform: scaleY(0.06); }
         }
-        .reading-card.is-active :global(.rm-tree) { animation: rm-treecycle 15s ease-in-out infinite; }
+        .reading-card.is-active :global(.rm-trunk) { animation: rm-trunkcycle 15s ease-in-out infinite; }
+
+        /* crown: emerges from the trunk top (260,120), rising + swelling as the
+           trunk pushes it up; slightly lags the trunk so it looks pushed up */
+        @keyframes rm-crowncycle {
+          0%   { opacity: 0; transform: translateY(24px) scale(0.02); }
+          8%   { opacity: 0; transform: translateY(24px) scale(0.02); }
+          16%  { opacity: 1; transform: translateY(10px) scale(0.45); animation-timing-function: cubic-bezier(.3,.9,.4,1); }
+          26%  { transform: translateY(-2px) scale(1.06); }
+          32%  { transform: translateY(0) scale(1); }
+          90%  { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(24px) scale(0.02); }
+        }
+        .reading-card.is-active :global(.rm-crown) { animation: rm-crowncycle 15s ease-in-out infinite; }
+
+        /* individual leaf clusters pop in (staggered via inline delays) so the
+           canopy visibly fills out rather than just scaling as one blob */
+        @keyframes rm-leafcycle {
+          0%,12% { opacity: 0; transform: scale(0); }
+          20%    { opacity: 1; transform: scale(1.12); }
+          26%    { transform: scale(1); }
+          90%    { opacity: 1; transform: scale(1); }
+          100%   { opacity: 0; transform: scale(0); }
+        }
+        .reading-card.is-active :global(.rm-leaf) { animation: rm-leafcycle 15s ease-in-out infinite both; }
+        /* centre-outward ripple as the crown fills in (tiny offsets) */
+        .reading-card.is-active :global(.rm-leaf-1) { animation-delay: 0s; }
+        .reading-card.is-active :global(.rm-leaf-2) { animation-delay: 0.15s; }
+        .reading-card.is-active :global(.rm-leaf-3) { animation-delay: 0.3s; }
+        .reading-card.is-active :global(.rm-leaf-4) { animation-delay: 0.45s; }
+
         @keyframes rm-sway { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-1.6deg); } 70% { transform: rotate(1.6deg); } }
         .reading-card.is-active :global(.rm-canopy) { animation: rm-sway 6.5s ease-in-out infinite; }
 
@@ -204,7 +244,9 @@ export function ReadingMattersCard() {
           .reading-card :global(.rm-child),
           .reading-card :global(.rm-child-2),
           .reading-card :global(.rm-book),
-          .reading-card :global(.rm-tree),
+          .reading-card :global(.rm-trunk),
+          .reading-card :global(.rm-crown),
+          .reading-card :global(.rm-leaf),
           .reading-card :global(.rm-canopy),
           .reading-card :global(.rm-sun),
           .reading-card :global(.rm-rays),
@@ -220,6 +262,8 @@ export function ReadingMattersCard() {
           .reading-card :global(.rm-page) { stroke-dashoffset: 0 !important; }
           .reading-card :global(.rm-book), .reading-card :global(.rm-sun),
           .reading-card :global(.rm-star), .reading-card :global(.rm-awardgrp),
+          .reading-card :global(.rm-trunk), .reading-card :global(.rm-crown),
+          .reading-card :global(.rm-leaf),
           .reading-card :global(.rm-spark) { opacity: 1 !important; transform: none !important; }
           .reading-card :global(.rm-bigstar), .reading-card :global(.rm-shine),
           .reading-card :global(.rm-burst) { opacity: 0 !important; }
@@ -372,17 +416,27 @@ export function ReadingMattersCard() {
               <path d="M44 140 a3 3 0 016 0 v6 h-6z" fill="#0D5C2E" opacity="0.45" />
             </g>
 
-            {/* tree — grows from tiny sprout to full tree, then the canopy sways */}
+            {/* tree — a real sapling-to-tree growth: the trunk rises out of the
+               ground (pivoting on its foot) pushing up the canopy, and the leaf
+               clusters bloom in outward from the centre. Foot stays fixed at the
+               ground line (y=164), same baseline as the kids. */}
             <g className="rm-tree">
-              <rect x="256" y="120" width="8" height="44" rx="3" fill="#8a5a33" />
-              <rect x="256" y="120" width="3" height="44" rx="1.5" fill="#a06e42" opacity="0.6" />
+              {/* trunk grows in height from a stub at the ground */}
+              <g className="rm-trunk">
+                <rect x="256" y="120" width="8" height="44" rx="3" fill="#8a5a33" />
+                <rect x="256" y="120" width="3" height="44" rx="1.5" fill="#a06e42" opacity="0.6" />
+              </g>
+              {/* canopy: the whole crown lifts + scales in as the trunk rises,
+                 then the individual leaf clusters pop out for a "filling in" feel */}
               <g className="rm-canopy">
-                <circle cx="260" cy="107" r="27" fill="#1A7A3C" />
-                <circle cx="242" cy="117" r="16" fill="#0D5C2E" />
-                <circle cx="278" cy="117" r="16" fill="#23935F" />
-                <circle cx="253" cy="95" r="14" fill="#2FA25A" />
-                <circle cx="267" cy="99" r="12" fill="#3fbf6a" />
-                <circle cx="265" cy="94" r="8" fill="#7BC98F" opacity="0.55" />
+                <g className="rm-crown">
+                  <circle className="rm-leaf rm-leaf-1" cx="260" cy="107" r="27" fill="#1A7A3C" />
+                  <circle className="rm-leaf rm-leaf-2" cx="242" cy="117" r="16" fill="#0D5C2E" />
+                  <circle className="rm-leaf rm-leaf-2" cx="278" cy="117" r="16" fill="#23935F" />
+                  <circle className="rm-leaf rm-leaf-3" cx="253" cy="95" r="14" fill="#2FA25A" />
+                  <circle className="rm-leaf rm-leaf-3" cx="267" cy="99" r="12" fill="#3fbf6a" />
+                  <circle className="rm-leaf rm-leaf-4" cx="265" cy="94" r="8" fill="#7BC98F" opacity="0.55" />
+                </g>
               </g>
             </g>
 

@@ -88,6 +88,7 @@ export default function SummerLogPage() {
   const [review, setReview] = useState('')
   const [dateFinished, setDateFinished] = useState(todayStr())
   const [parentVerified, setParentVerified] = useState(false)
+  const [parentEmailInput, setParentEmailInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -134,6 +135,7 @@ export default function SummerLogPage() {
       const call = httpsCallable(functions, 'editSummerBook')
       const res = await call({
         code,
+        parentEmail: parentEmailInput.trim(),
         index,
         title: editTitle.trim(),
         author: editAuthor.trim(),
@@ -170,7 +172,7 @@ export default function SummerLogPage() {
     setDeletingIndex(index)
     try {
       const call = httpsCallable(functions, 'deleteSummerBook')
-      const res = await call({ code, index })
+      const res = await call({ code, index, parentEmail: parentEmailInput.trim() })
       const result = res.data as { booksCount: number; tier: Tier }
       setBooksLogged((prev) => prev.filter((_, i) => i !== index))
       setBooksCount(result.booksCount)
@@ -232,11 +234,13 @@ export default function SummerLogPage() {
     e.preventDefault()
     setFormError('')
     if (!title.trim() || !parentVerified || !code) return
+    if (!parentEmailInput.trim()) { setFormError('Enter the parent email used at registration to verify this is your child.'); return }
     setSubmitting(true)
     try {
       const call = httpsCallable(functions, 'logSummerBook')
       const res = await call({
         code,
+        parentEmail: parentEmailInput.trim(),
         title: title.trim(),
         author: author.trim(),
         rating,
@@ -481,6 +485,11 @@ export default function SummerLogPage() {
                   <input id="dateFinished" type="date" className={inputClass} value={dateFinished} max={todayStr()} onChange={(e) => setDateFinished(e.target.value)} />
                 </label>
 
+                <label className="grid gap-1.5 text-sm font-semibold" htmlFor="parentEmail">Parent email (verification)
+                  <input id="parentEmail" type="email" className={inputClass} value={parentEmailInput} placeholder="The email used when you registered" onChange={(e) => setParentEmailInput(e.target.value)} required />
+                  <span className="text-xs font-normal text-muted">Used to confirm this is your child&apos;s record before saving.</span>
+                </label>
+
                 <label className="flex items-start gap-2.5 text-sm text-muted">
                   <input type="checkbox" checked={parentVerified} onChange={(e) => setParentVerified(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-black/20 text-primary focus:ring-primary/30" required />
                   <span>Parent verified this book was fully read.</span>
@@ -488,7 +497,7 @@ export default function SummerLogPage() {
 
                 <button
                   type="submit"
-                  disabled={!title.trim() || !parentVerified || submitting}
+                  disabled={!title.trim() || !parentVerified || !parentEmailInput.trim() || submitting}
                   className="btn-shine mt-2 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   {submitting ? (

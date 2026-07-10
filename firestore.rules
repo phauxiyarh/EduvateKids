@@ -7,37 +7,44 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
-    // Role is stored on the user's own /users/{uid} doc (set by admin tooling).
-    // Backward-compatible: a signed-in user whose /users doc is missing or has no
-    // `role` is treated as admin (matches the app's historical default), so the
-    // existing owner account is never locked out. Explicit 'cashier' is limited.
+    // Role lives on the user's own /users/{uid} doc. A signed-in user with NO
+    // /users doc (or no `role`) is treated as an ordinary user, NOT admin, so a
+    // self-registered account can never gain admin by absence of data.
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
-    function roleOrDefault() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+    function userRole() {
+      return signedIn()
+             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
              && ('role' in userDoc().data)
              ? userDoc().data.role
-             : 'admin';
+             : '';
+    }
+    // Bootstrap escape hatch: the founding owner's verified email is always
+    // admin, so seeding the owner's /users doc can never lock anyone out. Keep
+    // this list minimal and remove once every admin has an explicit role doc.
+    function isBootstrapAdmin() {
+      return signedIn()
+             && request.auth.token.email_verified == true
+             && request.auth.token.email in ['ismailukman@gmail.com'];
     }
     function isAdmin() {
-      return signedIn() && roleOrDefault() == 'admin';
+      return signedIn() && (userRole() == 'admin' || isBootstrapAdmin());
     }
     // Staff = admin or cashier (operational access to store data).
     function isStaff() {
-      return signedIn() && (roleOrDefault() == 'admin' || roleOrDefault() == 'cashier');
+      return isAdmin() || (signedIn() && userRole() == 'cashier');
     }
 
     // ── User profiles ─────────────────────────────────────────────────────
-    // A user may read/update their own profile, but MUST NOT escalate their own
-    // role. Only admins can set/change roles (or create other users' docs).
+    // A user may read/update their own profile but can NEVER change the `role`
+    // field (that is admin-only). Only admins create/delete other users' docs.
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
                     || (request.auth.uid == userId
-                        && request.resource.data.get('role', 'admin')
-                           == resource.data.get('role', 'admin'));
+                        && !('role' in request.resource.data.diff(resource.data).affectedKeys()));
     }
 
     // ── Public config (read by anyone signed in; writes admin-only) ─────────
@@ -53,8 +60,6 @@ service cloud.firestore {
     }
 
     // ── Store operations: staff read; writes admin-only ─────────────────────
-    // Cashiers operate the POS (which records sales/orders) but should not be
-    // able to rewrite the master inventory/event catalogue; that stays admin.
     match /inventory/{document=**} {
       allow read: if isStaff();
       allow write: if isAdmin();
@@ -81,7 +86,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Contact messages: public create (validated), staff read, admin manage ─
+    // ── Contact messages: public create (validated + bounded), staff read ───
+    // Direct public writes are field-allow-listed and size-bounded. Abuse/spam
+    // is further limited by Firebase App Check enforcement (configured in the
+    // console); enable it so only the real front end can write here.
     match /contactMessages/{document=**} {
       allow read: if isStaff();
       allow update, delete: if isAdmin();
@@ -91,25 +99,31 @@ service cloud.firestore {
                     && request.resource.data.name.size() > 0
                     && request.resource.data.name.size() <= 200
                     && request.resource.data.email is string
+                    && request.resource.data.email.size() > 0
                     && request.resource.data.email.size() <= 200
                     && request.resource.data.message is string
                     && request.resource.data.message.size() > 0
-                    && request.resource.data.message.size() <= 5000;
+                    && request.resource.data.message.size() <= 5000
+                    && (!('subject' in request.resource.data) || request.resource.data.subject.size() <= 200)
+                    && (!('phone' in request.resource.data) || request.resource.data.phone.size() <= 40);
     }
 
-    // ── Event bookings: public create (bounded), staff read, admin manage ────
+    // ── Event bookings: public create (field-allow-listed + bounded) ────────
     match /eventBookings/{document=**} {
       allow read: if isStaff();
       allow update, delete: if isAdmin();
-      allow create: if request.resource.data.size() <= 30
+      allow create: if request.resource.data.keys().hasOnly(
+                        ['name','email','phone','organization','eventType','eventDate',
+                         'location','message','attendees','createdAt','_live','status'])
                     && request.resource.data.name is string
                     && request.resource.data.name.size() > 0
-                    && request.resource.data.name.size() <= 200;
+                    && request.resource.data.name.size() <= 200
+                    && (!('email' in request.resource.data) || request.resource.data.email.size() <= 200)
+                    && (!('message' in request.resource.data) || request.resource.data.message.size() <= 5000);
     }
 
     // ── Orders: created ONLY by Cloud Functions (Admin SDK bypasses rules) ───
-    // Orders hold customer PII + addresses, so reads are ADMIN-ONLY (a cashier
-    // does not need every customer's address). Clients can never forge an order.
+    // Orders hold customer PII + addresses, so reads/writes are ADMIN-ONLY.
     match /orders/{document=**} {
       allow read: if isAdmin();
       allow update, delete: if isAdmin();
@@ -117,23 +131,15 @@ service cloud.firestore {
     }
 
     // ── Summer Reads registrations ──────────────────────────────────────────
-    // - Registration + book logging normally go through Cloud Functions (Admin
-    //   SDK, bypasses rules). This public create is a tightly-validated fallback.
-    // - Public may READ a single doc by code (progress view) but NOT list.
-    // - Updates/deletes are ADMIN-ONLY (logging is via logSummerBook function).
+    // Registration + book logging go through Cloud Functions (Admin SDK). The
+    // public direct-create fallback is REMOVED so the child/parent PII in these
+    // docs cannot be forged or spammed from the client. Public `get` by code is
+    // kept for the progress view; treat the doc as holding PII (a code holder
+    // sees it). Only admins may list/update/delete.
     match /summerReads/{code} {
       allow get: if true;
       allow list: if isAdmin();
-      allow create: if request.resource.data.childName is string
-                    && request.resource.data.childName.size() > 0
-                    && request.resource.data.childName.size() <= 120
-                    && request.resource.data.parentEmail is string
-                    && request.resource.data.parentEmail.size() <= 200
-                    && request.resource.data.booksCount == 0
-                    && request.resource.data.tier == 'none'
-                    && request.resource.data.booksLogged is list
-                    && request.resource.data.booksLogged.size() == 0
-                    && (!('_live' in request.resource.data) || request.resource.data._live == true);
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 

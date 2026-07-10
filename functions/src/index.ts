@@ -37,12 +37,23 @@ const db = admin.firestore();
 
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
 
+// A single, well-formed email address (no commas, whitespace, or angle brackets
+// that could inject additional recipients/headers downstream).
+const EMAIL_RE = /^[^\s@,<>";]+@[^\s@,<>";]+\.[^\s@,<>";]+$/;
+function isValidEmail(v: unknown): v is string {
+  const s = String(v ?? '').trim();
+  return s.length <= 254 && EMAIL_RE.test(s);
+}
+
 function assertValidPayload(data: CreatePaymentInput | undefined): asserts data is CreatePaymentInput {
   if (!data || !Array.isArray(data.items) || data.items.length === 0) {
     throw new HttpsError('invalid-argument', 'Cart items are required.');
   }
-  if (!data.customer?.email || !data.customer?.name) {
-    throw new HttpsError('invalid-argument', 'Customer name and email are required.');
+  if (!data.customer?.name) {
+    throw new HttpsError('invalid-argument', 'Customer name is required.');
+  }
+  if (!isValidEmail(data.customer?.email)) {
+    throw new HttpsError('invalid-argument', 'A valid customer email is required.');
   }
   const a = data.shippingAddress;
   if (!a?.line1 || !a?.city || !a?.state || !a?.postalCode || !a?.country) {
@@ -278,18 +289,26 @@ export const registerSummerReader = onCall({ cors: ALLOWED_ORIGINS }, async (req
   }
 });
 
+// Map an internal summer error to an HttpsError code (not-found / permission / internal).
+function summerError(err: unknown, fallback: string): HttpsError {
+  const msg = (err as Error)?.message || fallback;
+  if (msg.startsWith('not-authorized')) {
+    return new HttpsError('permission-denied', 'The parent email does not match this code.');
+  }
+  return new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+}
+
 /** Log a parent-verified book against a code; recomputes count + tier server-side. */
 export const logSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as LogBookInput;
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (!isValidEmail(d?.parentEmail)) throw new HttpsError('invalid-argument', 'The parent email on file is required.');
   if (!d?.title?.trim()) throw new HttpsError('invalid-argument', 'A book title is required.');
   if (!d?.parentVerified) throw new HttpsError('invalid-argument', 'Parent verification is required.');
   try {
     return await logBook(db, d);
   } catch (err) {
-    const msg = (err as Error)?.message || 'Could not log the book.';
-    // Surface "code not found" cleanly; treat the rest as internal.
-    throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+    throw summerError(err, 'Could not log the book.');
   }
 });
 
@@ -297,26 +316,26 @@ export const logSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) =
 export const editSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as EditBookInput;
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (!isValidEmail(d?.parentEmail)) throw new HttpsError('invalid-argument', 'The parent email on file is required.');
   if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
   if (!d?.title?.trim()) throw new HttpsError('invalid-argument', 'A book title is required.');
   try {
     return await editBook(db, d);
   } catch (err) {
-    const msg = (err as Error)?.message || 'Could not edit the book.';
-    throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+    throw summerError(err, 'Could not edit the book.');
   }
 });
 
 /** Delete a logged book at an index; recomputes count + tier. */
 export const deleteSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
-  const d = request.data as { code?: string; index?: number };
+  const d = request.data as { code?: string; index?: number; parentEmail?: string };
   if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (!isValidEmail(d?.parentEmail)) throw new HttpsError('invalid-argument', 'The parent email on file is required.');
   if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
   try {
-    return await deleteBook(db, d.code, d.index);
+    return await deleteBook(db, d.code, d.index, d.parentEmail as string);
   } catch (err) {
-    const msg = (err as Error)?.message || 'Could not delete the book.';
-    throw new HttpsError(msg.includes('not found') ? 'not-found' : 'internal', msg);
+    throw summerError(err, 'Could not delete the book.');
   }
 });
 

@@ -56,12 +56,27 @@ export interface RegisterInput {
 
 export interface LogBookInput {
   code: string;
+  parentEmail: string; // must match the registration's parent email (ownership)
   title: string;
   author?: string;
   rating?: number; // 1-5
   review?: string;
   dateFinished?: string; // ISO date
   parentVerified: boolean;
+}
+
+/**
+ * Ownership check: a book log may only be mutated by someone who supplies the
+ * parent email used at registration. A bare code (which a code holder or a
+ * leaked link would have) is NOT enough to edit/delete another family's log.
+ * Case-insensitive; throws a clean "not authorised" error on mismatch.
+ */
+function assertOwnsCode(data: { parentEmail?: unknown }, providedEmail: string): void {
+  const onFile = String(data.parentEmail ?? '').trim().toLowerCase();
+  const given = String(providedEmail ?? '').trim().toLowerCase();
+  if (!given || !onFile || given !== onFile) {
+    throw new Error('not-authorized: the parent email does not match this code.');
+  }
 }
 
 /** Server-side age from DOB (don't trust the client's number). */
@@ -112,7 +127,8 @@ export async function logBook(
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found. Please check the code and try again.');
-    const data = snap.data() as { booksLogged?: unknown[]; tier?: SummerTier };
+    const data = snap.data() as { booksLogged?: unknown[]; tier?: SummerTier; parentEmail?: string };
+    assertOwnsCode(data, input.parentEmail);
     const prevTier = (data.tier ?? 'none') as SummerTier;
     const logged = Array.isArray(data.booksLogged) ? data.booksLogged : [];
     const rating = Math.max(0, Math.min(5, Math.round(Number(input.rating) || 0)));
@@ -140,6 +156,7 @@ export async function logBook(
 
 export interface EditBookInput {
   code: string;
+  parentEmail: string; // ownership check
   index: number;
   title: string;
   author?: string;
@@ -157,7 +174,8 @@ export async function editBook(
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found.');
-    const data = snap.data() as { booksLogged?: Record<string, unknown>[] };
+    const data = snap.data() as { booksLogged?: Record<string, unknown>[]; parentEmail?: string };
+    assertOwnsCode(data, input.parentEmail);
     const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
     if (input.index < 0 || input.index >= logged.length) throw new Error('Book entry not found.');
     const rating = Math.max(0, Math.min(5, Math.round(Number(input.rating) || 0)));
@@ -181,13 +199,15 @@ export async function editBook(
 export async function deleteBook(
   db: FirebaseFirestore.Firestore,
   code: string,
-  index: number
+  index: number,
+  parentEmail: string
 ): Promise<{ booksCount: number; tier: SummerTier }> {
   const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found.');
-    const data = snap.data() as { booksLogged?: unknown[] };
+    const data = snap.data() as { booksLogged?: unknown[]; parentEmail?: string };
+    assertOwnsCode(data, parentEmail);
     const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
     if (index < 0 || index >= logged.length) throw new Error('Book entry not found.');
     logged.splice(index, 1);

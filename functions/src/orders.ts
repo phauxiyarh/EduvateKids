@@ -110,8 +110,10 @@ export async function priceCart(
 
     items.push({
       id: snap.id,
-      inventoryId: invRef ? invRef.id : undefined,
-      sku: sku || undefined,
+      // Only include optional keys when present — Firestore rejects `undefined`
+      // values, so an item with no linked inventory/SKU must omit them entirely.
+      ...(invRef ? { inventoryId: invRef.id } : {}),
+      ...(sku ? { sku } : {}),
       title: String(data.title ?? ''),
       quantity: qty,
       unitPrice: round2(unitPrice),

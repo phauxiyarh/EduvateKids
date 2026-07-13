@@ -735,12 +735,20 @@ export default function HomePage() {
           <div ref={orderReveal} className="reveal relative z-10 mx-auto w-11/12 max-w-6xl">
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
-                Ready to Order?
+                Prefer to Order on WhatsApp?
               </p>
-              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Place Your Order Here</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Order via WhatsApp</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
-                Scan the QR code or click below to explore our complete collection of Islamic books,
-                learning kits, and educational materials for all ages.
+                Rather chat than check out online? Scan the QR code or tap below to browse our
+                complete WhatsApp catalog and place your order directly with us — a simple
+                alternative to ordering through the online store.
+              </p>
+              <p className="mt-4 text-sm text-muted">
+                Prefer to order online?{' '}
+                <Link href="/catalog" className="font-semibold text-primary underline-offset-2 hover:underline">
+                  Shop the online catalog
+                </Link>{' '}
+                and check out with card.
               </p>
             </div>
 

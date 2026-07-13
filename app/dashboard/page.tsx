@@ -277,6 +277,9 @@ type CatalogItem = {
   images: string[]
   createdAt: string
   sku?: string
+  // Mirrored stock count so the storefront knows in/out of stock. Kept in sync
+  // with the linked inventory item's quantity from the catalog form.
+  stock?: number
 }
 
 const defaultInventory: InventoryItem[] = [
@@ -806,6 +809,7 @@ export default function DashboardPage() {
                 price: Number(data.price ?? 0),
                 publisher: String(data.publisher ?? ''),
                 showPublisher: data.showPublisher !== false, // default visible
+                stock: data.stock ?? (data as { quantity?: number }).quantity,
                 images: Array.isArray(data.images) ? data.images : [],
                 createdAt: String(data.createdAt ?? new Date().toISOString())
               }
@@ -1706,6 +1710,9 @@ export default function DashboardPage() {
       const skuVal = catalogSku.trim()
       const price = parseNumber(catalogPrice)
       const imageUrls = await uploadCatalogFiles(catalogImages, skuVal || itemId)
+      // Stock: written whenever the admin provides a quantity (0 = out of stock).
+      // Left off entirely when blank so untracked items stay "available".
+      const stockVal = catalogQty.trim() === '' ? undefined : Math.max(0, Math.round(parseNumber(catalogQty)))
       const newItem: CatalogItem = {
         id: itemId,
         title: catalogTitle.trim(),
@@ -1717,7 +1724,8 @@ export default function DashboardPage() {
         showPublisher: catalogShowPublisher,
         images: imageUrls,
         createdAt: new Date().toISOString(),
-        sku: skuVal
+        sku: skuVal,
+        ...(stockVal !== undefined ? { stock: stockVal } : {})
       }
 
       setCatalogItems((prev) => [newItem, ...prev])
@@ -1765,7 +1773,7 @@ export default function DashboardPage() {
         i.title.trim().toLowerCase() === item.title.trim().toLowerCase()
     )
     setCatalogSku(item.sku || linkedInv?.sku || '')
-    setCatalogQty(linkedInv ? String(linkedInv.quantity ?? '') : '')
+    setCatalogQty(linkedInv ? String(linkedInv.quantity ?? '') : (typeof item.stock === 'number' ? String(item.stock) : ''))
     setCatalogSellingPrice(linkedInv && linkedInv.sellingPrice ? String(linkedInv.sellingPrice) : '')
     setCatalogExistingImages([...item.images])
     setCatalogImages([])
@@ -1791,6 +1799,7 @@ export default function DashboardPage() {
       }
 
       const allImages = [...catalogExistingImages, ...newImageUrls]
+      const stockVal = catalogQty.trim() === '' ? undefined : Math.max(0, Math.round(parseNumber(catalogQty)))
       const updatedFields = {
         title: catalogTitle.trim(),
         description: catalogDescription.trim(),
@@ -1800,7 +1809,8 @@ export default function DashboardPage() {
         publisher: catalogPublisher.trim(),
         showPublisher: catalogShowPublisher,
         images: allImages,
-        sku: skuVal
+        sku: skuVal,
+        ...(stockVal !== undefined ? { stock: stockVal } : {})
       }
 
       setCatalogItems((prev) =>
@@ -1853,34 +1863,52 @@ export default function DashboardPage() {
       const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
       let linked = 0
+      // Mirror the live inventory quantity onto each matched catalog doc's
+      // `stock` so the storefront's in/out-of-stock state is always correct
+      // (including 0 = out of stock). Match by SKU first, then by title.
+      const stockUpdates = new Map<string, number>() // catalogId -> stock
       for (const c of catalogItems) {
-        if (c.sku && c.sku.trim()) continue
+        const cSku = (c.sku || '').trim()
         const match = inventory.find(
-          (i) => i.title.trim().toLowerCase() === c.title.trim().toLowerCase()
+          (i) => (cSku && (i.sku || '').trim() === cSku) ||
+                 i.title.trim().toLowerCase() === c.title.trim().toLowerCase()
         )
         if (!match) continue
-        let sku = (match.sku || '').trim()
-        if (!sku) {
-          sku = `EK-${slugify(c.title) || match.id}`
-          inventoryUpdates.set(match.id, sku)
+
+        // Link SKUs for items that don't have one yet.
+        if (!cSku) {
+          let sku = (match.sku || '').trim()
+          if (!sku) {
+            sku = `EK-${slugify(c.title) || match.id}`
+            inventoryUpdates.set(match.id, sku)
+          }
+          catalogUpdates.set(c.id, sku)
+          linked += 1
         }
-        catalogUpdates.set(c.id, sku)
-        linked += 1
+
+        // Mirror stock when the catalog doc is missing/out of sync.
+        const qty = Math.max(0, Math.round(match.quantity ?? 0))
+        if (c.stock !== qty) stockUpdates.set(c.id, qty)
       }
 
       catalogUpdates.forEach((sku, id) => batch.update(doc(db, 'catalog', id), { sku }))
       inventoryUpdates.forEach((sku, id) => batch.update(doc(db, 'inventory', id), { sku }))
+      stockUpdates.forEach((stock, id) => batch.update(doc(db, 'catalog', id), { stock }))
 
-      if (catalogUpdates.size > 0 || inventoryUpdates.size > 0) {
+      if (catalogUpdates.size > 0 || inventoryUpdates.size > 0 || stockUpdates.size > 0) {
         await batch.commit()
         setCatalogItems((prev) =>
-          prev.map((c) => (catalogUpdates.has(c.id) ? { ...c, sku: catalogUpdates.get(c.id) } : c))
+          prev.map((c) => ({
+            ...c,
+            ...(catalogUpdates.has(c.id) ? { sku: catalogUpdates.get(c.id) } : {}),
+            ...(stockUpdates.has(c.id) ? { stock: stockUpdates.get(c.id) } : {}),
+          }))
         )
         setInventory((prev) =>
           prev.map((i) => (inventoryUpdates.has(i.id) ? { ...i, sku: inventoryUpdates.get(i.id) as string } : i))
         )
       }
-      setCatalogLinkMessage(`Linked ${linked} product${linked === 1 ? '' : 's'}.`)
+      setCatalogLinkMessage(`Linked ${linked} product${linked === 1 ? '' : 's'}; synced stock for ${stockUpdates.size}.`)
     } catch (error) {
       console.error('Link catalog and inventory error:', error)
       setCatalogLinkMessage('Failed to link. Please try again.')

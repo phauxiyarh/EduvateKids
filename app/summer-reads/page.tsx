@@ -32,7 +32,8 @@ const steps = [
   { title: 'Register your child', text: 'Sign up in a minute and receive a unique reading code.', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { title: 'Choose great books', text: 'Pick Islamic stories, prophets & companions, Arabic readers, and more.', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   { title: 'Log each book', text: 'Enter your code and log every book your child finishes (parent-verified).', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-  { title: 'Earn your certificate', text: 'Reach your chosen level’s goal to earn its certificate — keep reading for bonus books.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4' },
+  { title: 'Earn your certificate', text: 'Reach your chosen level’s goal to earn its certificate — keep reading for bonus books.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4', highlight: true },
+  { title: 'Win the raffle draw', text: 'Meet your goal and you’re entered into your category’s raffle to win a $30 store credit (USA & Nigeria residents).', icon: 'M5 5a2 2 0 00-2 2v2a2 2 0 010 4v2a2 2 0 002 2h14a2 2 0 002-2v-2a2 2 0 010-4V7a2 2 0 00-2-2H5z', highlight: true },
 ]
 
 const tiers = [
@@ -216,8 +217,43 @@ export default function SummerReadsPage() {
         }
         .sr-numpill { animation: sr-numpulse 2.4s ease-in-out infinite; }
 
+        /* Neon "lightning" border for the highlighted steps (certificate + raffle).
+           A conic-gradient ring rotates behind an inset white card so a bright
+           arc travels around the edge, with a soft pulsing glow. */
+        .sr-neon-ring {
+          background: conic-gradient(from 0deg,
+            transparent 0deg,
+            #7c3aed 40deg,
+            #22d3ee 80deg,
+            #ec4899 120deg,
+            transparent 160deg,
+            transparent 360deg);
+          animation: sr-neon-spin 3.4s linear infinite;
+          filter: blur(1px);
+        }
+        .sr-neon::after {
+          content: '';
+          position: absolute;
+          inset: -4px;
+          border-radius: 1.6rem;
+          background: linear-gradient(120deg, #7c3aed, #22d3ee, #ec4899);
+          opacity: 0.35;
+          filter: blur(12px);
+          z-index: -1;
+          animation: sr-neon-glow 3.4s ease-in-out infinite;
+        }
+        @keyframes sr-neon-spin { to { transform: rotate(360deg); } }
+        @keyframes sr-neon-glow { 0%,100% { opacity: 0.28; } 50% { opacity: 0.55; } }
+
+        /* Steps marquee: scroll one full set (-50%) for a seamless circular loop.
+           Pauses on hover so a reader can stop and read a card. */
+        @keyframes sr-steps-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .sr-steps-track { animation: sr-steps-scroll 26s linear infinite; }
+        .sr-steps-marquee:hover .sr-steps-track { animation-play-state: paused; }
+
         @media (prefers-reduced-motion: reduce) {
-          .sr-sun, .sr-float, .sr-twinkle, .sr-numpill { animation: none !important; }
+          .sr-sun, .sr-float, .sr-twinkle, .sr-numpill,
+          .sr-neon-ring, .sr-neon::after, .sr-steps-track { animation: none !important; }
           .sr-prize, .reveal.is-visible .sr-prize,
           .reveal.is-visible .sr-prize .sr-prize-icon,
           .reveal.is-visible .sr-sheen { animation: none !important; opacity: 1 !important; }
@@ -325,24 +361,50 @@ export default function SummerReadsPage() {
 
         {/* How it works */}
         <section className="relative py-14 sm:py-20 bg-white">
-          <div ref={stepsReveal} className="reveal mx-auto w-11/12 max-w-6xl">
+          <div ref={stepsReveal} className="reveal mx-auto w-11/12 max-w-7xl">
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">How It Works</p>
-              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Four simple steps</h2>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Five simple steps</h2>
             </div>
-            <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {steps.map((s, i) => (
-                <div key={s.title} className="card-hover rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-6 shadow-soft border border-primary/10 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_rgba(124,58,237,0.14)]">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
-                  </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primaryDark">{i + 1}</span>
-                    <h3 className="font-display text-lg font-bold text-primaryDark">{s.title}</h3>
-                  </div>
-                  <p className="mt-2 text-sm text-muted leading-relaxed">{s.text}</p>
-                </div>
-              ))}
+            {/* Auto-scrolling marquee that loops continuously and pauses on hover.
+               The steps are rendered twice so the track can translate -50% for a
+               seamless circular repeat. Edges are masked so cards fade in/out. */}
+            <div
+              className="sr-steps-marquee mt-10 overflow-hidden"
+              style={{ WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)', maskImage: 'linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)' }}
+            >
+              <div className="sr-steps-track flex w-max gap-6 py-2">
+                {[...steps, ...steps].map((s, i) => {
+                  const num = (i % steps.length) + 1
+                  return s.highlight ? (
+                    // Highlighted steps (certificate + raffle): animated neon border.
+                    <div key={i} className="sr-neon relative w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl p-[2px]" aria-hidden={i >= steps.length || undefined}>
+                      <span className="sr-neon-ring absolute inset-0 rounded-3xl" aria-hidden="true" />
+                      <div className="relative h-full rounded-[calc(1.5rem-2px)] bg-white p-6">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-secondary text-white shadow-md">
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
+                        </div>
+                        <div className="mt-4 flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-xs font-bold text-white">{num}</span>
+                          <h3 className="font-display text-lg font-bold text-primaryDark">{s.title}</h3>
+                        </div>
+                        <p className="mt-2 text-sm text-muted leading-relaxed">{s.text}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={i} className="w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-6 shadow-soft border border-primary/10" aria-hidden={i >= steps.length || undefined}>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primaryDark">{num}</span>
+                        <h3 className="font-display text-lg font-bold text-primaryDark">{s.title}</h3>
+                      </div>
+                      <p className="mt-2 text-sm text-muted leading-relaxed">{s.text}</p>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </section>

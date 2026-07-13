@@ -97,6 +97,7 @@ type CatalogItem = {
   ageCategory: string | string[]
   price: number
   publisher: string
+  showPublisher: boolean
   images: string[]
 }
 
@@ -220,6 +221,7 @@ export default function HomePage() {
             ageCategory: String(data.ageCategory ?? ''),
             price: Number(data.price ?? 0),
             publisher: String(data.publisher ?? ''),
+            showPublisher: data.showPublisher !== false,
             images: Array.isArray(data.images) ? data.images : []
           } as CatalogItem
         })
@@ -681,9 +683,11 @@ export default function HomePage() {
                       <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 min-h-[2rem]">{item.description}</p>
                       <div className="mt-auto pt-2 sm:pt-4 flex items-center justify-between gap-1">
                         <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
-                        <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
-                          {item.publisher}
-                        </span>
+                        {item.showPublisher && item.publisher && (
+                          <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
+                            {item.publisher}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1281,9 +1285,11 @@ export default function HomePage() {
                     {AGE_CATEGORIES[age]?.title || `Ages ${age}`}
                   </span>
                 ))}
-                <span className="rounded-full bg-purple-50 border border-purple-200 px-3 py-1 text-xs font-bold text-purple-700">
-                  {expandedItem.publisher}
-                </span>
+                {expandedItem.showPublisher && expandedItem.publisher && (
+                  <span className="rounded-full bg-purple-50 border border-purple-200 px-3 py-1 text-xs font-bold text-purple-700">
+                    {expandedItem.publisher}
+                  </span>
+                )}
               </div>
               <h2 className="font-display text-xl sm:text-3xl font-bold text-primaryDark">{expandedItem.title}</h2>
               <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted leading-relaxed">{expandedItem.description}</p>

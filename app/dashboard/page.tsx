@@ -273,6 +273,7 @@ type CatalogItem = {
   ageCategory: AgeCategory[]
   price: number
   publisher: string
+  showPublisher?: boolean
   images: string[]
   createdAt: string
   sku?: string
@@ -573,6 +574,8 @@ export default function DashboardPage() {
   const [catalogAge, setCatalogAge] = useState<AgeCategory[]>(['0+'])
   const [catalogPrice, setCatalogPrice] = useState('')
   const [catalogPublisher, setCatalogPublisher] = useState('')
+  // Whether the publisher name is shown to shoppers on the storefront.
+  const [catalogShowPublisher, setCatalogShowPublisher] = useState(true)
   const [catalogSku, setCatalogSku] = useState('')
   const [catalogQty, setCatalogQty] = useState('')
   const [catalogSellingPrice, setCatalogSellingPrice] = useState('')
@@ -802,6 +805,7 @@ export default function DashboardPage() {
                 ageCategory: ageArray,
                 price: Number(data.price ?? 0),
                 publisher: String(data.publisher ?? ''),
+                showPublisher: data.showPublisher !== false, // default visible
                 images: Array.isArray(data.images) ? data.images : [],
                 createdAt: String(data.createdAt ?? new Date().toISOString())
               }
@@ -1537,6 +1541,7 @@ export default function DashboardPage() {
     setCatalogAge(['0+'])
     setCatalogPrice('')
     setCatalogPublisher('')
+    setCatalogShowPublisher(true)
     setCatalogSku('')
     setCatalogQty('')
     setCatalogSellingPrice('')
@@ -1709,6 +1714,7 @@ export default function DashboardPage() {
         ageCategory: catalogAge,
         price,
         publisher: catalogPublisher.trim(),
+        showPublisher: catalogShowPublisher,
         images: imageUrls,
         createdAt: new Date().toISOString(),
         sku: skuVal
@@ -1752,6 +1758,7 @@ export default function DashboardPage() {
     setCatalogAge(item.ageCategory)
     setCatalogPrice(String(item.price))
     setCatalogPublisher(item.publisher)
+    setCatalogShowPublisher(item.showPublisher !== false)
     // Prefer sku from the catalog item; else fall back to a linked inventory item by title.
     const linkedInv = inventory.find(
       (i) => (item.sku && (i.sku || '') === item.sku) ||
@@ -1791,6 +1798,7 @@ export default function DashboardPage() {
         ageCategory: catalogAge,
         price,
         publisher: catalogPublisher.trim(),
+        showPublisher: catalogShowPublisher,
         images: allImages,
         sku: skuVal
       }
@@ -5724,6 +5732,21 @@ export default function DashboardPage() {
             <datalist id="catalog-publishers-list">
               {inventoryPublishers.map((p) => <option key={p} value={p} />)}
             </datalist>
+            {/* Toggle: show the publisher name on the public storefront or hide it. */}
+            <label className="mt-2.5 flex cursor-pointer items-center gap-2.5 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2.5">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={catalogShowPublisher}
+                onClick={() => setCatalogShowPublisher((v) => !v)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${catalogShowPublisher ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-black/20'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${catalogShowPublisher ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+              <span className="text-xs font-semibold text-primaryDark">
+                {catalogShowPublisher ? 'Publisher shown on storefront' : 'Publisher hidden from storefront'}
+              </span>
+            </label>
           </div>
 
           <div>

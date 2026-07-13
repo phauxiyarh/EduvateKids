@@ -21,6 +21,8 @@ type CatalogItem = {
   ageCategory: string | string[]
   price: number
   publisher: string
+  // Admin toggle: when false the publisher is hidden from the storefront.
+  showPublisher: boolean
   images: string[]
   // Mirrored stock count from inventory (see functions/src/orders.ts). When
   // undefined the book is treated as available (no stock tracking on that item).
@@ -141,6 +143,7 @@ export default function CatalogPage() {
             ageCategory: String(data.ageCategory ?? ''),
             price: Number(data.price ?? 0),
             publisher: String(data.publisher ?? ''),
+            showPublisher: data.showPublisher !== false, // default visible
             images: Array.isArray(data.images) ? data.images : [],
             stock: rawStock === undefined || rawStock === null ? undefined : Number(rawStock)
           } as CatalogItem
@@ -436,9 +439,11 @@ export default function CatalogPage() {
                   <p className="mt-1 sm:mt-1.5 text-[11px] sm:text-[13px] text-muted leading-relaxed line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem]">{item.description}</p>
                   <div className="mt-auto pt-2 sm:pt-4 flex items-center justify-between gap-1">
                     <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">${item.price.toFixed(2)}</span>
-                    <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
-                      {item.publisher}
-                    </span>
+                    {item.showPublisher && item.publisher && (
+                      <span className="text-[9px] sm:text-[11px] font-semibold text-purple-600 bg-purple-50 rounded-full px-1.5 sm:px-2.5 py-0.5 border border-purple-200/60 max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline">
+                        {item.publisher}
+                      </span>
+                    )}
                   </div>
                   {item.price > 0 && isOutOfStock(item) && (
                     <button
@@ -609,11 +614,13 @@ export default function CatalogPage() {
                   </span>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-100">
-                  <p className="text-sm text-muted">
-                    <span className="font-semibold">Publisher:</span> {expandedItem.publisher}
-                  </p>
-                </div>
+                {expandedItem.showPublisher && expandedItem.publisher && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <p className="text-sm text-muted">
+                      <span className="font-semibold">Publisher:</span> {expandedItem.publisher}
+                    </p>
+                  </div>
+                )}
 
                 {expandedItem.price > 0 && isOutOfStock(expandedItem) && (
                   <button

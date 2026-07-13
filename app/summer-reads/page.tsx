@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
+import { BookStack, STACK_PALETTES } from '../components/BookStack'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -35,38 +36,39 @@ const steps = [
 ]
 
 const tiers = [
-  { name: 'Early Readers', tag: 'Seedlings', books: 4, blurb: 'Picture books, early readers, lots of pictures, short text. Usually ages 4+, but place your child where they read comfortably.', color: 'from-emerald-400 to-green-500', ring: 'from-emerald-300 via-emerald-500 to-green-600' },
-  { name: 'Growing Readers', tag: 'Readers', books: 6, blurb: 'Beginning chapter books, longer stories, reading more independently. Usually ages 7+, but go by where your child reads, not their age.', color: 'from-primary to-accentThree', ring: 'from-violet-400 via-primary to-fuchsia-500' },
-  { name: 'Confident Readers', tag: 'Scholar', books: 10, blurb: 'Full chapter books and longer novels, reading fluently on their own. Usually ages 11+, or any child reading at this level.', color: 'from-secondary to-primary', ring: 'from-pink-400 via-secondary to-primary' },
+  { name: 'Early Readers', tag: 'Seedlings', books: 4, stack: 'emerald' as const, blurb: 'Picture books, early readers, lots of pictures, short text. Usually ages 4+, but place your child where they read comfortably.', color: 'from-emerald-400 to-green-500', ring: 'from-emerald-300 via-emerald-500 to-green-600' },
+  { name: 'Growing Readers', tag: 'Readers', books: 6, stack: 'violet' as const, blurb: 'Beginning chapter books, longer stories, reading more independently. Usually ages 7+, but go by where your child reads, not their age.', color: 'from-primary to-accentThree', ring: 'from-violet-400 via-primary to-fuchsia-500' },
+  { name: 'Confident Readers', tag: 'Scholar', books: 10, stack: 'pink' as const, blurb: 'Full chapter books and longer novels, reading fluently on their own. Usually ages 11+, or any child reading at this level.', color: 'from-secondary to-primary', ring: 'from-pink-400 via-secondary to-primary' },
 ]
 
 const prizes = [
   {
-    text: 'Grand Prize: a special Eduvate Kids gift bundle',
+    text: '$30 store credit for each winner',
+    sub: 'One prize per reading category.',
     tile: 'from-amber-400 to-orange-500',
     icon: (
-      // Trophy
+      // Gift / store credit
       <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7 4h10v5a5 5 0 01-10 0V4z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7 6H4.5A1.5 1.5 0 003 7.5V8a4 4 0 004 4M17 6h2.5A1.5 1.5 0 0121 7.5V8a4 4 0 01-4 4" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v3m-3 3h6m-5 0a1 1 0 011-1h2a1 1 0 011 1" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 12v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7M3 8h18v4H3zM12 8v12" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8S10.5 4 8.5 4 6 6 8 8h4zM12 8s1.5-4 3.5-4S18 6 16 8h-4z" />
       </svg>
     ),
   },
   {
-    text: 'Two runner-up prizes',
+    text: 'Winners chosen by raffle draw',
+    sub: '1 winner per category — every qualifying reader has a chance.',
     tile: 'from-secondary to-pink-600',
     icon: (
-      // Medal with ribbon
+      // Ticket / raffle
       <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 3l2.5 5M16 3l-2.5 5" />
-        <circle cx="12" cy="15" r="5" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 13l.9 1.8 2 .3-1.45 1.4.34 2L12 17.6l-1.79.9.34-2L9.1 15.1l2-.3.9-1.8z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4V7z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1.5 2.5" d="M13 5v14" />
       </svg>
     ),
   },
   {
-    text: 'A certificate for every milestone reached',
+    text: 'A certificate for every participant',
+    sub: 'Awarded once the minimum book goal for your category is met.',
     tile: 'from-primary to-violet-600',
     icon: (
       // Certificate / scroll with award seal
@@ -182,8 +184,36 @@ export default function SummerReadsPage() {
         .sr-float { animation: sr-float-y 7s ease-in-out infinite; }
         .sr-float.delay { animation-delay: 1.6s; animation-duration: 9s; }
         .sr-twinkle { animation: sr-twinkle 3.2s ease-in-out infinite; }
+
+        /* Prize card: each row slides up + fades in once the section reveals,
+           the icon gives a little celebratory pop, and a soft sheen sweeps the card. */
+        @keyframes sr-prize-in {
+          0% { opacity: 0; transform: translateY(14px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sr-icon-pop {
+          0% { transform: scale(0.4) rotate(-12deg); }
+          60% { transform: scale(1.14) rotate(6deg); }
+          100% { transform: scale(1) rotate(0); }
+        }
+        @keyframes sr-sheen {
+          0% { transform: translateX(-120%) skewX(-18deg); }
+          100% { transform: translateX(220%) skewX(-18deg); }
+        }
+        .sr-prize { opacity: 0; }
+        .reveal.is-visible .sr-prize { animation: sr-prize-in 620ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .reveal.is-visible .sr-prize .sr-prize-icon { animation: sr-icon-pop 720ms cubic-bezier(0.34, 1.56, 0.64, 1) both; animation-delay: inherit; }
+        .sr-sheen {
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+          width: 45%;
+        }
+        .reveal.is-visible .sr-sheen { animation: sr-sheen 2.6s ease-in-out 0.6s 1 both; }
+
         @media (prefers-reduced-motion: reduce) {
           .sr-sun, .sr-float, .sr-twinkle { animation: none !important; }
+          .sr-prize, .reveal.is-visible .sr-prize,
+          .reveal.is-visible .sr-prize .sr-prize-icon,
+          .reveal.is-visible .sr-sheen { animation: none !important; opacity: 1 !important; }
         }
       `}</style>
       <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
@@ -316,21 +346,15 @@ export default function SummerReadsPage() {
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading Levels</p>
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">Choose your reading level</h2>
-              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Scholars are entered into the grand prize drawing.</p>
+              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Every reader who meets their goal is entered into their category&apos;s raffle to win a $30 store credit.</p>
             </div>
             <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-3">
               {tiers.map((t) => (
                 <div key={t.name} className="card-hover rounded-3xl bg-white p-6 text-center shadow-soft border border-primary/10 hover:-translate-y-1.5">
-                  {/* Animated glowing conic-gradient ring wrapping a 3D coin */}
-                  <div className="relative mx-auto h-24 w-24">
-                    <div className={`tier-ring absolute inset-0 rounded-full bg-gradient-to-br ${t.ring}`} aria-hidden="true" />
-                    <div className={`tier-coin absolute inset-[6px] flex items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-white shadow-[0_10px_30px_rgba(0,0,0,0.18)]`}>
-                      {/* Top highlight to read as a 3D sphere */}
-                      <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(120%_90%_at_30%_22%,rgba(255,255,255,0.6),rgba(255,255,255,0)_55%)]" aria-hidden="true" />
-                      {/* Bottom inner shading */}
-                      <span className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_0_-8px_16px_rgba(0,0,0,0.22),inset_0_6px_10px_rgba(255,255,255,0.28)]" aria-hidden="true" />
-                      <span className="relative font-display text-2xl font-bold drop-shadow-sm">{t.books}</span>
-                    </div>
+                  {/* 3D book stack that piles up on a loop — height reflects the goal */}
+                  <div className="relative mx-auto h-28 w-28">
+                    <BookStack count={t.books} palette={STACK_PALETTES[t.stack]} uid={t.stack} className="h-full w-full" loopSeconds={6} />
+                    <span className="pointer-events-none absolute right-1 top-1 flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 font-display text-sm font-bold text-primaryDark shadow-md ring-1 ring-primary/10">{t.books}</span>
                   </div>
                   <h3 className="mt-4 font-display text-xl gradient-text">{t.name}</h3>
                   <p className="text-xs font-semibold uppercase tracking-wide text-accentThree">{t.tag}</p>
@@ -345,19 +369,24 @@ export default function SummerReadsPage() {
         {/* Prizes + eligible books */}
         <section className="relative py-14 sm:py-20 bg-white">
           <div ref={prizeReveal} className="reveal mx-auto grid w-11/12 max-w-5xl gap-8 md:grid-cols-2">
-            <div className="rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 p-6 sm:p-8 shadow-soft border border-amber-200/60">
-              <h3 className="font-display text-2xl gradient-text">Prizes</h3>
-              <ul className="mt-4 space-y-3 text-sm">
-                {prizes.map((p) => (
-                  <li key={p.text} className="flex items-start gap-3">
-                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.tile} shadow-sm`}>
+            <div className="sr-prizecard relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 p-6 sm:p-8 shadow-soft border border-amber-200/60">
+              {/* soft moving sheen across the prize card */}
+              <span className="sr-sheen pointer-events-none absolute inset-0" aria-hidden="true" />
+              <h3 className="relative font-display text-2xl gradient-text">Prizes</h3>
+              <ul className="relative mt-5 space-y-4 text-sm">
+                {prizes.map((p, i) => (
+                  <li key={p.text} className="sr-prize flex items-start gap-3" style={{ animationDelay: `${i * 140}ms` }}>
+                    <span className={`sr-prize-icon flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${p.tile} shadow-md`}>
                       {p.icon}
                     </span>
-                    <span className="pt-1.5 text-muted">{p.text}</span>
+                    <span className="pt-0.5">
+                      <span className="block font-semibold text-ink">{p.text}</span>
+                      {p.sub && <span className="mt-0.5 block text-xs leading-snug text-muted">{p.sub}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-4 text-xs text-muted">All Scholars (10 books) are entered into the grand prize drawing. Winners announced after the program.</p>
+              <p className="relative mt-5 text-xs text-muted">Winners are drawn by raffle after the program ends — one per reading category — and announced by email. Every reader who meets their category&apos;s book goal keeps their certificate.</p>
             </div>
             <div className="rounded-3xl bg-gradient-to-br from-purple-50 to-pink-50 p-6 sm:p-8 shadow-soft border border-primary/10">
               <h3 className="font-display text-2xl gradient-text">Eligible Books</h3>

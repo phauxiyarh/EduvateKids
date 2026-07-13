@@ -10,6 +10,15 @@ import { EventNavDropdown } from '../../components/EventNavDropdown'
 import { HeaderCart } from '../../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../../components/CookieConsent'
 import { SummerCelebration } from '../../components/SummerCelebration'
+import { BookStack, STACK_PALETTES } from '../../components/BookStack'
+
+// Map a reading level to its book-stack color palette.
+const STACK_KEY: Record<string, keyof typeof STACK_PALETTES> = {
+  seedling: 'emerald',
+  reader: 'violet',
+  scholar: 'pink',
+  none: 'emerald',
+}
 import logo from '../../../assets/logo.png'
 
 const inputClass =
@@ -287,11 +296,7 @@ export default function SummerLogPage() {
     }
   }
 
-  // Progress ring geometry — always relative to THIS reader's chosen goal.
-  const R = 52
-  const CIRC = 2 * Math.PI * R
-  const progress = goal > 0 ? Math.min(booksCount / goal, 1) : 0
-  const dashOffset = CIRC * (1 - progress)
+  // Progress figures — always relative to THIS reader's chosen goal.
   const reachedGoal = booksCount >= goal
   const booksToGoal = Math.max(0, goal - booksCount)
   const bonusBooks = Math.max(0, booksCount - goal)
@@ -384,41 +389,21 @@ export default function SummerLogPage() {
             {/* Progress card */}
             <section className="rounded-3xl border border-primary/10 bg-white p-6 shadow-soft sm:p-8">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-                <div className="relative flex h-36 w-36 flex-shrink-0 items-center justify-center">
-                  <div className="pointer-events-none absolute inset-2 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 blur-xl" aria-hidden="true" />
-                  <svg className="relative h-36 w-36 -rotate-90" viewBox="0 0 120 120" aria-hidden="true">
-                    <circle cx="60" cy="60" r={R} fill="none" stroke="currentColor" strokeWidth="10" className="text-primary/10" />
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r={R}
-                      fill="none"
-                      stroke="url(#ringGrad)"
-                      strokeWidth="10"
-                      strokeLinecap="round"
-                      strokeDasharray={CIRC}
-                      strokeDashoffset={dashOffset}
-                      filter="url(#ringGlow)"
-                      style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1)' }}
-                    />
-                    <defs>
-                      <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#7c3aed" />
-                        <stop offset="55%" stopColor="#ec4899" />
-                        <stop offset="100%" stopColor="#f59e0b" />
-                      </linearGradient>
-                      <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
-                        <feGaussianBlur stdDeviation="2.4" result="blur" />
-                        <feMerge>
-                          <feMergeNode in="blur" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span key={booksCount} className="animate-fadeIn font-display text-4xl font-bold text-primaryDark">{booksCount}</span>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">books</span>
+                <div className="relative flex h-40 w-40 flex-shrink-0 items-center justify-center">
+                  <div className="pointer-events-none absolute inset-3 rounded-full bg-gradient-to-br from-primary/15 to-secondary/15 blur-xl" aria-hidden="true" />
+                  {/* 3D book stack — its height IS the child's real progress. Keyed on
+                     booksCount so a new book drops onto the pile when logged. */}
+                  <BookStack
+                    key={booksCount}
+                    count={Math.max(booksCount, 0)}
+                    palette={STACK_PALETTES[STACK_KEY[level]]}
+                    uid="log"
+                    mode="progress"
+                    className="relative h-40 w-40"
+                  />
+                  <div className="pointer-events-none absolute right-1 top-1 flex flex-col items-center rounded-2xl bg-white/90 px-2 py-1 shadow-md ring-1 ring-primary/10">
+                    <span key={`n-${booksCount}`} className="animate-fadeIn font-display text-2xl font-bold leading-none text-primaryDark">{booksCount}</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-muted">of {goal}</span>
                   </div>
                 </div>
                 <div className="text-center sm:text-left">

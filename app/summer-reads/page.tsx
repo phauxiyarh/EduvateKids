@@ -218,17 +218,24 @@ export default function SummerReadsPage() {
         .sr-numpill { animation: sr-numpulse 2.4s ease-in-out infinite; }
 
         /* Neon border for the highlighted steps (certificate + raffle): a bright
-           arc travels crisply AROUND the card edge. The conic gradient is masked
-           to just the border ring (mask-composite exclude of an inner rect), so
-           only the ~2px perimeter is painted — never the card face. A faint full
-           border stays lit; a concentrated bright sweep runs around it. */
+           arc travels crisply AROUND a STATIONARY card edge. The element never
+           rotates (rotating it would spin the whole masked frame); instead the
+           conic gradient's start angle (--sr-angle) animates, so a bright sweep
+           moves along a fixed border. The gradient is masked to just the ~2px
+           perimeter via mask-composite, so the card face is never painted. */
+        @property --sr-angle {
+          syntax: '<angle>';
+          initial-value: 0deg;
+          inherits: false;
+        }
         .sr-neon-ring {
           padding: 2px;
-          background: conic-gradient(from 0deg,
-            rgba(124,58,237,0.30) 0deg,
-            rgba(124,58,237,0.30) 300deg,
-            #a855f7 330deg,
-            #22d3ee 350deg,
+          background: conic-gradient(from var(--sr-angle),
+            rgba(124,58,237,0.28) 0deg,
+            rgba(124,58,237,0.28) 250deg,
+            #a855f7 300deg,
+            #22d3ee 335deg,
+            #f5f9ff 350deg,
             #ec4899 360deg);
           -webkit-mask:
             linear-gradient(#000 0 0) content-box,
@@ -238,7 +245,7 @@ export default function SummerReadsPage() {
             linear-gradient(#000 0 0) content-box,
             linear-gradient(#000 0 0);
           mask-composite: exclude;
-          animation: sr-neon-spin 3s linear infinite;
+          animation: sr-neon-sweep 3s linear infinite;
         }
         /* soft outer glow that pulses in time with the sweep */
         .sr-neon::after {
@@ -252,8 +259,16 @@ export default function SummerReadsPage() {
           z-index: -1;
           animation: sr-neon-glow 3s ease-in-out infinite;
         }
-        @keyframes sr-neon-spin { to { transform: rotate(360deg); } }
+        @keyframes sr-neon-sweep { to { --sr-angle: 360deg; } }
         @keyframes sr-neon-glow { 0%,100% { opacity: 0.28; } 50% { opacity: 0.55; } }
+        /* Fallback for browsers without @property: fixed multi-colour border so
+           the effect degrades to a static neon ring rather than a spinning box. */
+        @supports not (background: conic-gradient(from var(--sr-angle), red, blue)) {
+          .sr-neon-ring {
+            background: linear-gradient(120deg, #a855f7, #22d3ee, #ec4899);
+            animation: none;
+          }
+        }
 
         /* Steps marquee: scroll one full set (-50%) for a seamless circular loop.
            Pauses on hover so a reader can stop and read a card. */

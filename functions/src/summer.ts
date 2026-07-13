@@ -73,6 +73,20 @@ export interface RegisterInput {
   parentPhone?: string;
   consent: boolean;
   level?: string; // chosen reading level (seedling | reader | scholar); fixed after registration
+  country?: string;
+  state?: string;
+  city?: string;
+}
+
+/**
+ * The raffle prize draw is currently open only to residents of the USA or
+ * Nigeria. Everyone may still register, read, and earn a certificate — this
+ * flag only governs prize-draw eligibility. Matches common spellings/aliases.
+ */
+export const RAFFLE_ELIGIBLE_COUNTRIES = ['united states', 'usa', 'us', 'united states of america', 'nigeria'];
+export function isRaffleEligible(country: unknown): boolean {
+  const c = String(country ?? '').trim().toLowerCase();
+  return RAFFLE_ELIGIBLE_COUNTRIES.includes(c);
 }
 
 export interface LogBookInput {
@@ -119,6 +133,7 @@ export async function registerReader(
   const code = await generateUniqueCode(db);
   const level = normalizeLevel(input.level);
   const goal = goalForLevel(level);
+  const country = String(input.country ?? '').trim();
   await db
     .collection('summerReads')
     .doc(code)
@@ -130,6 +145,12 @@ export async function registerReader(
       parentName: input.parentName,
       parentEmail: input.parentEmail,
       parentPhone: input.parentPhone || '',
+      // Location (persisted so the admin can verify raffle eligibility).
+      country,
+      state: String(input.state ?? '').trim(),
+      city: String(input.city ?? '').trim(),
+      // Raffle draw is currently open only to USA / Nigeria residents.
+      raffleEligible: isRaffleEligible(country),
       consent: Boolean(input.consent),
       booksLogged: [],
       booksCount: 0,
@@ -143,7 +164,7 @@ export async function registerReader(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-  logger.info('Summer reader registered', { code, level });
+  logger.info('Summer reader registered', { code, level, country });
   return { code };
 }
 

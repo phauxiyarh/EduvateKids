@@ -209,8 +209,15 @@ export default function SummerReadsPage() {
         }
         .reveal.is-visible .sr-sheen { animation: sr-sheen 2.6s ease-in-out 0.6s 1 both; }
 
+        /* Bold, animated goal number pill — a lively pulse to draw the eye. */
+        @keyframes sr-numpulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.12); }
+        }
+        .sr-numpill { animation: sr-numpulse 2.4s ease-in-out infinite; }
+
         @media (prefers-reduced-motion: reduce) {
-          .sr-sun, .sr-float, .sr-twinkle { animation: none !important; }
+          .sr-sun, .sr-float, .sr-twinkle, .sr-numpill { animation: none !important; }
           .sr-prize, .reveal.is-visible .sr-prize,
           .reveal.is-visible .sr-prize .sr-prize-icon,
           .reveal.is-visible .sr-sheen { animation: none !important; opacity: 1 !important; }
@@ -346,15 +353,18 @@ export default function SummerReadsPage() {
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading Levels</p>
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">Choose your reading level</h2>
-              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Every reader who meets their goal is entered into their category&apos;s raffle to win a $30 store credit.</p>
+              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Every reader who meets their goal is entered into their category&apos;s raffle to win a $30 store credit (raffle open to USA &amp; Nigeria residents).</p>
             </div>
             <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-3">
               {tiers.map((t) => (
                 <div key={t.name} className="card-hover rounded-3xl bg-white p-6 text-center shadow-soft border border-primary/10 hover:-translate-y-1.5">
                   {/* 3D book stack that piles up on a loop — height reflects the goal */}
-                  <div className="relative mx-auto h-28 w-28">
+                  <div className="relative mx-auto h-32 w-32">
                     <BookStack count={t.books} palette={STACK_PALETTES[t.stack]} uid={t.stack} className="h-full w-full" loopSeconds={6} />
-                    <span className="pointer-events-none absolute right-1 top-1 flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 font-display text-sm font-bold text-primaryDark shadow-md ring-1 ring-primary/10">{t.books}</span>
+                    <span className={`sr-numpill pointer-events-none absolute -right-1 -top-1 flex h-12 w-12 flex-col items-center justify-center rounded-full bg-gradient-to-br ${t.color} font-display text-2xl font-extrabold leading-none text-white shadow-[0_8px_22px_rgba(0,0,0,0.22)] ring-2 ring-white`}>
+                      {t.books}
+                      <span className="text-[8px] font-bold uppercase tracking-wide text-white/85">books</span>
+                    </span>
                   </div>
                   <h3 className="mt-4 font-display text-xl gradient-text">{t.name}</h3>
                   <p className="text-xs font-semibold uppercase tracking-wide text-accentThree">{t.tag}</p>
@@ -386,7 +396,7 @@ export default function SummerReadsPage() {
                   </li>
                 ))}
               </ul>
-              <p className="relative mt-5 text-xs text-muted">Winners are drawn by raffle after the program ends — one per reading category — and announced by email. Every reader who meets their category&apos;s book goal keeps their certificate.</p>
+              <p className="relative mt-5 text-xs text-muted">Winners are drawn by raffle after the program ends — one per reading category — and announced by email. The prize raffle draw is currently open only to residents of the USA and Nigeria. Every reader who meets their category&apos;s book goal keeps their certificate, wherever they live.</p>
             </div>
             <div className="rounded-3xl bg-gradient-to-br from-purple-50 to-pink-50 p-6 sm:p-8 shadow-soft border border-primary/10">
               <h3 className="font-display text-2xl gradient-text">Eligible Books</h3>

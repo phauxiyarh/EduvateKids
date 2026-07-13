@@ -43,6 +43,9 @@ export default function SummerRegisterPage() {
   const [copied, setCopied] = useState(false)
 
   const isUS = form.country === US_COUNTRY
+  // The prize raffle is currently open only to USA / Nigeria residents. This
+  // does not block registration — everyone may still join and earn a certificate.
+  const raffleEligible = form.country === US_COUNTRY || form.country === 'Nigeria'
   const canSubmit = form.childName.trim() && form.dateOfBirth && form.parentName.trim() && form.parentEmail.trim() && form.country && (!isUS || form.state) && form.consent
 
   const submit = async (e: React.FormEvent) => {
@@ -222,6 +225,12 @@ export default function SummerRegisterPage() {
                 <label className="grid gap-1.5 text-sm font-semibold">City
                   <input className={inputClass} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                 </label>
+                {form.country && !raffleEligible && (
+                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 animate-slideDown" role="note">
+                    <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span>Your child can fully join Summer Reads and earn a certificate! Please note the <span className="font-semibold">prize raffle draw is currently open only to residents of the USA and Nigeria</span>, so this registration won&apos;t be entered into the draw.</span>
+                  </div>
+                )}
                 <label className="flex items-start gap-2.5 text-sm text-muted">
                   <input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-black/20 text-primary focus:ring-primary/30" required />
                   <span>I consent to registering my child for the Summer Reads program and confirm the information is accurate.</span>

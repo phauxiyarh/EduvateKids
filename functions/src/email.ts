@@ -87,3 +87,48 @@ export async function sendOrderNotification(params: {
     logger.error('Failed to send order notification email', err);
   }
 }
+
+/**
+ * Notify the admin that a shopper reserved (pre-ordered) an out-of-stock book.
+ * No-op (logged) if RESEND_API_KEY is not configured — never blocks the request.
+ */
+export async function sendBookRequestNotification(params: {
+  requestId: string;
+  bookTitle: string;
+  quantity: number;
+  name: string;
+  email: string;
+  phone?: string;
+}): Promise<void> {
+  if (!emailConfigured()) {
+    logger.info('Book-request email skipped — RESEND_API_KEY not set', { requestId: params.requestId });
+    return;
+  }
+  const resend = new Resend(RESEND_API_KEY.value());
+  const html = `
+  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:20px 24px;border-radius:14px 14px 0 0">
+      <h1 style="margin:0;font-size:20px">📚 New Book Reservation</h1>
+      <p style="margin:6px 0 0;opacity:.9;font-size:13px">Out-of-stock pre-order request</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:24px;font-size:14px">
+      <p style="margin:0 0 4px"><strong>Book:</strong> ${esc(params.bookTitle)}</p>
+      <p style="margin:0 0 4px"><strong>Copies requested:</strong> ${params.quantity}</p>
+      <h3 style="margin:20px 0 6px;font-size:14px">Requested by</h3>
+      <p style="margin:0">${esc(params.name)}<br>${esc(params.email)}${params.phone ? '<br>' + esc(params.phone) : ''}</p>
+      <p style="margin:20px 0 0;font-size:12px;color:#9ca3af">Request ref: ${esc(params.requestId)}</p>
+    </div>
+  </div>`;
+  try {
+    await resend.emails.send({
+      from: ORDER_NOTIFY_FROM,
+      to: ORDER_NOTIFY_TO,
+      replyTo: params.email,
+      subject: `Book reservation — ${params.quantity}× ${params.bookTitle}`,
+      html,
+    });
+    logger.info('Book-request notification email sent', { requestId: params.requestId });
+  } catch (err) {
+    logger.error('Failed to send book-request notification email', err);
+  }
+}

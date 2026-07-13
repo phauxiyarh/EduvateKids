@@ -125,6 +125,9 @@ export default function SummerLogPage() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null)
+  // Parent email typed into the delete prompt to verify ownership before deleting.
+  const [deleteEmail, setDeleteEmail] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   const code = child?.code || ''
 
@@ -184,19 +187,31 @@ export default function SummerLogPage() {
   }
 
   const deleteBook = async (index: number) => {
-    setEditError('')
+    setDeleteError('')
     if (!code) return
+    const email = deleteEmail.trim()
+    if (!email) {
+      setDeleteError('Enter the parent email used at registration to confirm.')
+      return
+    }
     setDeletingIndex(index)
     try {
       const call = httpsCallable(functions, 'deleteSummerBook')
-      const res = await call({ code, index, parentEmail: parentEmailInput.trim() })
+      const res = await call({ code, index, parentEmail: email })
       const result = res.data as { booksCount: number; level: Level; goal: number; goalMet: boolean }
       setBooksLogged((prev) => prev.filter((_, i) => i !== index))
       setBooksCount(result.booksCount)
       setConfirmDeleteIndex(null)
+      setDeleteEmail('')
       if (editingIndex === index) setEditingIndex(null)
     } catch (err) {
-      setEditError((err as { message?: string })?.message || 'Could not delete the book. Please try again.')
+      // Ownership mismatch comes back as permission-denied → show a clear message.
+      const msg = (err as { message?: string })?.message || ''
+      setDeleteError(
+        /match|permission|not-?authorized/i.test(msg)
+          ? 'That email does not match the one on file for this code. Please check and try again.'
+          : (msg || 'Could not delete the book. Please try again.')
+      )
     } finally {
       setDeletingIndex(null)
     }
@@ -280,7 +295,9 @@ export default function SummerLogPage() {
         dateFinished,
         dateLogged: todayStr(),
       }
-      setBooksLogged((prev) => [newEntry, ...prev])
+      // Append (not prepend) so the local order mirrors the server array —
+      // otherwise edit/delete-by-index would target the wrong entry.
+      setBooksLogged((prev) => [...prev, newEntry])
       setBooksCount(result.booksCount)
       resetForm()
 
@@ -398,13 +415,15 @@ export default function SummerLogPage() {
                     count={Math.max(booksCount, 0)}
                     palette={STACK_PALETTES[STACK_KEY[level]]}
                     uid="log"
-                    mode="progress"
+                    mode="loop"
+                    loopSeconds={Math.max(4.5, Math.min(booksCount, 10) * 0.7 + 2)}
                     className="relative h-40 w-40"
                   />
-                  <div className="pointer-events-none absolute right-1 top-1 flex flex-col items-center rounded-2xl bg-white/90 px-2 py-1 shadow-md ring-1 ring-primary/10">
-                    <span key={`n-${booksCount}`} className="animate-fadeIn font-display text-2xl font-bold leading-none text-primaryDark">{booksCount}</span>
-                    <span className="text-[9px] font-semibold uppercase tracking-wide text-muted">of {goal}</span>
+                  <div className="sr-log-numpill pointer-events-none absolute -right-1 -top-1 flex h-14 w-14 flex-col items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary font-display leading-none text-white shadow-[0_10px_26px_rgba(124,58,237,0.35)] ring-2 ring-white">
+                    <span key={`n-${booksCount}`} className="animate-fadeIn text-2xl font-extrabold">{booksCount}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-white/85">of {goal}</span>
                   </div>
+                  <style>{`@keyframes srLogPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}.sr-log-numpill{animation:srLogPulse 2.4s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.sr-log-numpill{animation:none}}`}</style>
                 </div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading with code {code}</p>
@@ -633,7 +652,7 @@ export default function SummerLogPage() {
                               <button
                                 type="button"
                                 aria-label={`Delete ${b.title}`}
-                                onClick={() => setConfirmDeleteIndex(i)}
+                                onClick={() => { setDeleteError(''); setDeleteEmail(''); setConfirmDeleteIndex(i) }}
                                 disabled={isDeleting}
                                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 text-red-500 transition hover:bg-red-50 disabled:opacity-50"
                               >
@@ -647,30 +666,45 @@ export default function SummerLogPage() {
                           </div>
                         )}
 
-                        {/* inline delete confirm */}
+                        {/* inline delete confirm — requires the parent email on file */}
                         {isConfirming && !isEditing && (
-                          <div className="animate-slideDown flex flex-wrap items-center justify-between gap-3 border-t border-red-100 bg-red-50/70 px-4 py-3 pl-5">
-                            <span className="text-sm font-medium text-red-700">Delete this book from the shelf?</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => deleteBook(i)}
-                                disabled={isDeleting}
-                                className="flex items-center justify-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-60"
-                              >
-                                {isDeleting ? (
-                                  <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Deleting...</>
-                                ) : 'Delete'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteIndex(null)}
-                                disabled={isDeleting}
-                                className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-black/5 disabled:opacity-60"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                          <div className="animate-slideDown border-t border-red-100 bg-red-50/70 px-4 py-3 pl-5">
+                            <p className="text-sm font-medium text-red-700">Delete this book from the shelf?</p>
+                            <p className="mt-1 text-xs text-red-600/80">For security, confirm the parent email used when you registered.</p>
+                            <form
+                              onSubmit={(e) => { e.preventDefault(); deleteBook(i) }}
+                              className="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-center"
+                            >
+                              <input
+                                type="email"
+                                autoFocus
+                                value={deleteEmail}
+                                onChange={(e) => { setDeleteEmail(e.target.value); if (deleteError) setDeleteError('') }}
+                                placeholder="Parent email on file"
+                                aria-label="Parent email on file"
+                                className="flex-1 rounded-xl border border-red-200 bg-white px-3.5 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-300/40"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="submit"
+                                  disabled={isDeleting || !deleteEmail.trim()}
+                                  className="flex items-center justify-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-60"
+                                >
+                                  {isDeleting ? (
+                                    <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Deleting...</>
+                                  ) : 'Delete'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setConfirmDeleteIndex(null); setDeleteEmail(''); setDeleteError('') }}
+                                  disabled={isDeleting}
+                                  className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-black/5 disabled:opacity-60"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                            {deleteError && <p className="mt-2 text-xs font-semibold text-red-600">{deleteError}</p>}
                           </div>
                         )}
                       </li>

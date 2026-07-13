@@ -28,7 +28,7 @@ import {
 } from './config';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
-import { sendOrderNotification } from './email';
+import { sendOrderNotification, sendBookRequestNotification } from './email';
 import { registerReader, logBook, editBook, deleteBook, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
@@ -338,6 +338,61 @@ export const deleteSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request
     throw summerError(err, 'Could not delete the book.');
   }
 });
+
+// ─────────────────────────── Book requests (out-of-stock pre-orders) ───────────────────────────
+
+/**
+ * Record a shopper's reservation for an out-of-stock book and notify the admin.
+ * Written to the `bookRequests` collection (admin-only read; create is locked to
+ * this function via Firestore rules). No payment — a reservation of intent only.
+ */
+export const submitBookRequest = onCall(
+  { secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS },
+  async (request) => {
+    const d = request.data as {
+      bookId?: string;
+      bookTitle?: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      quantity?: number;
+    };
+    if (!d?.name?.trim()) throw new HttpsError('invalid-argument', 'Your name is required.');
+    if (!isValidEmail(d?.email)) throw new HttpsError('invalid-argument', 'A valid email is required.');
+    if (!d?.bookTitle?.trim()) throw new HttpsError('invalid-argument', 'A book is required.');
+    const quantity = Math.max(1, Math.min(999, Math.floor(Number(d.quantity) || 1)));
+
+    try {
+      const ref = db.collection('bookRequests').doc();
+      await ref.set({
+        bookId: String(d.bookId ?? '').trim(),
+        bookTitle: d.bookTitle.trim().slice(0, 300),
+        name: d.name.trim().slice(0, 200),
+        email: String(d.email).trim().slice(0, 254),
+        phone: String(d.phone ?? '').trim().slice(0, 40),
+        quantity,
+        status: 'requested',
+        _live: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      // Fire-and-forget notification (never fails the request).
+      await sendBookRequestNotification({
+        requestId: ref.id,
+        bookTitle: d.bookTitle.trim(),
+        quantity,
+        name: d.name.trim(),
+        email: String(d.email).trim(),
+        phone: String(d.phone ?? '').trim(),
+      });
+      logger.info('Book request submitted', { requestId: ref.id, bookId: d.bookId });
+      return { ok: true, id: ref.id };
+    } catch (err) {
+      logger.error('submitBookRequest failed', err);
+      throw new HttpsError('internal', 'Could not submit your request. Please try again.');
+    }
+  }
+);
 
 // ─────────────────────────── Address validation (USPS) ───────────────────────────
 

@@ -143,6 +143,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // ── Book requests (out-of-stock pre-orders) ─────────────────────────────
+    // Created ONLY by the submitBookRequest Cloud Function (Admin SDK bypasses
+    // rules). Holds shopper PII (name/email/phone), so reads are ADMIN-ONLY and
+    // clients may never create/update/delete directly.
+    match /bookRequests/{document=**} {
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+      allow create: if false;
+    }
+
     // ── Default deny ─────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

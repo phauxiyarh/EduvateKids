@@ -136,6 +136,10 @@ type SummerReader = {
   level?: 'seedling' | 'reader' | 'scholar' | 'none' | string
   goal?: number
   goalMet?: boolean
+  country?: string
+  state?: string
+  city?: string
+  raffleEligible?: boolean
   booksLogged?: SummerBookLog[]
   createdAt?: { seconds: number } | null
 }
@@ -151,6 +155,26 @@ function readerGoalMet(r: SummerReader): boolean {
   if (typeof r.goalMet === 'boolean') return r.goalMet
   const g = r.goal ?? LEVEL_GOAL[readerLevel(r)] ?? 3
   return (r.booksCount ?? 0) >= g
+}
+// Raffle draw is currently open only to USA / Nigeria residents.
+const RAFFLE_COUNTRIES = ['united states of america', 'united states', 'usa', 'us', 'nigeria']
+/** Whether a reader is eligible for the prize raffle (prefers stored flag). */
+function readerRaffleEligible(r: SummerReader): boolean {
+  if (typeof r.raffleEligible === 'boolean') return r.raffleEligible
+  return RAFFLE_COUNTRIES.includes(String(r.country ?? '').trim().toLowerCase())
+}
+
+/** Out-of-stock pre-order request (written by the submitBookRequest function). */
+type BookRequest = {
+  id: string
+  bookId?: string
+  bookTitle: string
+  name: string
+  email: string
+  phone?: string
+  quantity: number
+  status?: string
+  createdAt?: { seconds: number } | null
 }
 
 type EventStatus = 'active' | 'closed'
@@ -412,7 +436,7 @@ export default function DashboardPage() {
     }
     return true
   })
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer' | 'bookRequests'>(
     'home'
   )
   const [orders, setOrders] = useState<OnlineOrder[]>([])
@@ -422,6 +446,8 @@ export default function DashboardPage() {
   const [summerReaders, setSummerReaders] = useState<SummerReader[]>([])
   const [summerLoading, setSummerLoading] = useState(false)
   const [expandedReader, setExpandedReader] = useState<SummerReader | null>(null)
+  const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
+  const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
   const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
@@ -3020,6 +3046,29 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, userRole])
 
+  // ─── Book requests (out-of-stock pre-orders) ───
+  const loadBookRequests = async () => {
+    setBookRequestsLoading(true)
+    try {
+      const snap = await getDocs(collection(db, 'bookRequests'))
+      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BookRequest, 'id'>) }))
+      rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
+      setBookRequests(rows)
+    } catch (error) {
+      console.error('Failed to load book requests:', error)
+    } finally {
+      setBookRequestsLoading(false)
+    }
+  }
+
+  // Fetch book requests when that view opens (admin only).
+  useEffect(() => {
+    if (activeView === 'bookRequests' && userRole === 'admin') {
+      loadBookRequests()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, userRole])
+
   const markOrderShipped = async (order: OnlineOrder) => {
     try {
       await updateDoc(doc(db, 'orders', order.id), { status: 'shipped', shippedAt: serverTimestamp() })
@@ -3215,12 +3264,15 @@ export default function DashboardPage() {
       >(functions, 'deleteSummerBook')
       const res = await callable({ code: reader.code, index, parentEmail: reader.parentEmail })
       const data = res.data || {}
+      // The callable returns counts/level but NOT the array, so remove the entry
+      // locally by index (server already removed it from Firestore).
+      const removeAt = (arr?: SummerBookLog[]) => (arr ? arr.filter((_, i) => i !== index) : arr)
       setSummerReaders((prev) =>
         prev.map((r) =>
           r.id === reader.id
             ? {
                 ...r,
-                booksLogged: data.booksLogged ?? r.booksLogged,
+                booksLogged: removeAt(r.booksLogged),
                 booksCount: data.booksCount ?? r.booksCount,
                 level: data.level ?? r.level,
                 goal: data.goal ?? r.goal,
@@ -3234,7 +3286,7 @@ export default function DashboardPage() {
         cur && cur.id === reader.id
           ? {
               ...cur,
-              booksLogged: data.booksLogged ?? cur.booksLogged,
+              booksLogged: removeAt(cur.booksLogged),
               booksCount: data.booksCount ?? cur.booksCount,
               level: data.level ?? cur.level,
               goal: data.goal ?? cur.goal,
@@ -3368,7 +3420,7 @@ export default function DashboardPage() {
   }
 
   const exportSummerCsv = () => {
-    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Books Logged', 'Level', 'Goal', 'Goal Met']
+    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Country', 'Books Logged', 'Level', 'Goal', 'Goal Met', 'Raffle Eligible']
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v)
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -3376,7 +3428,7 @@ export default function DashboardPage() {
     const rows = summerReaders.map((r) => {
       const lvl = readerLevel(r)
       const g = r.goal ?? LEVEL_GOAL[lvl] ?? 3
-      return [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.booksCount, lvl, g, readerGoalMet(r) ? 'Yes' : 'No'].map(escape).join(',')
+      return [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.country, r.booksCount, lvl, g, readerGoalMet(r) ? 'Yes' : 'No', readerRaffleEligible(r) ? 'Yes' : 'No'].map(escape).join(',')
     })
     const csv = [header.join(','), ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -3394,13 +3446,16 @@ export default function DashboardPage() {
     const scholars = summerReaders.filter((r) => readerLevel(r) === 'scholar').length
     const goalsMet = summerReaders.filter((r) => readerGoalMet(r)).length
     const totalBooks = summerReaders.reduce((s, r) => s + (r.booksCount ?? 0), 0)
+    // Eligible for the prize draw = goal met AND resident of USA/Nigeria.
+    const raffleEntries = summerReaders.filter((r) => readerGoalMet(r) && readerRaffleEligible(r)).length
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { label: 'Total Registered', value: String(summerReaders.length) },
             { label: 'Goals Met', value: String(goalsMet) },
+            { label: 'Raffle Entries', value: String(raffleEntries) },
             { label: 'Scholars', value: String(scholars) },
             { label: 'Total Books Logged', value: String(totalBooks) },
           ].map((s) => (
@@ -3446,7 +3501,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-black/5 text-xs uppercase tracking-wider text-muted">
                     <th className="pb-3 pr-4 font-semibold">Code</th>
@@ -3454,6 +3509,7 @@ export default function DashboardPage() {
                     <th className="pb-3 pr-4 font-semibold">Parent</th>
                     <th className="pb-3 pr-4 font-semibold">Books</th>
                     <th className="pb-3 pr-4 font-semibold">Level</th>
+                    <th className="pb-3 pr-4 font-semibold">Raffle</th>
                     <th className="pb-3 font-semibold"></th>
                   </tr>
                 </thead>
@@ -3462,6 +3518,7 @@ export default function DashboardPage() {
                     const lvl = readerLevel(r)
                     const g = r.goal ?? LEVEL_GOAL[lvl] ?? 3
                     const met = readerGoalMet(r)
+                    const eligible = readerRaffleEligible(r)
                     return (
                     <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
                       <td className="py-3 pr-4 font-mono text-xs text-muted">{r.code}</td>
@@ -3472,12 +3529,120 @@ export default function DashboardPage() {
                         <span className={summerTierBadge(lvl)}>{lvl}</span>
                         {met && <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700" title="Goal met"><svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></span>}
                       </td>
+                      <td className="py-3 pr-4">
+                        {eligible
+                          ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700" title={r.country || 'USA / Nigeria'}>Eligible</span>
+                          : <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-500" title={r.country || 'Country not on file'}>Not eligible</span>}
+                      </td>
                       <td className="py-3 text-right">
                         <button type="button" onClick={() => setExpandedReader(r)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
                       </td>
                     </tr>
                     )
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const exportBookRequestsCsv = () => {
+    const header = ['Date', 'Book', 'Name', 'Email', 'Phone', 'Quantity', 'Status']
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = bookRequests.map((r) => [
+      r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toISOString().slice(0, 10) : '',
+      r.bookTitle, r.name, r.email, r.phone, r.quantity, r.status || 'requested',
+    ].map(escape).join(','))
+    const csv = [header.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `eduvate-book-requests-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const renderBookRequests = () => {
+    const totalCopies = bookRequests.reduce((s, r) => s + (r.quantity ?? 0), 0)
+    return (
+      <div className="fade-up space-y-6">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Total Requests', value: String(bookRequests.length) },
+            { label: 'Copies Requested', value: String(totalCopies) },
+            { label: 'Unique Books', value: String(new Set(bookRequests.map((r) => r.bookTitle)).size) },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl bg-white p-5 shadow-xl border border-primary/5">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">{s.label}</p>
+              <p className="mt-2 font-display text-2xl gradient-text">{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={exportBookRequestsCsv}
+              disabled={bookRequests.length === 0}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={loadBookRequests}
+              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5"
+            >
+              <svg className={`h-4 w-4 ${bookRequestsLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Refresh
+            </button>
+          </div>
+
+          {bookRequestsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-muted">
+              <svg className="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Loading requests…
+            </div>
+          ) : bookRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/5 text-primary/40">
+                <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+              </div>
+              <p className="text-muted">No book requests yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-black/5 text-xs uppercase tracking-wider text-muted">
+                    <th className="pb-3 pr-4 font-semibold">Date</th>
+                    <th className="pb-3 pr-4 font-semibold">Book</th>
+                    <th className="pb-3 pr-4 font-semibold">Requested By</th>
+                    <th className="pb-3 pr-4 font-semibold">Phone</th>
+                    <th className="pb-3 pr-4 font-semibold">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookRequests.map((r) => (
+                    <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
+                      <td className="py-3 pr-4 text-xs text-muted">{r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : '—'}</td>
+                      <td className="py-3 pr-4"><span className="font-medium text-ink">{r.bookTitle}</span></td>
+                      <td className="py-3 pr-4"><span className="font-medium text-ink">{r.name}</span><br /><span className="text-xs text-muted">{r.email}</span></td>
+                      <td className="py-3 pr-4 text-xs text-muted">{r.phone || '—'}</td>
+                      <td className="py-3 pr-4 font-bold text-primaryDark">{r.quantity ?? 1}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -5928,7 +6093,8 @@ export default function DashboardPage() {
                 { id: 'pos', label: 'POS' },
                 { id: 'catalog', label: 'Catalog' },
                 { id: 'orders', label: 'Orders' },
-                { id: 'summer', label: 'Summer Reads' }
+                { id: 'summer', label: 'Summer Reads' },
+                { id: 'bookRequests', label: 'Book Requests' }
               ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                 <button
                   key={item.id}
@@ -5949,6 +6115,7 @@ export default function DashboardPage() {
                     {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
                     {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
                     {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
+                    {item.id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
                   </svg>
                   <span>{item.label}</span>
                 </button>
@@ -6022,7 +6189,9 @@ export default function DashboardPage() {
                   { id: 'events', label: 'Events' },
                   { id: 'pos', label: 'POS' },
                   { id: 'catalog', label: 'Catalog' },
-                  { id: 'summer', label: 'Summer Reads' }
+                  { id: 'orders', label: 'Orders' },
+                  { id: 'summer', label: 'Summer Reads' },
+                  { id: 'bookRequests', label: 'Book Requests' }
                 ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
                   <button
                     key={item.id}
@@ -6046,6 +6215,7 @@ export default function DashboardPage() {
                       {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
                     {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
                     {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
+                    {item.id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
                     </svg>
                     <span>{item.label}</span>
                   </button>
@@ -6124,6 +6294,7 @@ export default function DashboardPage() {
             {activeView === 'pos' && renderPOS()}
             {activeView === 'orders' && renderOrders()}
             {activeView === 'summer' && renderSummer()}
+            {activeView === 'bookRequests' && renderBookRequests()}
           </section>
         </div>
       </main>

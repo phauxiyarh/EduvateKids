@@ -810,11 +810,55 @@ export default function DashboardPage() {
                 publisher: String(data.publisher ?? ''),
                 showPublisher: data.showPublisher !== false, // default visible
                 stock: data.stock ?? (data as { quantity?: number }).quantity,
+                sku: data.sku ? String(data.sku) : undefined,
                 images: Array.isArray(data.images) ? data.images : [],
                 createdAt: String(data.createdAt ?? new Date().toISOString())
-              }
+              } as CatalogItem
             }))
             setCatalogItems(loadedCatalog)
+
+            // Auto-mirror inventory → catalog stock: inventory is the source of
+            // truth, but the public storefront can only read the catalog doc.
+            // On load, push each item's live inventory quantity onto its matching
+            // catalog doc's `stock` wherever they differ, so out-of-stock (incl.
+            // items already at 0) is always accurate without a manual sync.
+            try {
+              const norm = (s: unknown) => String(s ?? '').trim().toLowerCase()
+              // Live inventory (SKU, title, quantity) — fetched here so it's in
+              // scope regardless of demo/live branch above.
+              const invSnap = await getDocs(collection(db, 'inventory'))
+              const invList = invSnap.docs
+                .filter((snap) => snap.data()._live === true)
+                .map((snap) => {
+                  const d = snap.data() as { sku?: unknown; title?: unknown; quantity?: unknown }
+                  return { sku: String(d.sku ?? ''), title: String(d.title ?? ''), quantity: Math.max(0, Math.round(Number(d.quantity) || 0)) }
+                })
+              const stockFor = (c: { sku?: string; title: string }): number | null => {
+                const cSku = norm(c.sku)
+                const inv = invList.find((i) => (cSku && norm(i.sku) === cSku) || norm(i.title) === norm(c.title))
+                return inv ? inv.quantity : null
+              }
+              const reconcile = writeBatch(db)
+              let mirrored = 0
+              for (const c of loadedCatalog) {
+                const qty = stockFor(c)
+                if (qty !== null && c.stock !== qty) {
+                  reconcile.update(doc(db, 'catalog', c.id), { stock: qty })
+                  mirrored += 1
+                }
+              }
+              if (mirrored > 0) {
+                await reconcile.commit()
+                setCatalogItems((prev) =>
+                  prev.map((c) => {
+                    const qty = stockFor(c)
+                    return qty !== null ? { ...c, stock: qty } : c
+                  })
+                )
+              }
+            } catch (mirrorErr) {
+              console.error('Stock reconcile (inventory → catalog) failed:', mirrorErr)
+            }
           } else {
             setCatalogItems([])
           }

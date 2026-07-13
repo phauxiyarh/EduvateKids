@@ -110,7 +110,10 @@ type OnlineOrder = {
   paymentProvider: string
   paymentRef: string
   status: 'paid' | 'shipped' | 'delivered' | 'cancelled' | 'pending' | 'failed'
-  live?: boolean // true = real (live-mode) Stripe payment; false/undefined = test mode
+  // Live-mode flag. finalizeOrder writes it as `_live`; `live` kept for any
+  // older docs. true = real (live-mode) Stripe payment; false/undefined = test.
+  _live?: boolean
+  live?: boolean
   stockRestored?: boolean // true once this order's stock has been returned to inventory
   createdAt?: { seconds: number } | null
   paidAt?: { seconds: number } | null
@@ -3110,11 +3113,12 @@ export default function DashboardPage() {
     try {
       const snap = await getDocs(collection(db, 'orders'))
       const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<OnlineOrder, 'id'>) }))
-      // Separate live from test-mode orders. Stripe stamps live: pi.livemode on
-      // each order (false in test mode). In demo mode we show test orders; in
-      // live mode we show only real (live-mode) orders, so test orders never
-      // appear alongside genuine sales.
-      const rows = all.filter((o) => (demoMode ? o.live !== true : o.live === true))
+      // Separate live from test-mode orders. finalizeOrder stamps `_live` from
+      // pi.livemode on each order (older docs may use `live`). In demo mode we
+      // show test orders; in live mode we show only real (live-mode) orders, so
+      // test orders never appear alongside genuine sales.
+      const isLiveOrder = (o: OnlineOrder) => (o._live ?? o.live) === true
+      const rows = all.filter((o) => (demoMode ? !isLiveOrder(o) : isLiveOrder(o)))
       // Newest first by createdAt seconds (fallback: keep order).
       rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
       setOrders(rows)

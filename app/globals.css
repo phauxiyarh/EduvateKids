@@ -269,6 +269,25 @@ textarea:focus-visible,
   animation: slideDown 0.3s ease-out;
 }
 
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slideInLeft { animation: none; }
+}
+
 /* ───────────────────────────────────────────────
    Premium polish: scroll reveal, gradient motion,
    button shine, refined easing & interactivity

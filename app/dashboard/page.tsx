@@ -164,6 +164,34 @@ function readerRaffleEligible(r: SummerReader): boolean {
   return RAFFLE_COUNTRIES.includes(String(r.country ?? '').trim().toLowerCase())
 }
 
+/** Dashboard navigation items, in sidebar order. `title`/`subtitle` drive the page header. */
+const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[] = [
+  { id: 'home', label: 'Home', title: 'Admin Home', subtitle: 'Monitor restock needs, best sellers, and event performance at a glance.' },
+  { id: 'inventory', label: 'Inventory', title: 'Inventory Management', subtitle: 'Upload, update, and manage your complete inventory with ease.' },
+  { id: 'events', label: 'Events', title: 'Event Management', subtitle: 'Create events, manage dates and fees, and review event performance summaries.' },
+  { id: 'pos', label: 'POS', title: 'Point of Sale', subtitle: 'Record sales for events or general transactions. Search products, manage cart, and process payments.' },
+  { id: 'catalog', label: 'Catalog', title: 'Catalog Management', subtitle: 'Create, manage, and showcase your product catalog with images and details.' },
+  { id: 'orders', label: 'Orders', title: 'Online Orders', subtitle: 'Online store orders paid via Stripe. Review details and mark items as shipped.' },
+  { id: 'summer', label: 'Summer Reads', title: 'Summer Reads', subtitle: 'Registrations and reading progress for the Summer Reads program.' },
+  { id: 'bookRequests', label: 'Book Requests', title: 'Book Requests', subtitle: 'Out-of-stock pre-orders reserved by shoppers. Follow up when items are back in stock.' },
+]
+
+/** The icon path(s) for a nav item id. */
+function NavIcon({ id, className }: { id: string; className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      {id === 'home' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />}
+      {id === 'inventory' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
+      {id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
+      {id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
+      {id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
+      {id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
+      {id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
+      {id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
+    </svg>
+  )
+}
+
 /** Out-of-stock pre-order request (written by the submitBookRequest function). */
 type BookRequest = {
   id: string
@@ -485,6 +513,8 @@ export default function DashboardPage() {
   const [scanStockQty, setScanStockQty] = useState(1)
   const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // Left sidebar: collapsed to an icon-only rail on desktop; slide-in on mobile.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
   const [isSavingInventory, setIsSavingInventory] = useState(false)
@@ -6064,79 +6094,47 @@ export default function DashboardPage() {
         />
       ))}
 
-      {/* Sticky Header with Horizontal Navigation */}
+      {/* Slim top bar: brand at the left, Live indicator + Settings + Logout at the right. */}
       <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 backdrop-blur-xl shadow-[0_8px_30px_rgba(124,58,237,0.06)] animate-fadeIn">
         <div className="h-[3px] w-full bg-gradient-to-r from-primary via-secondary to-accentOne" aria-hidden="true" />
-        <div className="mx-auto w-full max-w-7xl px-4">
-          <div className="flex items-center justify-between py-4">
-            {/* Logo */}
-            <a className="flex items-center gap-3 group" href="/">
-              <Image
-                src={logo}
-                alt="Eduvate Kids logo"
-                width={32}
-                height={32}
-                className="group-hover:scale-110 transition-transform duration-300"
-              />
-              <div className="hidden sm:block">
-                <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
-                <p className="text-xs text-muted">Admin Dashboard</p>
-              </div>
-            </a>
+        <div className="w-full px-4">
+          <div className="flex items-center justify-between py-3.5">
+            {/* Left: mobile menu toggle + logo */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl border-2 border-primary/30 text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+                aria-label="Open menu"
+                aria-expanded={mobileMenuOpen}
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+              <a className="flex items-center gap-3 group" href="/">
+                <Image
+                  src={logo}
+                  alt="Eduvate Kids logo"
+                  width={32}
+                  height={32}
+                  className="group-hover:scale-110 transition-transform duration-300"
+                />
+                <div className="hidden sm:block">
+                  <span className="font-display text-xl font-bold gradient-text">Eduvate Kids</span>
+                  <p className="text-xs text-muted">Admin Dashboard</p>
+                </div>
+              </a>
+            </div>
 
-            {/* Desktop Horizontal Tabs */}
-            <nav className="hidden md:flex items-center gap-2">
-              {[
-                { id: 'home', label: 'Home' },
-                { id: 'inventory', label: 'Inventory' },
-                { id: 'events', label: 'Events' },
-                { id: 'pos', label: 'POS' },
-                { id: 'catalog', label: 'Catalog' },
-                { id: 'orders', label: 'Orders' },
-                { id: 'summer', label: 'Summer Reads' },
-                { id: 'bookRequests', label: 'Book Requests' }
-              ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveView(item.id as typeof activeView)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
-                    activeView === item.id
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg scale-105'
-                      : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:scale-102'
-                  }`}
-                  type="button"
-                  aria-current={activeView === item.id ? 'page' : undefined}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    {item.id === 'home' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />}
-                    {item.id === 'inventory' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
-                    {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
-                    {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
-                    {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
-                    {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
-                    {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
-                    {item.id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
-                  </svg>
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </nav>
-
-            {/* Right Side - User Info & Actions */}
+            {/* Right: Live indicator + Settings + Logout */}
             <div className="flex items-center gap-3">
-              {/* Mode Indicator */}
-              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-50 to-green-50 border border-primary/20">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-50 to-green-50 border border-primary/20">
                 <span className={`h-2 w-2 rounded-full ${demoMode ? 'bg-amber-500' : 'bg-green-500'}`} />
-                <span className="text-[11px] font-bold text-primaryDark">
-                  {demoMode ? 'Demo' : 'Live'}
-                </span>
+                <span className="text-[11px] font-bold text-primaryDark">{demoMode ? 'Demo' : 'Live'}</span>
               </div>
-
-              {/* Settings Button - Admin Only */}
               {userRole === 'admin' && (
                 <button
                   onClick={() => router.push('/settings')}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-primary/30 bg-white hover:bg-primary/5 hover:-translate-y-0.5 transition-all duration-300"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/30 bg-white hover:bg-primary/5 hover:-translate-y-0.5 transition-all duration-300"
                   type="button"
                   aria-label="Settings"
                 >
@@ -6146,158 +6144,122 @@ export default function DashboardPage() {
                   </svg>
                 </button>
               )}
-
-              {/* Logout Button - all roles (desktop) */}
               <button
                 onClick={handleLogout}
-                className="hidden md:flex h-11 items-center justify-center gap-2 rounded-full border-2 border-red-200 bg-white px-4 text-sm font-bold text-red-600 hover:bg-red-50 hover:-translate-y-0.5 transition-all duration-300"
+                className="flex h-10 items-center justify-center gap-2 rounded-full border-2 border-red-200 bg-white px-3 sm:px-4 text-sm font-bold text-red-600 hover:bg-red-50 hover:-translate-y-0.5 transition-all duration-300"
                 type="button"
                 aria-label="Log out"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Log out
-              </button>
-
-              {/* Mobile Hamburger Menu Button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl border-2 border-primary/30 text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-                aria-label="Toggle menu"
-                aria-expanded={mobileMenuOpen}
-              >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {mobileMenuOpen ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  )}
-                </svg>
+                <span className="hidden sm:inline">Log out</span>
               </button>
             </div>
           </div>
+        </div>
+      </header>
 
-          {/* Mobile Dropdown Menu */}
-          {mobileMenuOpen && (
-            <div className="md:hidden border-t border-primary/10 py-4 animate-slideDown">
-              <nav className="flex flex-col gap-2">
-                {[
-                  { id: 'home', label: 'Home' },
-                  { id: 'inventory', label: 'Inventory' },
-                  { id: 'events', label: 'Events' },
-                  { id: 'pos', label: 'POS' },
-                  { id: 'catalog', label: 'Catalog' },
-                  { id: 'orders', label: 'Orders' },
-                  { id: 'summer', label: 'Summer Reads' },
-                  { id: 'bookRequests', label: 'Book Requests' }
-                ].filter(item => userRole === 'admin' || item.id === 'pos').map((item) => (
+      {(() => {
+        const navItems = NAV_ITEMS.filter((item) => userRole === 'admin' || item.id === 'pos')
+        const current = NAV_ITEMS.find((n) => n.id === activeView) ?? NAV_ITEMS[0]
+        return (
+      <div className="relative z-10 flex">
+        {/* ── Left sidebar (desktop): collapsible icon rail ── */}
+        <aside
+          className={`sticky top-[71px] hidden md:flex h-[calc(100vh-71px)] flex-col border-r border-primary/10 bg-white/70 backdrop-blur-xl transition-all duration-300 ${sidebarCollapsed ? 'w-[74px]' : 'w-60'}`}
+        >
+          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveView(item.id as typeof activeView)}
+                type="button"
+                aria-current={activeView === item.id ? 'page' : undefined}
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-all duration-200 ${sidebarCollapsed ? 'justify-center' : ''} ${
+                  activeView === item.id
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-md'
+                    : 'text-primaryDark hover:bg-primary/10'
+                }`}
+              >
+                <NavIcon id={item.id} className="h-5 w-5 flex-shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+              </button>
+            ))}
+          </nav>
+          {/* collapse toggle */}
+          <div className="border-t border-primary/10 p-3">
+            <button
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              type="button"
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted hover:bg-primary/5 transition-colors ${sidebarCollapsed ? 'justify-center' : ''}`}
+            >
+              <svg className={`h-5 w-5 flex-shrink-0 transition-transform duration-300 ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+              {!sidebarCollapsed && <span>Collapse</span>}
+            </button>
+          </div>
+        </aside>
+
+        {/* ── Mobile slide-in sidebar ── */}
+        {mobileMenuOpen && (
+          <div className="md:hidden fixed inset-0 z-[60]">
+            <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fadeIn" onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+            <aside className="absolute left-0 top-0 h-full w-72 max-w-[82%] bg-white shadow-2xl animate-slideInLeft flex flex-col">
+              <div className="flex items-center justify-between border-b border-primary/10 px-4 py-4">
+                <span className="font-display text-lg font-bold gradient-text">Menu</span>
+                <button onClick={() => setMobileMenuOpen(false)} type="button" aria-label="Close menu" className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 text-primaryDark hover:bg-primary/5">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
+                {navItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => {
-                      setActiveView(item.id as typeof activeView)
-                      setMobileMenuOpen(false)
-                    }}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
-                      activeView === item.id
-                        ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                        : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
-                    }`}
+                    onClick={() => { setActiveView(item.id as typeof activeView); setMobileMenuOpen(false) }}
                     type="button"
                     aria-current={activeView === item.id ? 'page' : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition-all duration-200 ${
+                      activeView === item.id
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-md'
+                        : 'text-primaryDark hover:bg-primary/10'
+                    }`}
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                      {item.id === 'home' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" />}
-                      {item.id === 'inventory' && <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />}
-                      {item.id === 'events' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />}
-                      {item.id === 'pos' && <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />}
-                      {item.id === 'catalog' && <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a2 2 0 012-2h9a2 2 0 012 2v14l-6-3-6 3V5z" />}
-                    {item.id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
-                    {item.id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
-                    {item.id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
-                    </svg>
+                    <NavIcon id={item.id} className="h-5 w-5 flex-shrink-0" />
                     <span>{item.label}</span>
                   </button>
                 ))}
               </nav>
+            </aside>
+          </div>
+        )}
 
-              <div className="mt-4 pt-4 border-t border-primary/10 space-y-3 px-4">
-                {userRole === 'admin' && (
-                  <button
-                    onClick={() => { router.push('/settings'); setMobileMenuOpen(false) }}
-                    className="w-full rounded-full border-2 border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-all duration-300 shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Settings
-                  </button>
-                )}
-                <button
-                  onClick={() => { setMobileMenuOpen(false); handleLogout() }}
-                  className="w-full rounded-full border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-all duration-300 shadow-sm flex items-center justify-center gap-2"
-                  type="button"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Log out
-                </button>
+        {/* ── Main content ── */}
+        <main className="relative z-10 min-w-0 flex-1 px-4 py-8 md:px-8 md:py-10">
+          <div className="mx-auto max-w-6xl">
+            <section className="flex-1 space-y-8">
+              <div className="fade-up">
+                <h1 className="font-display text-3xl md:text-4xl gradient-text">{current.title}</h1>
+                <p className="mt-3 text-sm text-muted max-w-2xl">{current.subtitle}</p>
               </div>
-            </div>
-          )}
-        </div>
-      </header>
 
-      <main className="relative z-10 w-full px-4 py-8 md:px-6 md:py-10">
-        <div className="mx-auto max-w-7xl">
-          <section className="flex-1 space-y-8">
-            <div className="fade-up">
-              <h1 className="font-display text-3xl md:text-4xl gradient-text">
-                {activeView === 'home'
-                  ? 'Admin Home'
-                  : activeView === 'inventory'
-                  ? 'Inventory Management'
-                  : activeView === 'catalog'
-                  ? 'Catalog Management'
-                  : activeView === 'pos'
-                  ? 'Point of Sale'
-                  : activeView === 'orders'
-                  ? 'Online Orders'
-                  : activeView === 'summer'
-                  ? 'Summer Reads'
-                  : 'Event Management'}
-              </h1>
-              <p className="mt-3 text-sm text-muted max-w-2xl">
-                {activeView === 'home'
-                  ? 'Monitor restock needs, best sellers, and event performance at a glance.'
-                  : activeView === 'inventory'
-                  ? 'Upload, update, and manage your complete inventory with ease.'
-                  : activeView === 'catalog'
-                  ? 'Create, manage, and showcase your product catalog with images and details.'
-                  : activeView === 'pos'
-                  ? 'Record sales for events or general transactions. Search products, manage cart, and process payments.'
-                  : activeView === 'orders'
-                  ? 'Online store orders paid via Stripe. Review details and mark items as shipped.'
-                  : activeView === 'summer'
-                  ? 'Registrations and reading progress for the Summer Reads program.'
-                  : 'Create events, manage dates and fees, and review event performance summaries.'}
-              </p>
-            </div>
-
-            {activeView === 'home' && renderHome()}
-            {activeView === 'inventory' && renderInventory()}
-            {activeView === 'events' && renderEvents()}
-            {activeView === 'catalog' && renderCatalog()}
-            {activeView === 'pos' && renderPOS()}
-            {activeView === 'orders' && renderOrders()}
-            {activeView === 'summer' && renderSummer()}
-            {activeView === 'bookRequests' && renderBookRequests()}
-          </section>
-        </div>
-      </main>
+              {activeView === 'home' && renderHome()}
+              {activeView === 'inventory' && renderInventory()}
+              {activeView === 'events' && renderEvents()}
+              {activeView === 'catalog' && renderCatalog()}
+              {activeView === 'pos' && renderPOS()}
+              {activeView === 'orders' && renderOrders()}
+              {activeView === 'summer' && renderSummer()}
+              {activeView === 'bookRequests' && renderBookRequests()}
+            </section>
+          </div>
+        </main>
+      </div>
+        )
+      })()}
 
       {/* Global Modals - rendered outside page views */}
       {showCreateCatalog && renderCatalogFormModal(false)}

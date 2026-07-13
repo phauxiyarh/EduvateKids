@@ -2445,7 +2445,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        <div className="relative z-10 mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="relative z-10 mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {summaryCards.map((card, index) => (
             <div
               key={card.label}
@@ -2466,9 +2466,11 @@ export default function DashboardPage() {
                     </svg>
                   </span>
                 </div>
-                <h2 className="mt-4 font-display text-2xl sm:text-4xl gradient-text">
+                <h2 className="mt-4 font-display text-2xl sm:text-3xl xl:text-[1.75rem] 2xl:text-4xl gradient-text leading-tight break-words">
                   {'prefix' in card ? card.prefix : ''}
-                  {formatNumber(card.value)}
+                  {'prefix' in card && card.prefix === '$'
+                    ? card.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : formatNumber(card.value)}
                 </h2>
                 <p className="mt-3 text-xs text-muted flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
@@ -5788,10 +5790,23 @@ export default function DashboardPage() {
             />
             <p className="mt-1 text-[11px] text-muted">Shared SKU links this product to an inventory stock record.</p>
           </div>
-          {/* Quantity and secondary selling price are intentionally not shown on
-              the catalog form: stock and pricing live on the inventory record
-              (the storefront shows the single "Price" above). These values are
-              still carried from the selected inventory item behind the scenes. */}
+
+          {/* Stock: controls in/out-of-stock on the storefront. 0 = out of stock
+              (shoppers get the reserve prompt). Blank = untracked (always available).
+              Auto-filled from the linked inventory item when there is one. */}
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Stock</label>
+            <input
+              type="number"
+              min={0}
+              value={catalogQty}
+              onChange={(e) => setCatalogQty(e.target.value)}
+              placeholder="e.g., 12  (0 = out of stock)"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+            />
+            <p className="mt-1 text-[11px] text-muted">Set to <span className="font-semibold">0</span> to mark out of stock — shoppers then get the reserve/pre-order prompt. Leave blank to keep it always available.</p>
+          </div>
+          {/* Secondary selling price is carried from the linked inventory item. */}
 
           <div className="md:col-span-2">
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">

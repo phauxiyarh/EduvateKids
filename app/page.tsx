@@ -7,6 +7,7 @@ import { EventNavDropdown } from './components/EventNavDropdown'
 import { HeaderCart } from './components/HeaderCart'
 import { BookPlaceholder } from './components/BookPlaceholder'
 import { ReadingMattersCard } from './components/ReadingMattersCard'
+import { OPEN_COOKIE_PREFS } from './components/CookieConsent'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import logo from '../assets/logo.png'
@@ -1163,6 +1164,12 @@ export default function HomePage() {
                 <Link href="/faqs" className="transition-colors duration-200 hover:text-white">
                   Help Center
                 </Link>
+                <Link href="/accessibility" className="transition-colors duration-200 hover:text-white">
+                  Accessibility
+                </Link>
+                <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="transition-colors duration-200 hover:text-white">
+                  Cookie Preferences
+                </button>
                 <Link
                   href="/auth/login"
                   aria-label="Admin Login"

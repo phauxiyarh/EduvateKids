@@ -8,12 +8,14 @@ import { doc, getDoc } from 'firebase/firestore'
 import { functions, db } from '../../../lib/firebase'
 import { EventNavDropdown } from '../../components/EventNavDropdown'
 import { HeaderCart } from '../../components/HeaderCart'
+import { OPEN_COOKIE_PREFS } from '../../components/CookieConsent'
+import { SummerCelebration } from '../../components/SummerCelebration'
 import logo from '../../../assets/logo.png'
 
 const inputClass =
   'w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
 
-type Tier = 'none' | 'seedling' | 'reader' | 'scholar'
+type Level = 'none' | 'seedling' | 'reader' | 'scholar'
 
 type LoggedBook = {
   title: string
@@ -31,24 +33,30 @@ type ChildDoc = {
   childAge?: number
   parentName?: string
   booksCount: number
-  tier: Tier
+  level: Level
+  goal: number
+  goalMet: boolean
   booksLogged: LoggedBook[]
 }
 
-const TIER_LABELS: Record<Tier, string> = {
-  none: 'Not started',
-  seedling: 'Seedling',
-  reader: 'Reader',
-  scholar: 'Scholar',
+const LEVEL_LABELS: Record<Level, string> = {
+  none: 'Growing Readers',
+  seedling: 'Early Readers',
+  reader: 'Growing Readers',
+  scholar: 'Confident Readers',
 }
 
-const TIER_GOAL = 10 // Scholar is the top tier
+const LEVEL_GOALS: Record<Exclude<Level, 'none'>, number> = { seedling: 4, reader: 6, scholar: 10 }
 
-function nextTierInfo(count: number): { label: string; target: number } {
-  if (count < 3) return { label: 'Seedling', target: 3 }
-  if (count < 6) return { label: 'Reader', target: 6 }
-  if (count < 10) return { label: 'Scholar', target: 10 }
-  return { label: 'Scholar', target: 10 }
+/**
+ * The chosen level is FIXED. Older docs may only carry a legacy `tier`; fall
+ * back to it, then to seedling. The goal is that level's book target — it never
+ * changes based on how many books are logged.
+ */
+function resolveLevel(data: Partial<ChildDoc> & { tier?: Level }): Exclude<Level, 'none'> {
+  const raw = (data.level ?? data.tier) as Level | undefined
+  if (raw === 'scholar' || raw === 'reader' || raw === 'seedling') return raw
+  return 'seedling'
 }
 
 function todayStr(): string {
@@ -77,7 +85,8 @@ export default function SummerLogPage() {
   // STATE 2: loaded child
   const [child, setChild] = useState<ChildDoc | null>(null)
   const [booksCount, setBooksCount] = useState(0)
-  const [tier, setTier] = useState<Tier>('none')
+  const [level, setLevel] = useState<Level>('seedling')
+  const [goal, setGoal] = useState(3)
   const [booksLogged, setBooksLogged] = useState<LoggedBook[]>([])
 
   // Log form
@@ -92,8 +101,8 @@ export default function SummerLogPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
-  // Celebration
-  const [celebrateTier, setCelebrateTier] = useState<string | null>(null)
+  // Celebration (shown when the child reaches their chosen goal)
+  const [celebrateGoal, setCelebrateGoal] = useState<string | null>(null)
 
   // Edit / delete state
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -143,7 +152,7 @@ export default function SummerLogPage() {
         review: editReview.trim(),
         dateFinished: editDateFinished,
       })
-      const result = res.data as { booksCount: number; tier: Tier }
+      const result = res.data as { booksCount: number; level: Level; goal: number; goalMet: boolean }
       setBooksLogged((prev) => prev.map((b, i) => (
         i === index
           ? {
@@ -157,7 +166,6 @@ export default function SummerLogPage() {
           : b
       )))
       setBooksCount(result.booksCount)
-      setTier(result.tier)
       setEditingIndex(null)
     } catch (err) {
       setEditError((err as { message?: string })?.message || 'Could not save changes. Please try again.')
@@ -173,10 +181,9 @@ export default function SummerLogPage() {
     try {
       const call = httpsCallable(functions, 'deleteSummerBook')
       const res = await call({ code, index, parentEmail: parentEmailInput.trim() })
-      const result = res.data as { booksCount: number; tier: Tier }
+      const result = res.data as { booksCount: number; level: Level; goal: number; goalMet: boolean }
       setBooksLogged((prev) => prev.filter((_, i) => i !== index))
       setBooksCount(result.booksCount)
-      setTier(result.tier)
       setConfirmDeleteIndex(null)
       if (editingIndex === index) setEditingIndex(null)
     } catch (err) {
@@ -198,20 +205,26 @@ export default function SummerLogPage() {
         setLookupError('Code not found. Check the code and try again.')
         return
       }
-      const data = snap.data() as Partial<ChildDoc>
+      const data = snap.data() as Partial<ChildDoc> & { tier?: Level }
+      const lvl = resolveLevel(data)
+      const g = typeof data.goal === 'number' ? data.goal : LEVEL_GOALS[lvl]
+      const count = data.booksCount || 0
       const loaded: ChildDoc = {
         code: data.code || c,
         childName: data.childName || 'Reader',
         dateOfBirth: data.dateOfBirth,
         childAge: data.childAge,
         parentName: data.parentName,
-        booksCount: data.booksCount || 0,
-        tier: (data.tier as Tier) || 'none',
+        booksCount: count,
+        level: lvl,
+        goal: g,
+        goalMet: typeof data.goalMet === 'boolean' ? data.goalMet : count >= g,
         booksLogged: Array.isArray(data.booksLogged) ? data.booksLogged : [],
       }
       setChild(loaded)
       setBooksCount(loaded.booksCount)
-      setTier(loaded.tier)
+      setLevel(loaded.level)
+      setGoal(loaded.goal)
       setBooksLogged(loaded.booksLogged)
     } catch {
       setLookupError('Something went wrong. Please try again.')
@@ -248,7 +261,7 @@ export default function SummerLogPage() {
         dateFinished,
         parentVerified: true,
       })
-      const result = res.data as { booksCount: number; tier: Tier; newTier?: boolean }
+      const result = res.data as { booksCount: number; level: Level; goal: number; goalMet: boolean; goalJustMet?: boolean }
 
       const newEntry: LoggedBook = {
         title: title.trim(),
@@ -260,12 +273,12 @@ export default function SummerLogPage() {
       }
       setBooksLogged((prev) => [newEntry, ...prev])
       setBooksCount(result.booksCount)
-      setTier(result.tier)
       resetForm()
 
-      if (result.newTier) {
-        setCelebrateTier(TIER_LABELS[result.tier] || 'a new tier')
-        setTimeout(() => setCelebrateTier(null), 5000)
+      // Celebrate the moment they reach their chosen goal (not a promotion).
+      // The SummerCelebration overlay auto-dismisses itself via onDone.
+      if (result.goalJustMet) {
+        setCelebrateGoal(LEVEL_LABELS[result.level] || level)
       }
     } catch (err) {
       setFormError((err as { message?: string })?.message || 'Could not log the book. Please try again.')
@@ -274,13 +287,15 @@ export default function SummerLogPage() {
     }
   }
 
-  // Progress ring geometry
+  // Progress ring geometry — always relative to THIS reader's chosen goal.
   const R = 52
   const CIRC = 2 * Math.PI * R
-  const progress = Math.min(booksCount / TIER_GOAL, 1)
+  const progress = goal > 0 ? Math.min(booksCount / goal, 1) : 0
   const dashOffset = CIRC * (1 - progress)
-  const next = nextTierInfo(booksCount)
-  const reachedTop = booksCount >= TIER_GOAL
+  const reachedGoal = booksCount >= goal
+  const booksToGoal = Math.max(0, goal - booksCount)
+  const bonusBooks = Math.max(0, booksCount - goal)
+  const levelLabel = LEVEL_LABELS[level]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50/60 via-white to-emerald-50/60 text-ink">
@@ -361,17 +376,9 @@ export default function SummerLogPage() {
         ) : (
           /* ---------- STATE 2: progress + log form ---------- */
           <div className="animate-fadeIn">
-            <style>{`@keyframes srCelebrate{0%{opacity:0;transform:scale(0.9)}60%{transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}.sr-celebrate{animation:srCelebrate 500ms cubic-bezier(0.22,1,0.36,1)}`}</style>
-            {/* Celebration banner */}
-            {celebrateTier && (
-              <div role="status" className="sr-celebrate mb-6 flex items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-emerald-50 p-4 text-center shadow-soft">
-                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-pink-500 text-white shadow-md">
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4zM7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3" />
-                  </svg>
-                </span>
-                <p className="font-display text-lg font-bold gradient-text">You reached {celebrateTier}!</p>
-              </div>
+            {/* Animated full-screen celebration — fires for ANY level's goal. */}
+            {celebrateGoal && (
+              <SummerCelebration label={celebrateGoal} onDone={() => setCelebrateGoal(null)} />
             )}
 
             {/* Progress card */}
@@ -417,13 +424,21 @@ export default function SummerLogPage() {
                 <div className="text-center sm:text-left">
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading with code {code}</p>
                   <h1 className="mt-1 font-display text-2xl">{child.childName}</h1>
-                  <p className="mt-2 text-sm text-muted">
-                    Current tier: <span className="font-semibold text-primaryDark">{TIER_LABELS[tier]}</span>
+                  <p className="mt-2 flex flex-wrap items-center justify-center gap-2 text-sm text-muted sm:justify-start">
+                    <span>Level: <span className="font-semibold text-primaryDark">{levelLabel}</span> · Goal: <span className="font-semibold text-primaryDark">{goal} books</span></span>
+                    {reachedGoal && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        Goal achieved
+                      </span>
+                    )}
                   </p>
                   <p className="mt-1 text-sm text-muted">
-                    {reachedTop
-                      ? 'Top tier reached, Scholar! Keep the streak going.'
-                      : <>Read <span className="font-semibold text-primaryDark">{Math.max(next.target - booksCount, 0)}</span> more to reach <span className="font-semibold text-primaryDark">{next.label}</span>.</>}
+                    {reachedGoal
+                      ? bonusBooks > 0
+                        ? <>You&apos;ve read <span className="font-semibold text-primaryDark">{bonusBooks}</span> bonus {bonusBooks === 1 ? 'book' : 'books'} beyond your goal — mashaAllah! Keep going.</>
+                        : <>You reached your goal — mashaAllah! Every extra book you log is a bonus.</>
+                      : <>Read <span className="font-semibold text-primaryDark">{booksToGoal}</span> more to reach your <span className="font-semibold text-primaryDark">{levelLabel}</span> goal.</>}
                   </p>
                 </div>
               </div>
@@ -699,6 +714,8 @@ export default function SummerLogPage() {
               <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
               <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
               <Link href="/catalog" className="transition-colors hover:text-white">Our Catalog</Link>
+              <Link href="/accessibility" className="transition-colors hover:text-white">Accessibility</Link>
+              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="transition-colors hover:text-white">Cookie Preferences</button>
             </div>
           </div>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

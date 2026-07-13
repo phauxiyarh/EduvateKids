@@ -7,11 +7,21 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../../lib/firebase'
 import { EventNavDropdown } from '../../components/EventNavDropdown'
 import { HeaderCart } from '../../components/HeaderCart'
+import { OPEN_COOKIE_PREFS } from '../../components/CookieConsent'
 import logo from '../../../assets/logo.png'
 import { COUNTRIES, US_STATES, US_COUNTRY } from '../../../lib/geo'
 
 const inputClass =
   'w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
+
+// The three reading levels. The chosen level is the child's goal and is FIXED —
+// reading extra books is welcome, but it never moves them to another level.
+// Pick by where the child actually reads comfortably, not strictly by age.
+const LEVELS = [
+  { id: 'seedling', name: 'Early Readers', tag: 'Seedlings', books: 4, blurb: 'Picture books, early readers, lots of pictures, short text. Usually ages 4+, but place your child here if this is where they read comfortably.' },
+  { id: 'reader', name: 'Growing Readers', tag: 'Readers', books: 6, blurb: 'Beginning chapter books, longer stories, reading more independently. Usually ages 7+, but go by where your child reads, not their age.' },
+  { id: 'scholar', name: 'Confident Readers', tag: 'Scholar', books: 10, blurb: 'Full chapter books and longer novels, reading fluently on their own. Usually ages 11+, or any child reading at this level.' },
+] as const
 
 function computeAge(dob: string): number | null {
   if (!dob) return null
@@ -25,7 +35,7 @@ function computeAge(dob: string): number | null {
 }
 
 export default function SummerRegisterPage() {
-  const [form, setForm] = useState({ childName: '', dateOfBirth: '', parentName: '', parentEmail: '', parentPhone: '', country: '', state: '', city: '', consent: false })
+  const [form, setForm] = useState({ childName: '', dateOfBirth: '', parentName: '', parentEmail: '', parentPhone: '', country: '', state: '', city: '', level: 'seedling', consent: false })
   const childAge = computeAge(form.dateOfBirth)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -133,6 +143,34 @@ export default function SummerRegisterPage() {
                 </div>
               )}
               <div className="grid gap-4">
+                <fieldset className="grid gap-2">
+                  <legend className="text-sm font-semibold">Choose a Reading Level *</legend>
+                  <p className="text-xs font-normal text-muted">This is your child&apos;s goal for the summer. It stays the same all season — reading extra books is always welcome, but the level won&apos;t change.</p>
+                  <div className="mt-1 grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Reading level">
+                    {LEVELS.map((lvl) => {
+                      const selected = form.level === lvl.id
+                      return (
+                        <button
+                          key={lvl.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setForm({ ...form, level: lvl.id })}
+                          className={`rounded-2xl border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${selected ? 'border-primary bg-primary/5 shadow-[0_6px_18px_rgba(124,58,237,0.14)]' : 'border-black/10 bg-white hover:border-primary/30'}`}
+                        >
+                          <span className="flex items-start justify-between gap-1">
+                            <span className="font-display text-sm font-bold text-primaryDark">{lvl.name} <span className="font-semibold text-muted">({lvl.tag})</span></span>
+                            {selected && (
+                              <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-xs font-semibold text-secondary">Goal: {lvl.books} books</span>
+                          <span className="mt-1 block text-[11px] leading-snug text-muted">{lvl.blurb}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </fieldset>
                 <label className="grid gap-1.5 text-sm font-semibold">Child&apos;s Name *
                   <input className={inputClass} value={form.childName} onChange={(e) => setForm({ ...form, childName: e.target.value })} required />
                 </label>
@@ -215,6 +253,8 @@ export default function SummerRegisterPage() {
               <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
               <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
               <Link href="/catalog" className="transition-colors hover:text-white">Our Catalog</Link>
+              <Link href="/accessibility" className="transition-colors hover:text-white">Accessibility</Link>
+              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="transition-colors hover:text-white">Cookie Preferences</button>
             </div>
           </div>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

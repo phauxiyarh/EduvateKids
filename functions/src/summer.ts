@@ -2,22 +2,42 @@
  * Summer Reading Program — server-side integrity.
  *  - registerSummerReader: creates a registration with a guaranteed-unique code.
  *  - logSummerBook: validates the code, appends a parent-verified book, and
- *    recomputes booksCount + tier server-side (client can't inflate counts).
+ *    recomputes booksCount + goalMet server-side (client can't inflate counts).
  *
- * Tiers (configurable defaults): Seedling 3, Reader 6, Scholar 10.
+ * Levels are CHOSEN at registration and are FIXED — each level's book count is
+ * that reader's goal. Logging more books beyond the goal is welcomed (bonus
+ * reading), but it NEVER moves a reader into a different level/category. Reaching
+ * the goal marks the level "achieved"; readers may keep logging after that.
+ *
+ * Levels (book goal): Early Readers/Seedlings 4, Growing Readers 6, Confident Readers/Scholar 10.
  */
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 
-export const TIERS = { seedling: 3, reader: 6, scholar: 10 } as const;
+/** The three reading levels and the book goal for each. */
+export const LEVELS = { seedling: 4, reader: 6, scholar: 10 } as const;
 
-export type SummerTier = 'none' | 'seedling' | 'reader' | 'scholar';
+/** A reader's chosen level. 'none' only exists for legacy docs. */
+export type SummerLevel = 'none' | 'seedling' | 'reader' | 'scholar';
 
-export function tierFor(count: number): SummerTier {
-  if (count >= TIERS.scholar) return 'scholar';
-  if (count >= TIERS.reader) return 'reader';
-  if (count >= TIERS.seedling) return 'seedling';
-  return 'none';
+/** Back-compat alias for older callers/imports. */
+export type SummerTier = SummerLevel;
+export const TIERS = LEVELS;
+
+/** Normalise an arbitrary input to a valid chosen level (defaults to seedling). */
+export function normalizeLevel(input: unknown): Exclude<SummerLevel, 'none'> {
+  const v = String(input ?? '').trim().toLowerCase();
+  if (v === 'scholar') return 'scholar';
+  if (v === 'reader') return 'reader';
+  return 'seedling';
+}
+
+/** The book goal for a chosen level. */
+export function goalForLevel(level: SummerLevel): number {
+  if (level === 'scholar') return LEVELS.scholar;
+  if (level === 'reader') return LEVELS.reader;
+  if (level === 'seedling') return LEVELS.seedling;
+  return LEVELS.seedling;
 }
 
 /** Unambiguous code alphabet (no 0/O/1/I) → e.g. EK-7Q4M. */
@@ -52,6 +72,7 @@ export interface RegisterInput {
   parentEmail: string;
   parentPhone?: string;
   consent: boolean;
+  level?: string; // chosen reading level (seedling | reader | scholar); fixed after registration
 }
 
 export interface LogBookInput {
@@ -96,6 +117,8 @@ export async function registerReader(
   input: RegisterInput
 ): Promise<{ code: string }> {
   const code = await generateUniqueCode(db);
+  const level = normalizeLevel(input.level);
+  const goal = goalForLevel(level);
   await db
     .collection('summerReads')
     .doc(code)
@@ -110,26 +133,43 @@ export async function registerReader(
       consent: Boolean(input.consent),
       booksLogged: [],
       booksCount: 0,
-      tier: 'none' as SummerTier,
+      // Chosen level is fixed; goal is its book target; goalMet is derived.
+      level,
+      goal,
+      goalMet: false,
+      // `tier` mirrors the chosen level for back-compat with existing dashboards.
+      tier: level as SummerTier,
       _live: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-  logger.info('Summer reader registered', { code });
+  logger.info('Summer reader registered', { code, level });
   return { code };
+}
+
+/**
+ * Resolve a registration's FIXED level. Prefers the explicit `level` field;
+ * falls back to a legacy `tier` value; defaults to seedling. Never derived from
+ * the book count — the chosen level does not change when books are logged.
+ */
+function resolveLevel(data: { level?: unknown; tier?: unknown }): Exclude<SummerLevel, 'none'> {
+  const raw = data.level ?? data.tier;
+  return normalizeLevel(raw === 'none' ? 'seedling' : raw);
 }
 
 export async function logBook(
   db: FirebaseFirestore.Firestore,
   input: LogBookInput
-): Promise<{ booksCount: number; tier: SummerTier; newTier: boolean }> {
+): Promise<{ booksCount: number; level: SummerLevel; goal: number; goalMet: boolean; goalJustMet: boolean }> {
   const ref = db.collection('summerReads').doc(input.code.trim().toUpperCase());
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found. Please check the code and try again.');
-    const data = snap.data() as { booksLogged?: unknown[]; tier?: SummerTier; parentEmail?: string };
+    const data = snap.data() as { booksLogged?: unknown[]; level?: unknown; tier?: unknown; goalMet?: boolean; parentEmail?: string };
     assertOwnsCode(data, input.parentEmail);
-    const prevTier = (data.tier ?? 'none') as SummerTier;
+    const level = resolveLevel(data);
+    const goal = goalForLevel(level);
+    const wasGoalMet = Boolean(data.goalMet);
     const logged = Array.isArray(data.booksLogged) ? data.booksLogged : [];
     const rating = Math.max(0, Math.min(5, Math.round(Number(input.rating) || 0)));
     const entry = {
@@ -143,14 +183,19 @@ export async function logBook(
     };
     const nextLogged = [...logged, entry];
     const booksCount = nextLogged.length;
-    const tier = tierFor(booksCount);
+    const goalMet = booksCount >= goal;
     tx.update(ref, {
       booksLogged: nextLogged,
       booksCount,
-      tier,
+      // level/goal are fixed — re-write them so legacy docs get backfilled too.
+      level,
+      goal,
+      goalMet,
+      tier: level as SummerTier,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    return { booksCount, tier, newTier: tier !== prevTier && tier !== 'none' };
+    // goalJustMet: they crossed their own goal on THIS log (for the celebration).
+    return { booksCount, level, goal, goalMet, goalJustMet: goalMet && !wasGoalMet };
   });
 }
 
@@ -165,16 +210,16 @@ export interface EditBookInput {
   dateFinished?: string;
 }
 
-/** Edit a previously-logged book at a given index. Count/tier are unchanged (still 1 book). */
+/** Edit a previously-logged book at a given index. Level/goal are unchanged. */
 export async function editBook(
   db: FirebaseFirestore.Firestore,
   input: EditBookInput
-): Promise<{ booksCount: number; tier: SummerTier }> {
+): Promise<{ booksCount: number; level: SummerLevel; goal: number; goalMet: boolean }> {
   const ref = db.collection('summerReads').doc(input.code.trim().toUpperCase());
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found.');
-    const data = snap.data() as { booksLogged?: Record<string, unknown>[]; parentEmail?: string };
+    const data = snap.data() as { booksLogged?: Record<string, unknown>[]; level?: unknown; tier?: unknown; parentEmail?: string };
     assertOwnsCode(data, input.parentEmail);
     const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
     if (input.index < 0 || input.index >= logged.length) throw new Error('Book entry not found.');
@@ -188,32 +233,36 @@ export async function editBook(
       dateFinished: (input.dateFinished || '').trim() || (logged[input.index].dateFinished as string) || new Date().toISOString().split('T')[0],
       parentVerified: true,
     };
+    const level = resolveLevel(data);
+    const goal = goalForLevel(level);
     const booksCount = logged.length;
-    const tier = tierFor(booksCount);
-    tx.update(ref, { booksLogged: logged, booksCount, tier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { booksCount, tier };
+    const goalMet = booksCount >= goal;
+    tx.update(ref, { booksLogged: logged, booksCount, level, goal, goalMet, tier: level as SummerTier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { booksCount, level, goal, goalMet };
   });
 }
 
-/** Delete a logged book at a given index; recompute count + tier (tier can drop). */
+/** Delete a logged book at a given index; recompute count + goalMet (level is fixed). */
 export async function deleteBook(
   db: FirebaseFirestore.Firestore,
   code: string,
   index: number,
   parentEmail: string
-): Promise<{ booksCount: number; tier: SummerTier }> {
+): Promise<{ booksCount: number; level: SummerLevel; goal: number; goalMet: boolean }> {
   const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Code not found.');
-    const data = snap.data() as { booksLogged?: unknown[]; parentEmail?: string };
+    const data = snap.data() as { booksLogged?: unknown[]; level?: unknown; tier?: unknown; parentEmail?: string };
     assertOwnsCode(data, parentEmail);
     const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
     if (index < 0 || index >= logged.length) throw new Error('Book entry not found.');
     logged.splice(index, 1);
+    const level = resolveLevel(data);
+    const goal = goalForLevel(level);
     const booksCount = logged.length;
-    const tier = tierFor(booksCount);
-    tx.update(ref, { booksLogged: logged, booksCount, tier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { booksCount, tier };
+    const goalMet = booksCount >= goal;
+    tx.update(ref, { booksLogged: logged, booksCount, level, goal, goalMet, tier: level as SummerTier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { booksCount, level, goal, goalMet };
   });
 }

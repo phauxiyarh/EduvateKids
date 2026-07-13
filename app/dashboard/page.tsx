@@ -130,9 +130,27 @@ type SummerReader = {
   parentEmail: string
   parentPhone?: string
   booksCount: number
+  // `tier` mirrors the chosen level (kept for back-compat); `level` is the
+  // fixed, chosen category and `goal`/`goalMet` track completion.
   tier: 'seedling' | 'reader' | 'scholar' | 'none' | string
+  level?: 'seedling' | 'reader' | 'scholar' | 'none' | string
+  goal?: number
+  goalMet?: boolean
   booksLogged?: SummerBookLog[]
   createdAt?: { seconds: number } | null
+}
+
+const LEVEL_GOAL: Record<string, number> = { seedling: 4, reader: 6, scholar: 10 }
+/** A reader's fixed level (prefers `level`, falls back to legacy `tier`). */
+function readerLevel(r: { level?: string; tier?: string }): string {
+  const v = (r.level || r.tier || 'none') as string
+  return v === 'none' ? 'seedling' : v
+}
+/** Whether a reader has reached their chosen goal. */
+function readerGoalMet(r: SummerReader): boolean {
+  if (typeof r.goalMet === 'boolean') return r.goalMet
+  const g = r.goal ?? LEVEL_GOAL[readerLevel(r)] ?? 3
+  return (r.booksCount ?? 0) >= g
 }
 
 type EventStatus = 'active' | 'closed'
@@ -3192,10 +3210,10 @@ export default function DashboardPage() {
     if (!confirm('Delete this logged book?')) return
     try {
       const callable = httpsCallable<
-        { code: string; index: number },
-        { booksLogged?: SummerBookLog[]; booksCount?: number; tier?: string }
+        { code: string; index: number; parentEmail: string },
+        { booksLogged?: SummerBookLog[]; booksCount?: number; level?: string; goal?: number; goalMet?: boolean }
       >(functions, 'deleteSummerBook')
-      const res = await callable({ code: reader.code, index })
+      const res = await callable({ code: reader.code, index, parentEmail: reader.parentEmail })
       const data = res.data || {}
       setSummerReaders((prev) =>
         prev.map((r) =>
@@ -3204,7 +3222,10 @@ export default function DashboardPage() {
                 ...r,
                 booksLogged: data.booksLogged ?? r.booksLogged,
                 booksCount: data.booksCount ?? r.booksCount,
-                tier: data.tier ?? r.tier
+                level: data.level ?? r.level,
+                goal: data.goal ?? r.goal,
+                goalMet: data.goalMet ?? r.goalMet,
+                tier: data.level ?? r.tier,
               }
             : r
         )
@@ -3215,7 +3236,10 @@ export default function DashboardPage() {
               ...cur,
               booksLogged: data.booksLogged ?? cur.booksLogged,
               booksCount: data.booksCount ?? cur.booksCount,
-              tier: data.tier ?? cur.tier
+              level: data.level ?? cur.level,
+              goal: data.goal ?? cur.goal,
+              goalMet: data.goalMet ?? cur.goalMet,
+              tier: data.level ?? cur.tier,
             }
           : cur
       )
@@ -3344,12 +3368,16 @@ export default function DashboardPage() {
   }
 
   const exportSummerCsv = () => {
-    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Books Logged', 'Tier']
+    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Books Logged', 'Level', 'Goal', 'Goal Met']
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v)
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
     }
-    const rows = summerReaders.map((r) => [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.booksCount, r.tier].map(escape).join(','))
+    const rows = summerReaders.map((r) => {
+      const lvl = readerLevel(r)
+      const g = r.goal ?? LEVEL_GOAL[lvl] ?? 3
+      return [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.booksCount, lvl, g, readerGoalMet(r) ? 'Yes' : 'No'].map(escape).join(',')
+    })
     const csv = [header.join(','), ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -3363,14 +3391,16 @@ export default function DashboardPage() {
   }
 
   const renderSummer = () => {
-    const scholars = summerReaders.filter((r) => r.tier === 'scholar').length
+    const scholars = summerReaders.filter((r) => readerLevel(r) === 'scholar').length
+    const goalsMet = summerReaders.filter((r) => readerGoalMet(r)).length
     const totalBooks = summerReaders.reduce((s, r) => s + (r.booksCount ?? 0), 0)
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           {[
             { label: 'Total Registered', value: String(summerReaders.length) },
+            { label: 'Goals Met', value: String(goalsMet) },
             { label: 'Scholars', value: String(scholars) },
             { label: 'Total Books Logged', value: String(totalBooks) },
           ].map((s) => (
@@ -3423,23 +3453,31 @@ export default function DashboardPage() {
                     <th className="pb-3 pr-4 font-semibold">Child</th>
                     <th className="pb-3 pr-4 font-semibold">Parent</th>
                     <th className="pb-3 pr-4 font-semibold">Books</th>
-                    <th className="pb-3 pr-4 font-semibold">Tier</th>
+                    <th className="pb-3 pr-4 font-semibold">Level</th>
                     <th className="pb-3 font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {summerReaders.map((r) => (
+                  {summerReaders.map((r) => {
+                    const lvl = readerLevel(r)
+                    const g = r.goal ?? LEVEL_GOAL[lvl] ?? 3
+                    const met = readerGoalMet(r)
+                    return (
                     <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
                       <td className="py-3 pr-4 font-mono text-xs text-muted">{r.code}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.childName}</span>{r.childAge != null && <><br /><span className="text-xs text-muted">Age {r.childAge}</span></>}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.parentName}</span><br /><span className="text-xs text-muted">{r.parentEmail}</span></td>
-                      <td className="py-3 pr-4 font-bold text-primaryDark">{r.booksCount ?? 0}</td>
-                      <td className="py-3 pr-4"><span className={summerTierBadge(r.tier)}>{r.tier || 'none'}</span></td>
+                      <td className="py-3 pr-4 font-bold text-primaryDark">{r.booksCount ?? 0}<span className="font-normal text-muted"> / {g}</span></td>
+                      <td className="py-3 pr-4">
+                        <span className={summerTierBadge(lvl)}>{lvl}</span>
+                        {met && <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700" title="Goal met"><svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></span>}
+                      </td>
                       <td className="py-3 text-right">
                         <button type="button" onClick={() => setExpandedReader(r)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -6779,8 +6817,14 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-5 p-5">
               <div className="flex items-center justify-between">
-                <span className={summerTierBadge(expandedReader.tier)}>{expandedReader.tier || 'none'}</span>
-                <span className="text-xs text-muted">{expandedReader.booksCount ?? 0} book{(expandedReader.booksCount ?? 0) === 1 ? '' : 's'} logged</span>
+                <span className={summerTierBadge(readerLevel(expandedReader))}>{readerLevel(expandedReader)}</span>
+                {readerGoalMet(expandedReader) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Goal met
+                  </span>
+                )}
+                <span className="text-xs text-muted">{expandedReader.booksCount ?? 0} of {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} book{(expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3) === 1 ? '' : 's'} goal</span>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">

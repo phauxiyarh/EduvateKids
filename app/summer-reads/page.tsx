@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
+import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -30,13 +31,13 @@ const steps = [
   { title: 'Register your child', text: 'Sign up in a minute and receive a unique reading code.', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { title: 'Choose great books', text: 'Pick Islamic stories, prophets & companions, Arabic readers, and more.', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   { title: 'Log each book', text: 'Enter your code and log every book your child finishes (parent-verified).', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-  { title: 'Earn certificates', text: 'Reach milestones to unlock Seedling, Reader, and Scholar certificates.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4' },
+  { title: 'Earn your certificate', text: 'Reach your chosen level’s goal to earn its certificate — keep reading for bonus books.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4' },
 ]
 
 const tiers = [
-  { name: 'Seedling', books: 3, color: 'from-emerald-400 to-green-500', ring: 'from-emerald-300 via-emerald-500 to-green-600' },
-  { name: 'Reader', books: 6, color: 'from-primary to-accentThree', ring: 'from-violet-400 via-primary to-fuchsia-500' },
-  { name: 'Scholar', books: 10, color: 'from-secondary to-primary', ring: 'from-pink-400 via-secondary to-primary' },
+  { name: 'Early Readers', tag: 'Seedlings', books: 4, blurb: 'Picture books, early readers, lots of pictures, short text. Usually ages 4+, but place your child where they read comfortably.', color: 'from-emerald-400 to-green-500', ring: 'from-emerald-300 via-emerald-500 to-green-600' },
+  { name: 'Growing Readers', tag: 'Readers', books: 6, blurb: 'Beginning chapter books, longer stories, reading more independently. Usually ages 7+, but go by where your child reads, not their age.', color: 'from-primary to-accentThree', ring: 'from-violet-400 via-primary to-fuchsia-500' },
+  { name: 'Confident Readers', tag: 'Scholar', books: 10, blurb: 'Full chapter books and longer novels, reading fluently on their own. Usually ages 11+, or any child reading at this level.', color: 'from-secondary to-primary', ring: 'from-pink-400 via-secondary to-primary' },
 ]
 
 const prizes = [
@@ -261,14 +262,14 @@ export default function SummerReadsPage() {
           ))}
           <div className="reveal is-visible relative z-10 mx-auto w-11/12 max-w-3xl text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-accentThree backdrop-blur">
-              June 15 - August 31, 2026
+              July 13 - August 31, 2026
             </span>
             <h1 className="mt-4 font-display text-3xl sm:text-5xl leading-tight">
               Eduvate Kids <span className="gradient-text">Summer Reads</span>
             </h1>
             <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
               A joyful summer reading challenge for ages 5-14. Read Islamic and Arabic books,
-              log your progress, and earn certificates as you climb from Seedling to Scholar.
+              log your progress, and earn a certificate when you reach your goal — Early, Growing, or Confident Readers.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
               <Link href="/summer-reads/register" className="btn-shine inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5">
@@ -309,13 +310,13 @@ export default function SummerReadsPage() {
           </div>
         </section>
 
-        {/* Tiers */}
+        {/* Levels */}
         <section className="relative py-14 sm:py-20 bg-gradient-to-br from-emerald-50 via-white to-purple-50">
           <div ref={tiersReveal} className="reveal mx-auto w-11/12 max-w-5xl">
             <div className="text-center">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Milestones</p>
-              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Climb the reading tiers</h2>
-              <p className="mt-3 text-muted">Every tier earns a certificate. Reach Scholar to enter the grand prize drawing.</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading Levels</p>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Choose your reading level</h2>
+              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Scholars are entered into the grand prize drawing.</p>
             </div>
             <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-3">
               {tiers.map((t) => (
@@ -332,7 +333,9 @@ export default function SummerReadsPage() {
                     </div>
                   </div>
                   <h3 className="mt-4 font-display text-xl gradient-text">{t.name}</h3>
-                  <p className="mt-1 text-sm text-muted">Read {t.books} books</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-accentThree">{t.tag}</p>
+                  <p className="mt-2 text-sm font-semibold text-primaryDark">Goal: read {t.books} books</p>
+                  <p className="mt-2 text-[13px] leading-snug text-muted">{t.blurb}</p>
                 </div>
               ))}
             </div>
@@ -399,6 +402,8 @@ export default function SummerReadsPage() {
               <Link href="/summer-reads/register" className="transition-colors hover:text-white">Register</Link>
               <Link href="/summer-reads/log" className="transition-colors hover:text-white">Log a Book</Link>
               <Link href="/catalog" className="transition-colors hover:text-white">Our Catalog</Link>
+              <Link href="/accessibility" className="transition-colors hover:text-white">Accessibility</Link>
+              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="transition-colors hover:text-white">Cookie Preferences</button>
             </div>
           </div>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

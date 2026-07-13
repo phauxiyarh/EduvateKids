@@ -4,7 +4,8 @@ import { getAuth } from 'firebase/auth';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
-import { getAnalytics, isSupported } from 'firebase/analytics';
+import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
+import { analyticsAllowed } from './consent';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,14 +24,25 @@ const auth = getAuth(app);
 const functions = getFunctions(app, 'us-central1');
 const storage = getStorage(app);
 
-// Initialize Analytics only in browser environment
-let analytics;
-if (typeof window !== 'undefined') {
+// Analytics is a NON-ESSENTIAL cookie. It must not initialize until the visitor
+// has explicitly accepted cookies (see lib/consent.ts). The consent banner calls
+// enableAnalytics() on accept; on later visits we auto-init if consent persists.
+let analytics: Analytics | undefined;
+
+export function enableAnalytics(): void {
+  if (typeof window === 'undefined') return;
+  if (analytics) return; // already running
+  if (!analyticsAllowed()) return; // no consent → stay off
   isSupported().then((supported) => {
-    if (supported) {
+    if (supported && analyticsAllowed()) {
       analytics = getAnalytics(app);
     }
   });
+}
+
+// Auto-init on load only when consent was previously granted.
+if (typeof window !== 'undefined' && analyticsAllowed()) {
+  enableAnalytics();
 }
 
 export { app, db, auth, functions, storage, analytics };

@@ -7,6 +7,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
+import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -441,6 +442,8 @@ export default function ContactUsPage() {
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>
               <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
+              <Link href="/accessibility" className="text-white/70 transition-colors hover:text-white">Accessibility</Link>
+              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="text-white/70 transition-colors hover:text-white">Cookie Preferences</button>
             </div>
           </div>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

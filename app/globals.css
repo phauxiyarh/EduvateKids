@@ -24,7 +24,9 @@ body {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible,
+[role="radio"]:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid #7c3aed;
   outline-offset: 2px;

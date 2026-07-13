@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
+import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
 import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
@@ -97,6 +98,14 @@ const policies: {
       {
         heading: 'Sharing of Information',
         content: 'We do not sell or rent your personal information to third parties. We may share information with service providers who help us operate our business, but only to the extent necessary.'
+      },
+      {
+        heading: 'Cookies & Tracking',
+        content: 'We use cookies and similar technologies in two ways. Strictly necessary cookies keep the site working — for example, remembering your shopping cart, keeping you signed in, and saving your preferences; these are always active. With your permission, we also use analytics cookies (Google/Firebase Analytics) to understand how visitors use the site so we can improve it. Analytics cookies are turned off until you accept them in our cookie banner.'
+      },
+      {
+        heading: 'Your Choices',
+        content: 'You can accept or reject non-essential (analytics) cookies at any time using the “Cookie Preferences” link in the footer of any page. You may also block or delete cookies in your browser settings, though blocking strictly necessary cookies may affect how the site works. Rejecting analytics does not limit your access to any part of the site.'
       }
     ]
   },
@@ -166,6 +175,10 @@ const policies: {
       {
         heading: 'Intellectual Property',
         content: 'All content on our website, including text, images, logos, and designs, is the property of Eduvate Kids or our content suppliers and is protected by copyright laws.'
+      },
+      {
+        heading: 'Accessibility',
+        content: 'We are committed to making our website accessible and aim to conform to WCAG 2.1 Level AA. Read our full Accessibility Statement, or contact us to request an accommodation or report an accessibility problem, from the Accessibility link in the footer.'
       }
     ]
   }
@@ -471,7 +484,9 @@ export default function PoliciesPage() {
               <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
               <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>
-              <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
+              <Link href="/policies" className="text-white/70 transition-colors hover:text-white" aria-current="page">Policies</Link>
+              <Link href="/accessibility" className="text-white/70 transition-colors hover:text-white">Accessibility</Link>
+              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="text-white/70 transition-colors hover:text-white">Cookie Preferences</button>
             </div>
           </div>
           <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">

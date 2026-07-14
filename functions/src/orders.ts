@@ -57,7 +57,11 @@ async function resolveInventoryRef(
 export async function priceCart(
   db: FirebaseFirestore.Firestore,
   lines: CartLineInput[],
-  destinationState = ''
+  destinationState = '',
+  // Block the sale on insufficient stock BEFORE payment. At finalize (after the
+  // customer has already paid) pass false so a paid order is always recorded
+  // rather than lost — stock is reconciled via inventory decrement instead.
+  enforceStock = true
 ): Promise<{
   items: OrderItem[];
   subtotal: number;
@@ -90,7 +94,7 @@ export async function priceCart(
     if (!(unitPrice > 0)) throw new Error(`Item has no price: ${line.id}`);
 
     const stock = data.stock ?? data.quantity;
-    if (stock !== undefined && Number(stock) < qty) {
+    if (enforceStock && stock !== undefined && Number(stock) < qty) {
       throw new Error(`Insufficient stock for ${String(data.title ?? line.id)}`);
     }
 

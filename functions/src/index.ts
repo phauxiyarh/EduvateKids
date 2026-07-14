@@ -165,10 +165,12 @@ export const stripeWebhook = onRequest(
         const shippingAddress = JSON.parse(md.ek_address || '{}') as ShippingAddress;
 
         // Re-price from Firestore to guarantee integrity even at finalize time.
+        // Finalize after payment: don't block on stock (customer already paid).
         const priced = await priceCart(
           db,
           lines.map((l) => ({ id: l.id, quantity: l.q })),
-          shippingAddress.state
+          shippingAddress.state,
+          false
         );
 
         const result = await finalizeOrder(db, {
@@ -246,7 +248,8 @@ export const finalizeStripeOrder = onCall(
       const lines = JSON.parse(md.ek_items || '[]') as Array<{ id: string; q: number }>;
       const customer = JSON.parse(md.ek_customer || '{}') as CustomerInfo;
       const shippingAddress = JSON.parse(md.ek_address || '{}') as ShippingAddress;
-      const priced = await priceCart(db, lines.map((l) => ({ id: l.id, quantity: l.q })), shippingAddress.state);
+      // Finalize after payment: don't block on stock (customer already paid).
+      const priced = await priceCart(db, lines.map((l) => ({ id: l.id, quantity: l.q })), shippingAddress.state, false);
       const result = await finalizeOrder(db, {
         paymentRef: pi.id, provider: 'stripe', status: 'paid',
         items: priced.items, subtotal: priced.subtotal, shippingFee: priced.shippingFee,

@@ -143,6 +143,7 @@ type SummerReader = {
   state?: string
   city?: string
   raffleEligible?: boolean
+  consent?: boolean
   booksLogged?: SummerBookLog[]
   createdAt?: { seconds: number } | null
 }
@@ -7082,10 +7083,41 @@ export default function DashboardPage() {
                   {expandedReader.dateOfBirth && <p className="text-sm text-muted">DOB {expandedReader.dateOfBirth}</p>}
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Parent</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Parent / Guardian</p>
                   <p className="mt-1 text-sm font-medium text-ink">{expandedReader.parentName}</p>
-                  <p className="text-sm text-muted">{expandedReader.parentEmail}</p>
+                  <p className="text-sm text-muted break-all">{expandedReader.parentEmail}</p>
                   {expandedReader.parentPhone && <p className="text-sm text-muted">{expandedReader.parentPhone}</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Location</p>
+                  {(expandedReader.city || expandedReader.state || expandedReader.country) ? (
+                    <p className="mt-1 text-sm font-medium text-ink">
+                      {[expandedReader.city, expandedReader.state, expandedReader.country].filter(Boolean).join(', ')}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-muted">Not provided</p>
+                  )}
+                  <p className="mt-1 text-xs">
+                    {readerRaffleEligible(expandedReader)
+                      ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700">Raffle eligible</span>
+                      : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-500">Not raffle eligible</span>}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Reading Level</p>
+                  <p className="mt-1 text-sm font-medium capitalize text-ink">{readerLevel(expandedReader)}</p>
+                  <p className="text-sm text-muted">Goal: {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} books · {expandedReader.booksCount ?? 0} logged{readerGoalMet(expandedReader) ? ' · goal met' : ''}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Registered</p>
+                  <p className="mt-1 text-sm font-medium text-ink">
+                    {expandedReader.createdAt?.seconds ? new Date(expandedReader.createdAt.seconds * 1000).toLocaleString() : '—'}
+                  </p>
+                  <p className="text-sm text-muted">Consent: {expandedReader.consent ? 'Given' : 'Not recorded'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Code</p>
+                  <p className="mt-1 font-mono text-sm font-medium text-ink">{expandedReader.code}</p>
                 </div>
               </div>
 

@@ -189,6 +189,42 @@ export async function registerReader(
 }
 
 /**
+ * Re-send the warm welcome email to a parent who already registered — used by an
+ * admin "Resend welcome" button for readers who signed up before the welcome
+ * email existed (or who never received it). Looks the reader up by code, pulls
+ * the details already on file, and re-sends. Never mutates the record.
+ */
+export async function resendReaderWelcome(
+  db: FirebaseFirestore.Firestore,
+  code: string
+): Promise<{ sent: true; parentEmail: string }> {
+  const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('Code not found.');
+  const data = snap.data() as {
+    childName?: string;
+    parentName?: string;
+    parentEmail?: string;
+    level?: unknown;
+    tier?: unknown;
+    goal?: number;
+  };
+  const parentEmail = String(data.parentEmail ?? '').trim();
+  if (!parentEmail) throw new Error('This reader has no parent email on file.');
+  const level = resolveLevel(data);
+  await sendReaderWelcome({
+    parentName: String(data.parentName ?? '').trim() || 'there',
+    parentEmail,
+    childName: String(data.childName ?? '').trim() || 'your child',
+    code: snap.id,
+    levelName: levelDisplayName(level),
+    goal: typeof data.goal === 'number' ? data.goal : goalForLevel(level),
+  });
+  logger.info('Reader welcome email re-sent', { code: snap.id });
+  return { sent: true, parentEmail };
+}
+
+/**
  * Resolve a registration's FIXED level. Prefers the explicit `level` field;
  * falls back to a legacy `tier` value; defaults to seedling. Never derived from
  * the book count — the chosen level does not change when books are logged.

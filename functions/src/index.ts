@@ -29,7 +29,7 @@ import {
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification } from './email';
-import { registerReader, logBook, editBook, deleteBook, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
+import { registerReader, logBook, editBook, deleteBook, resendReaderWelcome, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
 admin.initializeApp();
@@ -339,6 +339,30 @@ export const deleteSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request
     return await deleteBook(db, d.code, d.index, d.parentEmail as string);
   } catch (err) {
     throw summerError(err, 'Could not delete the book.');
+  }
+});
+
+/**
+ * Re-send the Summer Reads welcome email to a reader's parent (admin action for
+ * readers who signed up before the welcome email existed). Requires BOTH the code
+ * and the parent email on file — a bare code is not enough to trigger an email to
+ * that inbox, which prevents anyone from spamming a parent by guessing codes.
+ */
+export const resendSummerWelcome = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
+  const d = request.data as { code?: string; parentEmail?: string };
+  if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (!isValidEmail(d?.parentEmail)) throw new HttpsError('invalid-argument', 'The parent email on file is required.');
+  // Ownership: the supplied email must match the record before we send.
+  const snap = await db.collection('summerReads').doc(d.code.trim().toUpperCase()).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Code not found.');
+  const onFile = String((snap.data() as { parentEmail?: string })?.parentEmail ?? '').trim().toLowerCase();
+  if (!onFile || onFile !== String(d.parentEmail).trim().toLowerCase()) {
+    throw new HttpsError('permission-denied', 'The parent email does not match this code.');
+  }
+  try {
+    return await resendReaderWelcome(db, d.code);
+  } catch (err) {
+    throw summerError(err, 'Could not re-send the welcome email.');
   }
 });
 

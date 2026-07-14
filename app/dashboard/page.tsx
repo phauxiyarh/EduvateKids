@@ -482,6 +482,9 @@ export default function DashboardPage() {
   const [summerReaders, setSummerReaders] = useState<SummerReader[]>([])
   const [summerLoading, setSummerLoading] = useState(false)
   const [expandedReader, setExpandedReader] = useState<SummerReader | null>(null)
+  // Tracks the "Resend welcome email" button state for the open reader modal.
+  const [welcomeSending, setWelcomeSending] = useState(false)
+  const [welcomeSent, setWelcomeSent] = useState<string | null>(null)
   const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
   const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
   const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
@@ -3369,6 +3372,29 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Failed to delete registration:', error)
       alert('Could not delete the registration. Please try again.')
+    }
+  }
+
+  // Re-send the Summer Reads welcome email to a reader's parent (for signups made
+  // before the welcome email existed, or that never arrived). Server re-sends from
+  // the record on file; requires the code + parent email to match.
+  const resendReaderWelcome = async (reader: SummerReader) => {
+    if (!reader.parentEmail) { alert('This reader has no parent email on file.'); return }
+    if (!confirm(`Send the welcome email to ${reader.parentEmail}?`)) return
+    setWelcomeSending(true)
+    setWelcomeSent(null)
+    try {
+      const callable = httpsCallable<
+        { code: string; parentEmail: string },
+        { sent: boolean; parentEmail: string }
+      >(functions, 'resendSummerWelcome')
+      await callable({ code: reader.code, parentEmail: reader.parentEmail })
+      setWelcomeSent(reader.id)
+    } catch (err) {
+      console.error('resendSummerWelcome failed', err)
+      alert('Could not send the welcome email. Please try again.')
+    } finally {
+      setWelcomeSending(false)
     }
   }
 
@@ -7160,7 +7186,21 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="border-t border-black/5 pt-4">
+              <div className="space-y-3 border-t border-black/5 pt-4">
+                <button
+                  type="button"
+                  onClick={() => resendReaderWelcome(expandedReader)}
+                  disabled={welcomeSending || !expandedReader.parentEmail}
+                  className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-primary/30 bg-white px-6 py-3 text-sm font-semibold text-primaryDark transition-all hover:bg-primary/5 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                >
+                  {welcomeSending ? (
+                    <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
+                  ) : welcomeSent === expandedReader.id ? (
+                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Welcome email sent</>
+                  ) : (
+                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Resend welcome email</>
+                  )}
+                </button>
                 <button
                   type="button"
                   onClick={() => deleteReaderRegistration(expandedReader)}

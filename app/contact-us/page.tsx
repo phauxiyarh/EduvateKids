@@ -102,7 +102,7 @@ export default function ContactUsPage() {
   }
 
   const inputClass =
-    'rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
+    'w-full rounded-xl border border-black/10 bg-cream px-4 py-3 font-normal outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
 
   return (
     <div className="min-h-screen text-ink">

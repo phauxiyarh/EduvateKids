@@ -487,6 +487,11 @@ export default function DashboardPage() {
   const [welcomeSent, setWelcomeSent] = useState<string | null>(null)
   const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
   const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
+  // Daily Pulse figures are hidden by default (privacy on a shared screen);
+  // the admin reveals them with the eye toggle in the section header.
+  const [pulseVisible, setPulseVisible] = useState(false)
+  // Inventory Health: show the top restock items, expand for the full list.
+  const [restockExpanded, setRestockExpanded] = useState(false)
   const [inventory, setInventory] = useState<InventoryItem[]>(() => demoMode ? defaultInventory : [])
   const [events, setEvents] = useState<EventRecord[]>(() => demoMode ? defaultEvents : [])
   const [generalSales, setGeneralSales] = useState<Sale[]>([])
@@ -891,14 +896,6 @@ export default function DashboardPage() {
     }
   }, [events, selectedEventId])
 
-  const restockItems = useMemo(
-    () =>
-      inventory
-        .filter((item) => item.quantity <= restockThreshold)
-        .sort((a, b) => a.quantity - b.quantity),
-    [inventory]
-  )
-
   const filteredInventory = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return inventory
@@ -947,6 +944,61 @@ export default function DashboardPage() {
     [events, generalSales]
   )
 
+  // Units sold per item across POS/event sales AND fulfilled online orders,
+  // keyed by BOTH itemId and title so we can tell "sold before" regardless of
+  // which key a record used. Used to prioritise restock: an item that has SOLD
+  // and is now out of stock is the urgent case; a 0-qty item that never sold is
+  // just dead stock and shouldn't crowd the restock radar.
+  const unitsSold = useMemo(() => {
+    const m = new Map<string, number>()
+    const add = (k: string | undefined, q: number) => {
+      if (!k) return
+      const key = k.toString().toLowerCase()
+      m.set(key, (m.get(key) ?? 0) + q)
+    }
+    allSales.forEach((s) => { add(s.itemId, s.quantity); add(s.title, s.quantity) })
+    orders
+      .filter((o) => o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered')
+      .forEach((o) => (o.items || []).forEach((it) => { add(it.inventoryId, it.quantity); add(it.sku, it.quantity); add(it.title, it.quantity) }))
+    return m
+  }, [allSales, orders])
+
+  const soldUnits = (item: InventoryItem) =>
+    (unitsSold.get(item.id.toLowerCase()) ?? 0) +
+    (item.sku ? (unitsSold.get(item.sku.toLowerCase()) ?? 0) : 0) +
+    (unitsSold.get(item.title.toLowerCase()) ?? 0)
+
+  // Restock radar, split into groups by urgency:
+  //  1) urgentOut  — out of stock AND sold before (needs reordering now)
+  //  2) lowStock   — still has stock but at/under the threshold
+  //  3) deadOut    — out of stock but never sold (dead stock, lowest priority)
+  const restockGroups = useMemo(() => {
+    const urgentOut: InventoryItem[] = []
+    const lowStock: InventoryItem[] = []
+    const deadOut: InventoryItem[] = []
+    inventory.forEach((item) => {
+      const qty = item.quantity || 0
+      if (qty <= 0) {
+        if (soldUnits(item) > 0) urgentOut.push(item)
+        else deadOut.push(item)
+      } else if (qty <= restockThreshold) {
+        lowStock.push(item)
+      }
+    })
+    urgentOut.sort((a, b) => soldUnits(b) - soldUnits(a))
+    lowStock.sort((a, b) => a.quantity - b.quantity)
+    deadOut.sort((a, b) => a.title.localeCompare(b.title))
+    return { urgentOut, lowStock, deadOut }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventory, unitsSold])
+
+  // Flat list kept for the "Low Stock Items" summary card count (all items needing
+  // attention: urgent out-of-stock + low stock; dead stock excluded from the count).
+  const restockItems = useMemo(
+    () => [...restockGroups.urgentOut, ...restockGroups.lowStock],
+    [restockGroups]
+  )
+
   const bestSellers = useMemo(() => {
     const tally = new Map<string, { title: string; quantity: number; revenue: number }>()
     allSales.forEach((sale) => {
@@ -966,12 +1018,18 @@ export default function DashboardPage() {
   }, [allSales])
 
   const categoryMix = useMemo(() => {
+    // Tally quantity across EVERY inventory category (books + non-book items like
+    // Activity Books, Cards, Games, Others). The previous version only counted
+    // 4 hardcoded categories, so non-book stock was silently dropped and the mix
+    // was wrong. Bucket any category actually present, in the canonical order.
     const buckets = new Map<InventoryCategory, number>()
     inventory.forEach((item) => {
-      buckets.set(item.category, (buckets.get(item.category) ?? 0) + item.quantity)
+      const cat = (item.category || 'Others') as InventoryCategory
+      buckets.set(cat, (buckets.get(cat) ?? 0) + (item.quantity || 0))
     })
-    const labels = ['Books', 'Crafts', 'Puzzles', 'Gifts']
-    const values = labels.map((label) => buckets.get(label as InventoryCategory) ?? 0)
+    const present = ALL_CATALOG_CATEGORIES.filter((cat) => (buckets.get(cat) ?? 0) > 0)
+    const labels = present.map((cat) => String(cat))
+    const values = present.map((cat) => buckets.get(cat) ?? 0)
     return { labels, values }
   }, [inventory])
 
@@ -1081,31 +1139,60 @@ export default function DashboardPage() {
     return { count: orders.length, revenue }
   }, [orders])
 
+  // All POS/event order records (each carries subtotal / discount / card fee), so
+  // we can separate product revenue from passthrough card fees reliably.
+  const allPosOrders = useMemo(
+    () => [...events.flatMap((e) => e.orders ?? []), ...generalOrders],
+    [events, generalOrders]
+  )
+
+  // Reliable revenue breakdown. "Product revenue (net)" is what we actually earned
+  // selling items — sellingPrice×qty minus discounts — and EXCLUDES passthroughs
+  // (card fees, shipping, sales tax) that we collect but don't keep. The passthrough
+  // parts are surfaced separately so the headline number isn't inflated by them.
+  const revenueBreakdown = useMemo(() => {
+    // POS/event: order.subtotal is the product total before discount/fee.
+    const posProductNet = allPosOrders.reduce((s, o) => s + ((o.subtotal || 0) - (o.discount || 0)), 0)
+    const posCardFees = allPosOrders.reduce((s, o) => s + (o.convenienceFee || 0), 0)
+
+    // Online (Stripe), fulfilled orders only (paid/shipped/delivered).
+    const countable = orders.filter((o) => o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered')
+    const onlineProductNet = countable.reduce((s, o) => s + (o.subtotal || 0), 0)
+    const onlineShipping = countable.reduce((s, o) => s + (o.shippingFee || 0), 0)
+    const onlineTax = countable.reduce((s, o) => s + (o.tax || 0), 0)
+
+    const productNet = posProductNet + onlineProductNet
+    const shipping = onlineShipping
+    const tax = onlineTax
+    const cardFees = posCardFees
+    const collected = productNet + shipping + tax + cardFees
+    return { productNet, shipping, tax, cardFees, collected, onlineProductNet, posProductNet }
+  }, [allPosOrders, orders])
+
   const summaryCards = useMemo(() => {
-    const posEventSales = allSales.reduce((sum, sale) => sum + sale.total, 0)
     const transactionCount = allSales.length
-    // Combined sales: POS/event sales plus online store order revenue.
-    const totalSales = posEventSales + onlineOrderStats.revenue
+    // Headline = product revenue (net). Passthroughs shown separately on the card.
+    const totalSales = revenueBreakdown.productNet
 
     return [
       {
         label: 'Total Sales',
         value: totalSales,
-        note: `${transactionCount} POS/event + ${onlineOrderStats.count} online`,
+        note: `${transactionCount} POS/event + ${onlineOrderStats.count} online · net of tax/shipping/fees`,
         prefix: '$',
         icon: 'sales'
       },
       {
         label: 'Online Orders',
-        value: onlineOrderStats.revenue,
-        note: `${onlineOrderStats.count} orders placed`,
+        value: revenueBreakdown.onlineProductNet,
+        note: `${onlineOrderStats.count} orders · $${onlineOrderStats.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} collected`,
         prefix: '$',
         icon: 'orders'
       },
       {
-        label: 'Low Stock Items',
+        label: 'Needs Restock',
         value: restockItems.length,
-        note: `Restock threshold: ${restockThreshold}`,
+        note: `${restockGroups.urgentOut.length} sold out · ${restockGroups.lowStock.length} low (≤${restockThreshold})`,
         icon: 'stock'
       },
       {
@@ -1121,7 +1208,7 @@ export default function DashboardPage() {
         icon: 'catalog'
       }
     ]
-  }, [allSales, events, inventory.length, restockItems.length, onlineOrderStats])
+  }, [allSales, events, inventory.length, restockItems.length, restockGroups, onlineOrderStats, revenueBreakdown])
 
   const formatNumber = (value: number) => value.toLocaleString('en-US')
 
@@ -2490,6 +2577,20 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPulseVisible((v) => !v)}
+              aria-pressed={pulseVisible}
+              className="inline-flex items-center gap-2 rounded-2xl bg-white/90 backdrop-blur px-4 py-3 shadow-soft border border-primary/10 text-sm font-bold text-primaryDark transition hover:bg-white hover:-translate-y-0.5"
+              title={pulseVisible ? 'Hide the figures' : 'Show the figures'}
+            >
+              {pulseVisible ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+              )}
+              {pulseVisible ? 'Hide figures' : 'Show figures'}
+            </button>
             <div className="rounded-2xl bg-white/90 backdrop-blur px-5 py-3 shadow-soft border border-primary/10">
               <p className="text-xs font-semibold text-muted">Last updated</p>
               <p className="text-sm font-bold text-primaryDark">Moments ago</p>
@@ -2518,10 +2619,16 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <h2 className="mt-4 font-display text-2xl sm:text-3xl xl:text-[1.75rem] 2xl:text-4xl gradient-text leading-tight break-words">
-                  {'prefix' in card ? card.prefix : ''}
-                  {'prefix' in card && card.prefix === '$'
-                    ? card.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                    : formatNumber(card.value)}
+                  {pulseVisible ? (
+                    <>
+                      {'prefix' in card ? card.prefix : ''}
+                      {'prefix' in card && card.prefix === '$'
+                        ? card.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : formatNumber(card.value)}
+                    </>
+                  ) : (
+                    <span className="tracking-widest text-muted/70" aria-label="Hidden">••••</span>
+                  )}
                 </h2>
                 <p className="mt-3 text-xs text-muted flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-primary" />
@@ -2531,6 +2638,27 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Revenue breakdown: the headline "Total Sales" is product revenue (net).
+            These are the passthroughs we collect but don't keep — shown separately
+            so the numbers are transparent and reconcile to what was charged. */}
+        {pulseVisible && (
+          <div className="relative z-10 mt-5 rounded-2xl bg-white/80 backdrop-blur-sm p-5 shadow-soft border border-primary/10">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted">Revenue breakdown</p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              <span className="font-semibold text-primaryDark">
+                Product revenue (net): <span className="gradient-text font-bold">${revenueBreakdown.productNet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </span>
+              <span className="text-muted">+ Shipping collected: <strong className="text-ink">${revenueBreakdown.shipping.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span className="text-muted">+ Sales tax collected: <strong className="text-ink">${revenueBreakdown.tax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span className="text-muted">+ Card fees collected: <strong className="text-ink">${revenueBreakdown.cardFees.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span className="ml-auto rounded-full bg-primary/10 px-4 py-1.5 font-bold text-primaryDark">
+                Total collected: ${revenueBreakdown.collected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] text-muted">Tax and shipping are passthroughs (remitted / cover postage); card fees offset processing. They aren&apos;t product earnings, so they&apos;re excluded from the headline figure.</p>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -2800,44 +2928,96 @@ export default function DashboardPage() {
             </div>
             <span className="text-xs font-semibold text-muted bg-amber-100 px-3 py-1 rounded-full border border-amber-200">Restock radar</span>
           </div>
-          {restockItems.length ? (
-            <div className="space-y-4">
-              {restockItems.slice(0, 6).map((item, index) => (
-                <div key={item.id} className="group hover:bg-amber-50/50 p-3 rounded-xl transition-colors" style={{ animationDelay: `${index * 80}ms` }}>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="font-medium">{item.title}</span>
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                      item.quantity <= 5 ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'
-                    }`}>
-                      {item.quantity} left
+          {(() => {
+            // A single restock row (progress bar + qty/sold badges).
+            const Row = (item: InventoryItem, opts: { out?: boolean } = {}) => {
+              const sold = soldUnits(item)
+              const out = opts.out ?? item.quantity <= 0
+              return (
+                <div key={item.id} className="group hover:bg-amber-50/50 p-3 rounded-xl transition-colors">
+                  <div className="flex items-center justify-between gap-2 text-sm mb-2">
+                    <span className="font-medium min-w-0 truncate">{item.title}</span>
+                    <span className="flex items-center gap-2 flex-shrink-0">
+                      {sold > 0 && (
+                        <span className="text-[11px] font-semibold text-muted whitespace-nowrap">{sold} sold</span>
+                      )}
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${
+                        out ? 'bg-red-100 text-red-700 border border-red-200'
+                          : item.quantity <= 5 ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                          : 'bg-amber-100 text-amber-700 border border-amber-200'
+                      }`}>
+                        {out ? 'Out of stock' : `${item.quantity} left`}
+                      </span>
                     </span>
                   </div>
                   <div className="h-2.5 rounded-full bg-gradient-to-r from-gray-200 to-gray-100 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        item.quantity <= 5
-                          ? 'bg-gradient-to-r from-red-500 to-orange-500'
-                          : 'bg-gradient-to-r from-amber-400 to-orange-400'
+                        out || item.quantity <= 5 ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'
                       }`}
-                      style={{
-                        width: `${Math.max(
-                          15,
-                          Math.min(100, (item.quantity / restockThreshold) * 100)
-                        )}%`
-                      }}
+                      style={{ width: `${out ? 4 : Math.max(15, Math.min(100, (item.quantity / restockThreshold) * 100))}%` }}
                     />
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 flex flex-col items-center">
-              <svg className="h-12 w-12 mb-3 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-muted">All items are healthy on stock.</p>
-            </div>
-          )}
+              )
+            }
+
+            const { urgentOut, lowStock, deadOut } = restockGroups
+            const needAttention = urgentOut.length + lowStock.length
+            if (!needAttention && !deadOut.length) {
+              return (
+                <div className="text-center py-8 flex flex-col items-center">
+                  <svg className="h-12 w-12 mb-3 text-emerald-500" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-muted">All items are healthy on stock.</p>
+                </div>
+              )
+            }
+
+            // Top priority: out-of-stock items that sold before (reorder now).
+            // If there are none, fall back to showing the lowest-stock items.
+            const topList = urgentOut.length ? urgentOut : lowStock
+            const topShown = topList.slice(0, 5)
+            const restUrgent = urgentOut.length ? urgentOut.slice(5) : []
+            const restLow = urgentOut.length ? lowStock : lowStock.slice(5)
+            const hiddenCount = restUrgent.length + restLow.length + deadOut.length
+
+            return (
+              <div className="space-y-4">
+                {urgentOut.length > 0 && (
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-600">Sold out — reorder first</p>
+                )}
+                {topShown.map((item) => Row(item))}
+
+                {hiddenCount > 0 && (
+                  <>
+                    {restockExpanded && (
+                      <div className="space-y-4 pt-1">
+                        {restUrgent.map((item) => Row(item, { out: true }))}
+                        {restLow.length > 0 && (
+                          <p className="text-xs font-bold uppercase tracking-wider text-amber-600 pt-1">Running low</p>
+                        )}
+                        {restLow.map((item) => Row(item))}
+                        {deadOut.length > 0 && (
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted pt-1">Out of stock · no sales yet</p>
+                        )}
+                        {deadOut.map((item) => Row(item, { out: true }))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRestockExpanded((v) => !v)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                    >
+                      {restockExpanded ? 'Show less' : `Show all ${needAttention + deadOut.length} items`}
+                      <svg className={`h-4 w-4 transition-transform ${restockExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </section>
       <style jsx>{`

@@ -366,8 +366,8 @@ export default function SummerReadsPage() {
               Eduvate Kids <span className="gradient-text">Summer Reads</span>
             </h1>
             <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
-              A joyful summer reading challenge for ages 5-14. Read Islamic and Arabic books,
-              log your progress, and earn a certificate when you reach your goal — Early, Growing, or Confident Readers.
+              A joyful summer reading challenge for ages 4-18. Read Islamic and Arabic books,
+              log your progress, and earn a certificate when you reach your goal — plus a chance of winning $30 store credit. Early, Growing, or Confident Readers.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
               <Link href="/summer-reads/register" className="btn-shine inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5">
@@ -403,9 +403,9 @@ export default function SummerReadsPage() {
                   const num = (i % steps.length) + 1
                   return s.highlight ? (
                     // Highlighted steps (certificate + raffle): animated neon border.
-                    <div key={i} className="sr-neon relative w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl p-[2px]" aria-hidden={i >= steps.length || undefined}>
+                    <div key={i} className="sr-neon relative w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl p-[2px]" aria-hidden={i >= steps.length || undefined}>
                       <span className="sr-neon-ring absolute inset-0 rounded-3xl" style={{ animationDelay: `${-(num % steps.length) * 0.6}s` }} aria-hidden="true" />
-                      <div className="relative h-full rounded-[calc(1.5rem-2px)] bg-white p-6">
+                      <div className="relative h-full rounded-[calc(1.5rem-2px)] bg-white p-5 sm:p-6">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-secondary text-white shadow-md">
                           <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
                         </div>
@@ -417,7 +417,7 @@ export default function SummerReadsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div key={i} className="w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-6 shadow-soft border border-primary/10" aria-hidden={i >= steps.length || undefined}>
+                    <div key={i} className="w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-5 sm:p-6 shadow-soft border border-primary/10" aria-hidden={i >= steps.length || undefined}>
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
                       </div>

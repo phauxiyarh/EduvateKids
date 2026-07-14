@@ -156,7 +156,8 @@ export async function sendReaderWelcome(params: {
   const html = `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
     <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
-      <h1 style="margin:0;font-size:22px">🌱 Welcome to Eduvate Kids Summer Reads!</h1>
+      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
+      <h1 style="margin:0;font-size:22px">Welcome to Eduvate Kids Summer Reads!</h1>
       <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
     </div>
     <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
@@ -167,13 +168,13 @@ export async function sendReaderWelcome(params: {
       <div style="text-align:center;margin:22px 0">
         <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">${child}'s reading code</p>
         <div style="display:inline-block;border:2px dashed #7c3aed;border-radius:14px;padding:12px 26px;font-size:26px;font-weight:bold;letter-spacing:3px;color:#4c1d95">${esc(params.code)}</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Keep this handy — you'll use it every time you log a book.</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Keep this handy — you'll need it every time you want to log a book.</p>
       </div>
 
       <p style="margin:20px 0 8px;font-weight:bold">Here's how it works:</p>
       <ul style="margin:0 0 18px;padding-left:20px">
         <li style="margin-bottom:6px">📚 <strong>Choose great books</strong> — Islamic stories, prophets &amp; companions, Arabic readers, and more.</li>
-        <li style="margin-bottom:6px">✍️ <strong>Log each book</strong> ${child} finishes at <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">Log a Book</a> using the code above (parent-verified).</li>
+        <li style="margin-bottom:6px">✍️ <strong>Log each book:</strong> when ${child} finishes a book, go to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">Log a Book</a> using the code above (parent-verified).</li>
         <li style="margin-bottom:6px">🏅 <strong>${child}'s goal:</strong> read <strong>${params.goal} books</strong> to complete the <strong>${esc(params.levelName)}</strong> level and earn a certificate.</li>
         <li style="margin-bottom:6px">🎁 Reach the goal and you're entered into the <strong>raffle to win a $30 store credit!</strong></li>
       </ul>

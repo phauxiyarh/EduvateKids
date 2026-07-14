@@ -13,6 +13,7 @@
  */
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
+import { sendReaderWelcome } from './email';
 
 /** The three reading levels and the book goal for each. */
 export const LEVELS = { seedling: 4, reader: 6, scholar: 10 } as const;
@@ -38,6 +39,13 @@ export function goalForLevel(level: SummerLevel): number {
   if (level === 'reader') return LEVELS.reader;
   if (level === 'seedling') return LEVELS.seedling;
   return LEVELS.seedling;
+}
+
+/** Friendly display name for a level (used in the welcome email). */
+export function levelDisplayName(level: SummerLevel): string {
+  if (level === 'scholar') return 'Confident Readers';
+  if (level === 'reader') return 'Growing Readers';
+  return 'Early Readers';
 }
 
 /** Unambiguous code alphabet (no 0/O/1/I) → e.g. EK-7Q4M. */
@@ -165,6 +173,18 @@ export async function registerReader(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   logger.info('Summer reader registered', { code, level, country });
+
+  // Warm welcome email to the parent with the reading code. Self-catches and
+  // never throws, so a mail hiccup can't fail the registration.
+  await sendReaderWelcome({
+    parentName: input.parentName,
+    parentEmail: input.parentEmail,
+    childName: input.childName,
+    code,
+    levelName: levelDisplayName(level),
+    goal,
+  });
+
   return { code };
 }
 

@@ -114,6 +114,7 @@ export function uspsConfigured(): boolean {
  * To send to eduvatekids@gmail.com, verify a domain in Resend and switch ORDER_NOTIFY_FROM
  * to an address on that domain — then this can be any recipient.
  */
-export const ORDER_NOTIFY_TO = 'thalamuxtech@gmail.com';
-/** From address for notifications. Use Resend's shared sender until a domain is verified. */
-export const ORDER_NOTIFY_FROM = 'Eduvate Kids <onboarding@resend.dev>';
+export const ORDER_NOTIFY_TO = 'salam@eduvatekids.com';
+/** From address for all app emails. Uses the verified eduvatekids.com domain in
+ *  Resend, so mail sends from the brand and reaches any recipient. */
+export const ORDER_NOTIFY_FROM = 'Eduvate Kids <salam@eduvatekids.com>';

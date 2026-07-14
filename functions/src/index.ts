@@ -276,7 +276,7 @@ export const finalizeStripeOrder = onCall(
 // ─────────────────────────── Summer Reading Program ───────────────────────────
 
 /** Register a child and return a guaranteed-unique code (server-generated). */
-export const registerSummerReader = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+export const registerSummerReader = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
   const d = request.data as RegisterInput;
   if (!d?.childName?.trim() || !d?.parentName?.trim() || !d?.parentEmail?.trim()) {
     throw new HttpsError('invalid-argument', 'Child name, parent name, and parent email are required.');

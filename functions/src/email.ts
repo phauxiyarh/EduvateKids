@@ -132,3 +132,72 @@ export async function sendBookRequestNotification(params: {
     logger.error('Failed to send book-request notification email', err);
   }
 }
+
+/**
+ * Warm welcome email to a parent after they register a child for Summer Reads.
+ * Sent to the PARENT (not the admin). No-op if Resend isn't configured; never
+ * throws, so it can't fail the registration.
+ */
+export async function sendReaderWelcome(params: {
+  parentName: string;
+  parentEmail: string;
+  childName: string;
+  code: string;
+  levelName: string;
+  goal: number;
+}): Promise<void> {
+  if (!emailConfigured()) {
+    logger.info('Reader welcome email skipped — RESEND_API_KEY not set', { code: params.code });
+    return;
+  }
+  const resend = new Resend(RESEND_API_KEY.value());
+  const logUrl = 'https://eduvatekids.com/summer-reads/log';
+  const child = esc(params.childName);
+  const html = `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
+      <h1 style="margin:0;font-size:22px">🌱 Welcome to Eduvate Kids Summer Reads!</h1>
+      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
+      <p style="margin:0 0 14px"><strong>Assalamu alaikum ${esc(params.parentName)},</strong></p>
+      <p style="margin:0 0 14px">JazakAllahu khayran for registering <strong>${child}</strong> for Summer Reads! We're so excited to have your family join us this summer, insha'Allah. 🎉</p>
+      <p style="margin:0 0 18px">You've taken a beautiful step — nurturing a love of reading that's <em>rooted in faith and growing in knowledge.</em></p>
+
+      <div style="text-align:center;margin:22px 0">
+        <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">${child}'s reading code</p>
+        <div style="display:inline-block;border:2px dashed #7c3aed;border-radius:14px;padding:12px 26px;font-size:26px;font-weight:bold;letter-spacing:3px;color:#4c1d95">${esc(params.code)}</div>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Keep this handy — you'll use it every time you log a book.</p>
+      </div>
+
+      <p style="margin:20px 0 8px;font-weight:bold">Here's how it works:</p>
+      <ul style="margin:0 0 18px;padding-left:20px">
+        <li style="margin-bottom:6px">📚 <strong>Choose great books</strong> — Islamic stories, prophets &amp; companions, Arabic readers, and more.</li>
+        <li style="margin-bottom:6px">✍️ <strong>Log each book</strong> ${child} finishes at <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">Log a Book</a> using the code above (parent-verified).</li>
+        <li style="margin-bottom:6px">🏅 <strong>${child}'s goal:</strong> read <strong>${params.goal} books</strong> to complete the <strong>${esc(params.levelName)}</strong> level and earn a certificate.</li>
+        <li style="margin-bottom:6px">🎁 Reach the goal and you're entered into the <strong>raffle to win a $30 store credit!</strong></li>
+      </ul>
+
+      <p style="margin:0 0 18px">Every book is a seed. We can't wait to see how much ${child} grows this summer, biidhnillah. 🌸</p>
+
+      <div style="text-align:center;margin:22px 0">
+        <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log ${child}'s first book →</a>
+      </div>
+
+      <p style="margin:18px 0 0">Happy reading!<br><strong>The Eduvate Kids Team</strong></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">Registered by mistake or need help? Just reply to this email.</p>
+    </div>
+  </div>`;
+  try {
+    await resend.emails.send({
+      from: ORDER_NOTIFY_FROM,
+      to: params.parentEmail,
+      replyTo: ORDER_NOTIFY_TO,
+      subject: `🌱 Welcome to Summer Reads — ${params.childName}'s reading code is ${params.code}`,
+      html,
+    });
+    logger.info('Reader welcome email sent', { code: params.code });
+  } catch (err) {
+    logger.error('Failed to send reader welcome email', err);
+  }
+}

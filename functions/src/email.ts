@@ -202,3 +202,97 @@ export async function sendReaderWelcome(params: {
     logger.error('Failed to send reader welcome email', err);
   }
 }
+
+/**
+ * Build the customer-facing purchase-confirmation email HTML. Pure function
+ * (no side effects) so the exact same markup can be rendered for a preview and
+ * for the actual send. Kept intentionally simple and inline-styled for email
+ * client compatibility.
+ */
+export function buildCustomerPurchaseEmailHtml(params: {
+  orderId: string;
+  items: OrderItem[];
+  subtotal: number;
+  shippingFee: number;
+  tax: number;
+  total: number;
+  currency: string;
+  customer: CustomerInfo;
+  shippingAddress: ShippingAddress;
+}): string {
+  const cur = params.currency.toUpperCase();
+  const a = params.shippingAddress;
+  const firstName = String(params.customer.name || '').trim().split(/\s+/)[0] || 'there';
+  const rows = params.items
+    .map(
+      (i) =>
+        `<tr><td style="padding:8px 10px;border-bottom:1px solid #eee">${esc(i.title)}</td>` +
+        `<td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${i.quantity}</td>` +
+        `<td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">$${i.lineTotal.toFixed(2)}</td></tr>`
+    )
+    .join('');
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
+      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
+      <h1 style="margin:0;font-size:22px">Thank you for your order!</h1>
+      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Order ${esc(params.orderId)}</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:14px;line-height:1.6">
+      <p style="margin:0 0 14px"><strong>Assalamu alaikum ${esc(firstName)},</strong></p>
+      <p style="margin:0 0 18px">JazakAllahu khayran for shopping with Eduvate Kids! We've received your order and are getting it ready. Here's your summary:</p>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase">
+          <th style="padding:6px 10px">Item</th><th style="padding:6px 10px;text-align:center">Qty</th><th style="padding:6px 10px;text-align:right">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">
+        <tr><td style="padding:3px 10px;color:#6b7280">Subtotal</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.subtotal.toFixed(2)}</td></tr>
+        <tr><td style="padding:3px 10px;color:#6b7280">Shipping</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.shippingFee.toFixed(2)}</td></tr>
+        <tr><td style="padding:3px 10px;color:#6b7280">Tax</td><td style="padding:3px 10px;color:#6b7280;text-align:right">$${params.tax.toFixed(2)}</td></tr>
+        <tr><td style="padding:8px 10px 3px;font-weight:bold">Total paid</td><td style="padding:8px 10px 3px;font-weight:bold;text-align:right">$${params.total.toFixed(2)} ${cur}</td></tr>
+      </table>
+      <h3 style="margin:22px 0 6px;font-size:14px">Shipping to</h3>
+      <p style="margin:0;font-size:14px">
+        ${esc(params.customer.name)}<br>
+        ${esc(a.line1)}${a.line2 ? '<br>' + esc(a.line2) : ''}<br>
+        ${esc(a.city)}, ${esc(a.state)} ${esc(a.postalCode)}<br>${esc(a.country)}
+      </p>
+      <p style="margin:22px 0 0">We'll be in touch when your order ships, insha'Allah. If you have any questions, just reply to this email.</p>
+      <p style="margin:18px 0 0">With gratitude,<br><strong>The Eduvate Kids Team</strong></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">Rooted in Faith. Growing in Knowledge.</p>
+    </div>
+  </div>`;
+}
+
+/**
+ * Send the customer their purchase confirmation. Triggered manually by the admin
+ * (not automatically on payment). No-op if Resend isn't configured; throws on a
+ * real send failure so the caller can surface an error to the admin.
+ */
+export async function sendCustomerPurchaseEmail(params: {
+  orderId: string;
+  items: OrderItem[];
+  subtotal: number;
+  shippingFee: number;
+  tax: number;
+  total: number;
+  currency: string;
+  customer: CustomerInfo;
+  shippingAddress: ShippingAddress;
+}): Promise<void> {
+  if (!emailConfigured()) {
+    throw new Error('Email is not configured (RESEND_API_KEY missing).');
+  }
+  const resend = new Resend(RESEND_API_KEY.value());
+  const cur = params.currency.toUpperCase();
+  await resend.emails.send({
+    from: ORDER_NOTIFY_FROM,
+    to: params.customer.email,
+    replyTo: ORDER_NOTIFY_TO,
+    subject: `Your Eduvate Kids order — $${params.total.toFixed(2)} ${cur}`,
+    html: buildCustomerPurchaseEmailHtml(params),
+  });
+  logger.info('Customer purchase email sent', { orderId: params.orderId, to: params.customer.email });
+}

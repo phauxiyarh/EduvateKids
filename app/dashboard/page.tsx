@@ -121,6 +121,62 @@ type OnlineOrder = {
   deliveredAt?: { seconds: number } | null
 }
 
+/**
+ * Build the customer purchase-confirmation email HTML for previewing in the
+ * dashboard. Mirrors the server template in functions/src/email.ts
+ * (buildCustomerPurchaseEmailHtml) so "View email draft" shows what will send.
+ * The actual send is done server-side from the order record.
+ */
+function buildPurchaseEmailHtml(order: OnlineOrder): string {
+  const esc = (s: unknown) =>
+    String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
+  const cur = String(order.currency || 'usd').toUpperCase()
+  const a = order.shippingAddress || { line1: '', city: '', state: '', postalCode: '', country: '' }
+  const firstName = String(order.customer?.name || '').trim().split(/\s+/)[0] || 'there'
+  const rows = (order.items || [])
+    .map(
+      (i) =>
+        `<tr><td style="padding:8px 10px;border-bottom:1px solid #eee">${esc(i.title)}</td>` +
+        `<td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${i.quantity}</td>` +
+        `<td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:right">${money(i.lineTotal)}</td></tr>`
+    )
+    .join('')
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
+      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
+      <h1 style="margin:0;font-size:22px">Thank you for your order!</h1>
+      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Order ${esc(order.id)}</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:14px;line-height:1.6">
+      <p style="margin:0 0 14px"><strong>Assalamu alaikum ${esc(firstName)},</strong></p>
+      <p style="margin:0 0 18px">JazakAllahu khayran for shopping with Eduvate Kids! We've received your order and are getting it ready. Here's your summary:</p>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase">
+          <th style="padding:6px 10px">Item</th><th style="padding:6px 10px;text-align:center">Qty</th><th style="padding:6px 10px;text-align:right">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">
+        <tr><td style="padding:3px 10px;color:#6b7280">Subtotal</td><td style="padding:3px 10px;color:#6b7280;text-align:right">${money(order.subtotal)}</td></tr>
+        <tr><td style="padding:3px 10px;color:#6b7280">Shipping</td><td style="padding:3px 10px;color:#6b7280;text-align:right">${money(order.shippingFee)}</td></tr>
+        <tr><td style="padding:3px 10px;color:#6b7280">Tax</td><td style="padding:3px 10px;color:#6b7280;text-align:right">${money(order.tax || 0)}</td></tr>
+        <tr><td style="padding:8px 10px 3px;font-weight:bold">Total paid</td><td style="padding:8px 10px 3px;font-weight:bold;text-align:right">${money(order.total)} ${cur}</td></tr>
+      </table>
+      <h3 style="margin:22px 0 6px;font-size:14px">Shipping to</h3>
+      <p style="margin:0;font-size:14px">
+        ${esc(order.customer?.name)}<br>
+        ${esc(a.line1)}${a.line2 ? '<br>' + esc(a.line2) : ''}<br>
+        ${esc(a.city)}, ${esc(a.state)} ${esc(a.postalCode)}<br>${esc(a.country)}
+      </p>
+      <p style="margin:22px 0 0">We'll be in touch when your order ships, insha'Allah. If you have any questions, just reply to this email.</p>
+      <p style="margin:18px 0 0">With gratitude,<br><strong>The Eduvate Kids Team</strong></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">Rooted in Faith. Growing in Knowledge.</p>
+    </div>
+  </div>`
+}
+
 /** Summer Reading Program registration (written to the `summerReads` collection). */
 type SummerBookLog = { title: string; author?: string; rating?: number; review?: string; dateFinished?: string; dateLogged?: string }
 type SummerReader = {
@@ -479,6 +535,10 @@ export default function DashboardPage() {
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
   const [expandedOrder, setExpandedOrder] = useState<OnlineOrder | null>(null)
+  // Purchase-email controls for the open order: preview draft + manual send.
+  const [purchaseEmailPreview, setPurchaseEmailPreview] = useState<OnlineOrder | null>(null)
+  const [purchaseEmailSending, setPurchaseEmailSending] = useState(false)
+  const [purchaseEmailSentId, setPurchaseEmailSentId] = useState<string | null>(null)
   const [summerReaders, setSummerReaders] = useState<SummerReader[]>([])
   const [summerLoading, setSummerLoading] = useState(false)
   const [expandedReader, setExpandedReader] = useState<SummerReader | null>(null)
@@ -3368,6 +3428,24 @@ export default function DashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, userRole])
+
+  // Manually send the customer their purchase-confirmation email. Not automatic
+  // on payment — the admin triggers it from the order record.
+  const sendPurchaseEmailToCustomer = async (order: OnlineOrder) => {
+    if (!order.customer?.email) { alert('This order has no customer email.'); return }
+    if (!confirm(`Send the purchase email to ${order.customer.email}?`)) return
+    setPurchaseEmailSending(true)
+    try {
+      const callable = httpsCallable<{ orderId: string }, { ok: boolean; to: string }>(functions, 'sendPurchaseEmail')
+      await callable({ orderId: order.id })
+      setPurchaseEmailSentId(order.id)
+    } catch (err) {
+      console.error('sendPurchaseEmail failed', err)
+      alert('Could not send the purchase email. Please try again.')
+    } finally {
+      setPurchaseEmailSending(false)
+    }
+  }
 
   const markOrderShipped = async (order: OnlineOrder) => {
     try {
@@ -7203,6 +7281,36 @@ export default function DashboardPage() {
                 <span className="font-semibold">Payment:</span> {expandedOrder.paymentProvider} · <span className="font-mono">{expandedOrder.paymentRef}</span>
               </div>
 
+              {/* Purchase email (manual): preview the draft, or send it to the customer. */}
+              <div className="rounded-xl border border-primary/10 bg-primary/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">Customer purchase email</p>
+                <p className="mt-1 text-xs text-muted break-all">To: {expandedOrder.customer?.email || '— no email on file —'}</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPurchaseEmailPreview(expandedOrder)}
+                    className="flex items-center justify-center gap-2 rounded-full border-2 border-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-primaryDark transition-all hover:bg-primary/5 hover:-translate-y-0.5"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    View email draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => sendPurchaseEmailToCustomer(expandedOrder)}
+                    disabled={purchaseEmailSending || !expandedOrder.customer?.email}
+                    className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  >
+                    {purchaseEmailSending ? (
+                      <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
+                    ) : purchaseEmailSentId === expandedOrder.id ? (
+                      <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Email sent</>
+                    ) : (
+                      <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Send purchase email</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
               {expandedOrder.status === 'paid' && (
                 <button
                   type="button"
@@ -7252,6 +7360,44 @@ export default function DashboardPage() {
                   Delete order
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase-email draft preview */}
+      {purchaseEmailPreview && (
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setPurchaseEmailPreview(null)}>
+          <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-white/95 backdrop-blur px-5 py-4">
+              <div>
+                <h3 className="font-display text-lg font-bold text-primaryDark">Email draft</h3>
+                <p className="text-xs text-muted break-all">To: {purchaseEmailPreview.customer?.email || '—'} · Subject: Your Eduvate Kids order — ${formatNumber(purchaseEmailPreview.total)} {String(purchaseEmailPreview.currency || 'usd').toUpperCase()}</p>
+              </div>
+              <button type="button" onClick={() => setPurchaseEmailPreview(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-4 sm:p-6 bg-gray-50">
+              <div className="rounded-2xl bg-white p-3 shadow-inner" dangerouslySetInnerHTML={{ __html: buildPurchaseEmailHtml(purchaseEmailPreview) }} />
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-black/10 bg-white px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setPurchaseEmailPreview(null)}
+                className="rounded-full border-2 border-primary/20 px-5 py-2.5 text-sm font-semibold text-primaryDark transition hover:bg-primary/5"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => { const o = purchaseEmailPreview; setPurchaseEmailPreview(null); if (o) sendPurchaseEmailToCustomer(o) }}
+                disabled={purchaseEmailSending || !purchaseEmailPreview.customer?.email}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                Send purchase email
+              </button>
             </div>
           </div>
         </div>

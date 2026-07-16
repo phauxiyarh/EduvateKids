@@ -28,7 +28,7 @@ import {
 } from './config';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
-import { sendOrderNotification, sendBookRequestNotification } from './email';
+import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail } from './email';
 import { registerReader, logBook, editBook, deleteBook, resendReaderWelcome, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
@@ -420,6 +420,49 @@ export const submitBookRequest = onCall(
     }
   }
 );
+
+/**
+ * Manually send a customer their purchase-confirmation email for an existing
+ * order (admin action — this email is NOT sent automatically on payment). Loads
+ * the order server-side so the email always reflects the real order record.
+ */
+export const sendPurchaseEmail = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
+  const d = request.data as { orderId?: string };
+  const orderId = String(d?.orderId ?? '').trim();
+  if (!orderId) throw new HttpsError('invalid-argument', 'An order id is required.');
+  const snap = await db.collection('orders').doc(orderId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
+  const o = snap.data() as {
+    items?: OrderItem[];
+    subtotal?: number;
+    shippingFee?: number;
+    tax?: number;
+    total?: number;
+    currency?: string;
+    customer?: CustomerInfo;
+    shippingAddress?: ShippingAddress;
+  };
+  if (!o.customer?.email || !isValidEmail(o.customer.email)) {
+    throw new HttpsError('failed-precondition', 'This order has no valid customer email.');
+  }
+  try {
+    await sendCustomerPurchaseEmail({
+      orderId,
+      items: Array.isArray(o.items) ? o.items : [],
+      subtotal: Number(o.subtotal ?? 0),
+      shippingFee: Number(o.shippingFee ?? 0),
+      tax: Number(o.tax ?? 0),
+      total: Number(o.total ?? 0),
+      currency: String(o.currency ?? 'usd'),
+      customer: o.customer,
+      shippingAddress: o.shippingAddress as ShippingAddress,
+    });
+    return { ok: true, to: o.customer.email };
+  } catch (err) {
+    logger.error('sendPurchaseEmail failed', err);
+    throw new HttpsError('internal', 'Could not send the purchase email. Please try again.');
+  }
+});
 
 // ─────────────────────────── Address validation (USPS) ───────────────────────────
 

@@ -4102,23 +4102,6 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Encouraging banner */}
-        <div className="rounded-3xl bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/5 p-5 sm:p-6 border border-primary/10">
-          <p className="font-display text-lg font-bold text-primaryDark">🌟 Reading is off to a fantastic start, mashaAllah!</p>
-          <p className="mt-1 text-sm text-muted">
-            {summerReaders.length} reader{summerReaders.length === 1 ? '' : 's'} registered, {goalsMet} goal{goalsMet === 1 ? '' : 's'} already met, and {totalValidBooks} valid book{totalValidBooks === 1 ? '' : 's'} logged. Keep the momentum going, the deadline is <strong>31 August</strong>.
-          </p>
-          <button
-            type="button"
-            onClick={() => { setReminderResult(null); setReminderOpen(true) }}
-            disabled={!hasData}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-bold text-white shadow transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-            Send reminder email to all readers
-          </button>
-        </div>
-
         {/* Program insights (charts) */}
         {hasData && (
           <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">

@@ -177,8 +177,51 @@ function buildPurchaseEmailHtml(order: OnlineOrder): string {
   </div>`
 }
 
+/**
+ * Build the Summer Reads reminder-broadcast email HTML for previewing in the
+ * dashboard. Mirrors the server template in functions/src/email.ts
+ * (buildSummerReminderEmailHtml) so the admin sees what will actually send.
+ * The real send is done server-side to each registered parent.
+ */
+function buildReminderEmailHtml(): string {
+  const logUrl = 'https://eduvatekids.com/summer-reads/log'
+  const booksUrl = 'https://eduvatekids.com/summer-reads'
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
+      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
+      <h1 style="margin:0;font-size:22px">📚 A little Summer Reads reminder</h1>
+      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
+      <p style="margin:0 0 14px"><strong>Assalamu alaikum dear parent,</strong></p>
+      <p style="margin:0 0 14px">MashaAllah — the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with your reader this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
+      <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
+        <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
+        <ul style="margin:0;padding-left:20px">
+          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations — those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
+          <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
+          <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
+        </ul>
+      </div>
+      <div style="text-align:center;margin:22px 0">
+        <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
+        <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush — but do aim to finish reading as soon as you comfortably can. 😊</p>
+      </div>
+      <div style="text-align:center;margin:22px 0">
+        <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
+      </div>
+      <p style="margin:18px 0 0">Keep up the wonderful reading!<br><strong>The Eduvate Kids Team</strong></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">You're receiving this because a child is registered for Eduvate Kids Summer Reads. Questions? Just reply to this email.</p>
+    </div>
+  </div>`
+}
+
 /** Summer Reading Program registration (written to the `summerReads` collection). */
-type SummerBookLog = { title: string; author?: string; rating?: number; review?: string; dateFinished?: string; dateLogged?: string }
+// `valid` is an admin's silent review flag — only valid books (valid !== false)
+// count towards the reading goal / raffle eligibility.
+type SummerBookLog = { title: string; author?: string; rating?: number; review?: string; dateFinished?: string; dateLogged?: string; valid?: boolean }
 type SummerReader = {
   id: string
   code: string
@@ -199,6 +242,9 @@ type SummerReader = {
   state?: string
   city?: string
   raffleEligible?: boolean
+  // Admin override: when set, forces eligibility regardless of country. Absent =
+  // fall back to the country-derived default.
+  raffleEligibleOverride?: boolean
   consent?: boolean
   booksLogged?: SummerBookLog[]
   createdAt?: { seconds: number } | null
@@ -210,16 +256,25 @@ function readerLevel(r: { level?: string; tier?: string }): string {
   const v = (r.level || r.tier || 'none') as string
   return v === 'none' ? 'seedling' : v
 }
-/** Whether a reader has reached their chosen goal. */
+/** Count of a reader's VALID logged books (valid !== false), used as a fallback. */
+function readerValidBooksCount(r: SummerReader): number {
+  if (Array.isArray(r.booksLogged)) return r.booksLogged.filter((b) => b.valid !== false).length
+  return r.booksCount ?? 0
+}
+/** Whether a reader has reached their chosen goal (valid books only). */
 function readerGoalMet(r: SummerReader): boolean {
   if (typeof r.goalMet === 'boolean') return r.goalMet
   const g = r.goal ?? LEVEL_GOAL[readerLevel(r)] ?? 3
-  return (r.booksCount ?? 0) >= g
+  return readerValidBooksCount(r) >= g
 }
-// Raffle draw is currently open only to USA / Nigeria residents.
-const RAFFLE_COUNTRIES = ['united states of america', 'united states', 'usa', 'us', 'nigeria']
-/** Whether a reader is eligible for the prize raffle (prefers stored flag). */
+// Raffle draw is currently open only to USA / Nigeria / Canada residents.
+const RAFFLE_COUNTRIES = ['united states of america', 'united states', 'usa', 'us', 'nigeria', 'ng', 'canada', 'ca']
+/**
+ * Whether a reader is eligible for the prize raffle. An explicit admin override
+ * wins; otherwise the stored flag; otherwise the country-derived default.
+ */
 function readerRaffleEligible(r: SummerReader): boolean {
+  if (typeof r.raffleEligibleOverride === 'boolean') return r.raffleEligibleOverride
   if (typeof r.raffleEligible === 'boolean') return r.raffleEligible
   return RAFFLE_COUNTRIES.includes(String(r.country ?? '').trim().toLowerCase())
 }
@@ -545,6 +600,14 @@ export default function DashboardPage() {
   // Tracks the "Resend welcome email" button state for the open reader modal.
   const [welcomeSending, setWelcomeSending] = useState(false)
   const [welcomeSent, setWelcomeSent] = useState<string | null>(null)
+  // Per-book validity toggle in-flight index (in the open reader modal).
+  const [bookValidityBusy, setBookValidityBusy] = useState<number | null>(null)
+  // Eligibility override toggle in-flight (open reader modal).
+  const [eligibilityBusy, setEligibilityBusy] = useState(false)
+  // Reminder-broadcast modal: open state, sending state, and last result.
+  const [reminderOpen, setReminderOpen] = useState(false)
+  const [reminderSending, setReminderSending] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{ sent: number; failed: number; recipients: number } | null>(null)
   const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
   const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
   // Daily Pulse figures are hidden by default (privacy on a shared screen);
@@ -3702,6 +3765,84 @@ export default function DashboardPage() {
     }
   }
 
+  // Admin: silently mark a logged book valid/invalid. Only valid books count
+  // toward the goal & raffle eligibility (recomputed server-side).
+  const setReaderBookValidity = async (reader: SummerReader, index: number, valid: boolean) => {
+    setBookValidityBusy(index)
+    try {
+      const callable = httpsCallable<
+        { code: string; index: number; valid: boolean },
+        { booksCount?: number; level?: string; goal?: number; goalMet?: boolean; valid?: boolean }
+      >(functions, 'setSummerBookValidity')
+      const res = await callable({ code: reader.code, index, valid })
+      const data = res.data || {}
+      const applyValid = (arr?: SummerBookLog[]) => (arr ? arr.map((b, i) => (i === index ? { ...b, valid } : b)) : arr)
+      const patch = (r: SummerReader): SummerReader => ({
+        ...r,
+        booksLogged: applyValid(r.booksLogged),
+        booksCount: data.booksCount ?? r.booksCount,
+        level: data.level ?? r.level,
+        goal: data.goal ?? r.goal,
+        goalMet: data.goalMet ?? r.goalMet,
+        tier: data.level ?? r.tier,
+      })
+      setSummerReaders((prev) => prev.map((r) => (r.id === reader.id ? patch(r) : r)))
+      setExpandedReader((cur) => (cur && cur.id === reader.id ? patch(cur) : cur))
+    } catch (error) {
+      console.error('Failed to set book validity:', error)
+      alert('Could not update the book. Please try again.')
+    } finally {
+      setBookValidityBusy(null)
+    }
+  }
+
+  // Admin: override a reader's raffle eligibility. `eligible` = true/false to
+  // force, or null to clear the override (revert to country-derived default).
+  const setReaderEligibilityOverride = async (reader: SummerReader, eligible: boolean | null) => {
+    setEligibilityBusy(true)
+    try {
+      const callable = httpsCallable<
+        { code: string; eligible: boolean | null },
+        { raffleEligible: boolean; overridden: boolean }
+      >(functions, 'setSummerReaderEligibility')
+      const res = await callable({ code: reader.code, eligible })
+      const data = res.data
+      const patch = (r: SummerReader): SummerReader => ({
+        ...r,
+        raffleEligible: data.raffleEligible,
+        raffleEligibleOverride: data.overridden ? data.raffleEligible : undefined,
+      })
+      setSummerReaders((prev) => prev.map((r) => (r.id === reader.id ? patch(r) : r)))
+      setExpandedReader((cur) => (cur && cur.id === reader.id ? patch(cur) : cur))
+    } catch (error) {
+      console.error('Failed to set eligibility:', error)
+      alert('Could not update eligibility. Please try again.')
+    } finally {
+      setEligibilityBusy(false)
+    }
+  }
+
+  // Admin: broadcast the Summer Reads reminder email to every registered parent.
+  // Recipients are gathered server-side; the client just triggers the send.
+  const sendReminderBroadcast = async () => {
+    setReminderSending(true)
+    setReminderResult(null)
+    try {
+      const callable = httpsCallable<Record<string, never>, { sent: number; failed: number; recipients: number; skipped?: boolean }>(
+        functions,
+        'sendSummerReminder'
+      )
+      const res = await callable({})
+      const data = res.data
+      setReminderResult({ sent: data.sent ?? 0, failed: data.failed ?? 0, recipients: data.recipients ?? 0 })
+    } catch (error) {
+      console.error('Failed to send reminder broadcast:', error)
+      alert('Could not send the reminder. Please try again.')
+    } finally {
+      setReminderSending(false)
+    }
+  }
+
   const orderStatusBadge = (status: OnlineOrder['status']) => {
     const map: Record<OnlineOrder['status'], string> = {
       paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -3821,7 +3962,7 @@ export default function DashboardPage() {
   }
 
   const exportSummerCsv = () => {
-    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Country', 'Books Logged', 'Level', 'Goal', 'Goal Met', 'Raffle Eligible']
+    const header = ['Code', 'Child Name', 'Child Age', 'Parent Name', 'Parent Email', 'Parent Phone', 'Country', 'Valid Books', 'Invalid Books', 'Total Logged', 'Level', 'Goal', 'Goal Met', 'Raffle Eligible', 'Eligibility Override']
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v)
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -3829,7 +3970,11 @@ export default function DashboardPage() {
     const rows = summerReaders.map((r) => {
       const lvl = readerLevel(r)
       const g = r.goal ?? LEVEL_GOAL[lvl] ?? 3
-      return [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.country, r.booksCount, lvl, g, readerGoalMet(r) ? 'Yes' : 'No', readerRaffleEligible(r) ? 'Yes' : 'No'].map(escape).join(',')
+      const validBooks = readerValidBooksCount(r)
+      const totalLogged = Array.isArray(r.booksLogged) ? r.booksLogged.length : (r.booksCount ?? 0)
+      const invalidBooks = totalLogged - validBooks
+      const override = typeof r.raffleEligibleOverride === 'boolean' ? (r.raffleEligibleOverride ? 'Eligible' : 'Not eligible') : ''
+      return [r.code, r.childName, r.childAge, r.parentName, r.parentEmail, r.parentPhone, r.country, validBooks, invalidBooks, totalLogged, lvl, g, readerGoalMet(r) ? 'Yes' : 'No', readerRaffleEligible(r) ? 'Yes' : 'No', override].map(escape).join(',')
     })
     const csv = [header.join(','), ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -3846,19 +3991,62 @@ export default function DashboardPage() {
   const renderSummer = () => {
     const scholars = summerReaders.filter((r) => readerLevel(r) === 'scholar').length
     const goalsMet = summerReaders.filter((r) => readerGoalMet(r)).length
-    const totalBooks = summerReaders.reduce((s, r) => s + (r.booksCount ?? 0), 0)
-    // Eligible for the prize draw = goal met AND resident of USA/Nigeria.
+    // Total valid books logged (only valid books count towards the record).
+    const totalValidBooks = summerReaders.reduce((s, r) => s + readerValidBooksCount(r), 0)
+    const totalInvalidBooks = summerReaders.reduce(
+      (s, r) => s + (Array.isArray(r.booksLogged) ? r.booksLogged.filter((b) => b.valid === false).length : 0),
+      0
+    )
+    // Eligible for the prize draw = goal met AND raffle-eligible (country/override).
     const raffleEntries = summerReaders.filter((r) => readerGoalMet(r) && readerRaffleEligible(r)).length
+
+    // ── Chart data ──
+    // Reader distribution by level.
+    const LEVEL_LABEL: Record<string, string> = { seedling: 'Early Readers', reader: 'Growing Readers', scholar: 'Confident Readers' }
+    const levelData = (['seedling', 'reader', 'scholar'] as const).map((lvl) => ({
+      name: LEVEL_LABEL[lvl],
+      level: lvl,
+      readers: summerReaders.filter((r) => readerLevel(r) === lvl).length,
+      met: summerReaders.filter((r) => readerLevel(r) === lvl && readerGoalMet(r)).length,
+    }))
+    // Reader distribution by country (top 6, rest grouped as "Other").
+    const countryCounts = new Map<string, number>()
+    summerReaders.forEach((r) => {
+      const c = (r.country || '').trim() || 'Unknown'
+      countryCounts.set(c, (countryCounts.get(c) ?? 0) + 1)
+    })
+    const countrySorted = Array.from(countryCounts.entries()).sort((a, b) => b[1] - a[1])
+    const countryTop = countrySorted.slice(0, 6).map(([name, readers]) => ({ name, readers }))
+    const countryOther = countrySorted.slice(6).reduce((s, [, n]) => s + n, 0)
+    const countryData = countryOther > 0 ? [...countryTop, { name: 'Other', readers: countryOther }] : countryTop
+    // Raffle eligibility split.
+    const eligibleCount = summerReaders.filter((r) => readerRaffleEligible(r)).length
+    const eligibilityData = [
+      { name: 'Eligible', value: eligibleCount },
+      { name: 'Not eligible', value: summerReaders.length - eligibleCount },
+    ]
+    // Book validity split.
+    const bookStatusData = [
+      { name: 'Valid (counted)', value: totalValidBooks },
+      { name: 'Invalid (off-list)', value: totalInvalidBooks },
+    ]
+    // Palette (CVD-validated): green, purple, pink, amber.
+    const CAT = ['#1a7a3c', '#7c3aed', '#ec4899', '#f59e0b']
+    const ELIG_COLORS = ['#1a7a3c', '#cbd5e1']
+    const BOOK_COLORS = ['#1a7a3c', '#ec4899']
+    const hasData = summerReaders.length > 0
+
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {[
             { label: 'Total Registered', value: String(summerReaders.length) },
             { label: 'Goals Met', value: String(goalsMet) },
             { label: 'Raffle Entries', value: String(raffleEntries) },
             { label: 'Scholars', value: String(scholars) },
-            { label: 'Total Books Logged', value: String(totalBooks) },
+            { label: 'Valid Books', value: String(totalValidBooks) },
+            { label: 'Invalid Books', value: String(totalInvalidBooks) },
           ].map((s) => (
             <div key={s.label} className="rounded-2xl bg-white p-5 shadow-xl border border-primary/5">
               <p className="text-xs font-bold uppercase tracking-wider text-muted">{s.label}</p>
@@ -3867,17 +4055,120 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {/* Encouraging banner */}
+        <div className="rounded-3xl bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/5 p-5 sm:p-6 border border-primary/10">
+          <p className="font-display text-lg font-bold text-primaryDark">🌟 Reading is off to a fantastic start, mashaAllah!</p>
+          <p className="mt-1 text-sm text-muted">
+            {summerReaders.length} reader{summerReaders.length === 1 ? '' : 's'} registered, {goalsMet} goal{goalsMet === 1 ? '' : 's'} already met, and {totalValidBooks} valid book{totalValidBooks === 1 ? '' : 's'} logged. Keep the momentum going — the deadline is <strong>31 August</strong>.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setReminderResult(null); setReminderOpen(true) }}
+            disabled={!hasData}
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-bold text-white shadow transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            Send reminder email to all readers
+          </button>
+        </div>
+
+        {/* Charts */}
+        {hasData && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Reader distribution by level */}
+            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+              <p className="font-display text-sm font-bold text-primaryDark">Reader distribution by level</p>
+              <p className="text-xs text-muted">Registered readers and how many have met their goal</p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={levelData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="readers" name="Registered" fill={CAT[0]} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="met" name="Goal met" fill={CAT[1]} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Reader distribution by country */}
+            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+              <p className="font-display text-sm font-bold text-primaryDark">Reader distribution by country</p>
+              <p className="text-xs text-muted">Where our readers are joining from</p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={countryData} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                    <Bar dataKey="readers" name="Readers" fill={CAT[1]} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Raffle eligibility split */}
+            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+              <p className="font-display text-sm font-bold text-primaryDark">Raffle eligibility</p>
+              <p className="text-xs text-muted">Readers eligible for the prize draw (US / Nigeria / Canada or admin override)</p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={eligibilityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
+                      {eligibilityData.map((_, i) => <Cell key={i} fill={ELIG_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Book validity split */}
+            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+              <p className="font-display text-sm font-bold text-primaryDark">Books logged: valid vs invalid</p>
+              <p className="text-xs text-muted">Only books from the recommended list count towards the record</p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={bookStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
+                      {bookStatusData.map((_, i) => <Cell key={i} fill={BOOK_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={exportSummerCsv}
-              disabled={summerReaders.length === 0}
-              className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
-              Export CSV
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={exportSummerCsv}
+                disabled={summerReaders.length === 0}
+                className="flex items-center gap-1.5 rounded-full border border-primary/20 px-4 py-1.5 text-xs font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => { setReminderResult(null); setReminderOpen(true) }}
+                disabled={summerReaders.length === 0}
+                className="flex items-center gap-1.5 rounded-full border border-secondary/30 px-4 py-1.5 text-xs font-bold text-secondary transition hover:bg-secondary/5 disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                Reminder Email
+              </button>
+            </div>
             <button
               type="button"
               onClick={loadSummerReaders}
@@ -3925,14 +4216,14 @@ export default function DashboardPage() {
                       <td className="py-3 pr-4 font-mono text-xs text-muted">{r.code}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.childName}</span>{r.childAge != null && <><br /><span className="text-xs text-muted">Age {r.childAge}</span></>}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.parentName}</span><br /><span className="text-xs text-muted">{r.parentEmail}</span></td>
-                      <td className="py-3 pr-4 font-bold text-primaryDark">{r.booksCount ?? 0}<span className="font-normal text-muted"> / {g}</span></td>
+                      <td className="py-3 pr-4 font-bold text-primaryDark">{readerValidBooksCount(r)}<span className="font-normal text-muted"> / {g}</span></td>
                       <td className="py-3 pr-4">
                         <span className={summerTierBadge(lvl)}>{lvl}</span>
                         {met && <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700" title="Goal met"><svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></span>}
                       </td>
                       <td className="py-3 pr-4">
                         {eligible
-                          ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700" title={r.country || 'USA / Nigeria'}>Eligible</span>
+                          ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700" title={r.country || 'USA / Nigeria / Canada'}>Eligible</span>
                           : <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-500" title={r.country || 'Country not on file'}>Not eligible</span>}
                       </td>
                       <td className="py-3 text-right">
@@ -7424,7 +7715,7 @@ export default function DashboardPage() {
                     Goal met
                   </span>
                 )}
-                <span className="text-xs text-muted">{expandedReader.booksCount ?? 0} of {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} book{(expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3) === 1 ? '' : 's'} goal</span>
+                <span className="text-xs text-muted">{readerValidBooksCount(expandedReader)} of {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} valid book{(expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3) === 1 ? '' : 's'} goal</span>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -7453,12 +7744,44 @@ export default function DashboardPage() {
                     {readerRaffleEligible(expandedReader)
                       ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700">Raffle eligible</span>
                       : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-semibold text-gray-500">Not raffle eligible</span>}
+                    {typeof expandedReader.raffleEligibleOverride === 'boolean' && (
+                      <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700" title="Manually set by an admin">Admin override</span>
+                    )}
                   </p>
+                  {/* Admin override of raffle eligibility. */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setReaderEligibilityOverride(expandedReader, true)}
+                      disabled={eligibilityBusy}
+                      className="rounded-full border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      Set eligible
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReaderEligibilityOverride(expandedReader, false)}
+                      disabled={eligibilityBusy}
+                      className="rounded-full border border-red-200 px-2.5 py-1 text-[11px] font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Set not eligible
+                    </button>
+                    {typeof expandedReader.raffleEligibleOverride === 'boolean' && (
+                      <button
+                        type="button"
+                        onClick={() => setReaderEligibilityOverride(expandedReader, null)}
+                        disabled={eligibilityBusy}
+                        className="rounded-full border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Clear override
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">Reading Level</p>
                   <p className="mt-1 text-sm font-medium capitalize text-ink">{readerLevel(expandedReader)}</p>
-                  <p className="text-sm text-muted">Goal: {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} books · {expandedReader.booksCount ?? 0} logged{readerGoalMet(expandedReader) ? ' · goal met' : ''}</p>
+                  <p className="text-sm text-muted">Goal: {expandedReader.goal ?? LEVEL_GOAL[readerLevel(expandedReader)] ?? 3} books · {readerValidBooksCount(expandedReader)} valid{readerGoalMet(expandedReader) ? ' · goal met' : ''}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">Registered</p>
@@ -7474,13 +7797,18 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted">Books Logged</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">Books Logged</p>
+                  <p className="text-[11px] text-muted">{readerValidBooksCount(expandedReader)} valid · only valid books count</p>
+                </div>
                 {expandedReader.booksLogged && expandedReader.booksLogged.length > 0 ? (
                   <ul className="mt-2 space-y-3">
-                    {expandedReader.booksLogged.map((b, idx) => (
-                      <li key={idx} className="rounded-xl border border-black/5 bg-gray-50 p-3">
+                    {expandedReader.booksLogged.map((b, idx) => {
+                      const invalid = b.valid === false
+                      return (
+                      <li key={idx} className={`rounded-xl border p-3 transition ${invalid ? 'border-red-200 bg-red-50/60' : 'border-black/5 bg-gray-50'}`}>
                         <div className="flex items-start justify-between gap-2">
-                          <div>
+                          <div className={invalid ? 'opacity-60' : ''}>
                             <p className="text-sm font-medium text-ink">{b.title}</p>
                             {b.author && <p className="text-xs text-muted">by {b.author}</p>}
                           </div>
@@ -7502,10 +7830,25 @@ export default function DashboardPage() {
                             </button>
                           </div>
                         </div>
-                        {b.dateFinished && <p className="mt-1 text-xs text-muted">Finished {b.dateFinished}</p>}
-                        {b.review && <p className="mt-2 text-sm text-ink">{b.review}</p>}
+                        {b.dateFinished && <p className={`mt-1 text-xs text-muted ${invalid ? 'opacity-60' : ''}`}>Finished {b.dateFinished}</p>}
+                        {b.review && <p className={`mt-2 text-sm text-ink ${invalid ? 'opacity-60' : ''}`}>{b.review}</p>}
+                        {/* Admin silent review: toggle whether this book counts. */}
+                        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-black/5 pt-2.5">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${invalid ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {invalid ? 'Invalid — not counted' : 'Valid — counts'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setReaderBookValidity(expandedReader, idx, invalid)}
+                            disabled={bookValidityBusy === idx}
+                            className={`rounded-full border px-3 py-1 text-[11px] font-bold transition disabled:opacity-50 ${invalid ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-red-200 text-red-700 hover:bg-red-50'}`}
+                          >
+                            {bookValidityBusy === idx ? 'Saving…' : invalid ? 'Mark valid' : 'Mark invalid'}
+                          </button>
+                        </div>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 ) : (
                   <p className="mt-2 text-sm text-muted">No books logged yet.</p>
@@ -7534,6 +7877,62 @@ export default function DashboardPage() {
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   Delete registration
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summer Reads reminder broadcast: preview + send to all registered parents */}
+      {reminderOpen && (
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => !reminderSending && setReminderOpen(false)}>
+          <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+              <div>
+                <h3 className="font-display text-lg font-bold text-primaryDark">Reminder email</h3>
+                <p className="text-xs text-muted">Broadcast to every registered parent · {summerReaders.length} registration{summerReaders.length === 1 ? '' : 's'}</p>
+              </div>
+              <button type="button" onClick={() => !reminderSending && setReminderOpen(false)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                This sends one email to each unique parent email on file. Recipients are gathered on the server — each parent sees only their own address.
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Preview</p>
+                <div className="rounded-2xl border border-black/10 bg-gray-50 p-3">
+                  <div className="overflow-hidden rounded-xl bg-white" dangerouslySetInnerHTML={{ __html: buildReminderEmailHtml() }} />
+                </div>
+              </div>
+              {reminderResult && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  Sent to {reminderResult.sent} of {reminderResult.recipients} parent{reminderResult.recipients === 1 ? '' : 's'}
+                  {reminderResult.failed > 0 && <span className="text-red-700"> · {reminderResult.failed} failed</span>}.
+                </div>
+              )}
+              <div className="flex flex-col-reverse gap-3 border-t border-black/5 pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setReminderOpen(false)}
+                  disabled={reminderSending}
+                  className="rounded-full border-2 border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-ink transition hover:bg-gray-50 disabled:opacity-60"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={sendReminderBroadcast}
+                  disabled={reminderSending || summerReaders.length === 0}
+                  className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
+                >
+                  {reminderSending ? (
+                    <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
+                  ) : (
+                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>{reminderResult ? 'Send again' : `Send to all ${summerReaders.length}`}</>
+                  )}
                 </button>
               </div>
             </div>

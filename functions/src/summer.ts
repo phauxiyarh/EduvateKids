@@ -87,11 +87,16 @@ export interface RegisterInput {
 }
 
 /**
- * The raffle prize draw is currently open only to residents of the USA or
- * Nigeria. Everyone may still register, read, and earn a certificate — this
- * flag only governs prize-draw eligibility. Matches common spellings/aliases.
+ * The raffle prize draw is currently open only to residents of the USA,
+ * Nigeria, or Canada. Everyone may still register, read, and earn a certificate
+ * — this flag only governs prize-draw eligibility. Matches common
+ * spellings/aliases.
  */
-export const RAFFLE_ELIGIBLE_COUNTRIES = ['united states', 'usa', 'us', 'united states of america', 'nigeria'];
+export const RAFFLE_ELIGIBLE_COUNTRIES = [
+  'united states', 'usa', 'us', 'united states of america',
+  'nigeria', 'ng',
+  'canada', 'ca',
+];
 export function isRaffleEligible(country: unknown): boolean {
   const c = String(country ?? '').trim().toLowerCase();
   return RAFFLE_ELIGIBLE_COUNTRIES.includes(c);
@@ -234,6 +239,21 @@ function resolveLevel(data: { level?: unknown; tier?: unknown }): Exclude<Summer
   return normalizeLevel(raw === 'none' ? 'seedling' : raw);
 }
 
+/**
+ * A book counts towards the reading goal ONLY if it has NOT been marked invalid
+ * by an admin. Books logged before this feature (no `valid` field) count as
+ * valid — an admin must explicitly flag one invalid to exclude it. This is the
+ * single source of truth for "how many books count" — used everywhere the goal
+ * is (re)computed so an admin's silent review of an off-list book immediately
+ * affects the reader's progress and raffle eligibility.
+ */
+function isValidBook(b: unknown): boolean {
+  return (b as { valid?: unknown })?.valid !== false;
+}
+function countValidBooks(logged: unknown[]): number {
+  return logged.reduce<number>((n, b) => n + (isValidBook(b) ? 1 : 0), 0);
+}
+
 export async function logBook(
   db: FirebaseFirestore.Firestore,
   input: LogBookInput
@@ -256,10 +276,14 @@ export async function logBook(
       review: (input.review || '').trim().slice(0, 500),
       dateFinished: (input.dateFinished || '').trim() || new Date().toISOString().split('T')[0],
       parentVerified: true,
+      // New books count towards the goal by default; an admin may later flag an
+      // off-list book invalid (silent review), which drops it from the count.
+      valid: true,
       dateLogged: new Date().toISOString(),
     };
     const nextLogged = [...logged, entry];
-    const booksCount = nextLogged.length;
+    // Only admin-VALID books count towards the goal (and thus raffle eligibility).
+    const booksCount = countValidBooks(nextLogged);
     const goalMet = booksCount >= goal;
     tx.update(ref, {
       booksLogged: nextLogged,
@@ -312,10 +336,77 @@ export async function editBook(
     };
     const level = resolveLevel(data);
     const goal = goalForLevel(level);
-    const booksCount = logged.length;
+    const booksCount = countValidBooks(logged);
     const goalMet = booksCount >= goal;
     tx.update(ref, { booksLogged: logged, booksCount, level, goal, goalMet, tier: level as SummerTier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     return { booksCount, level, goal, goalMet };
+  });
+}
+
+/**
+ * ADMIN-ONLY: silently mark a logged book valid or invalid. Off-list books an
+ * admin spots during review can be flagged invalid so they DON'T count towards
+ * the reading goal / raffle eligibility — without notifying or involving the
+ * parent (no ownership check; this is an admin action, gated by the callable's
+ * admin check). Recomputes booksCount + goalMet from the remaining valid books.
+ */
+export async function setBookValidity(
+  db: FirebaseFirestore.Firestore,
+  code: string,
+  index: number,
+  valid: boolean
+): Promise<{ booksCount: number; level: SummerLevel; goal: number; goalMet: boolean; valid: boolean }> {
+  const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Code not found.');
+    const data = snap.data() as { booksLogged?: Record<string, unknown>[]; level?: unknown; tier?: unknown };
+    const logged = Array.isArray(data.booksLogged) ? [...data.booksLogged] : [];
+    if (index < 0 || index >= logged.length) throw new Error('Book entry not found.');
+    logged[index] = { ...logged[index], valid };
+    const level = resolveLevel(data);
+    const goal = goalForLevel(level);
+    const booksCount = countValidBooks(logged);
+    const goalMet = booksCount >= goal;
+    tx.update(ref, { booksLogged: logged, booksCount, level, goal, goalMet, tier: level as SummerTier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { booksCount, level, goal, goalMet, valid };
+  });
+}
+
+/**
+ * ADMIN-ONLY: manually set (or clear) a reader's raffle-eligibility override.
+ * By default eligibility is derived from the reader's country
+ * (isRaffleEligible). This lets an admin force a reader eligible or ineligible
+ * regardless of country — e.g. a verified resident whose country text didn't
+ * match. `eligible` writes the boolean override; `null` clears it, reverting to
+ * the country-derived default (which we recompute and re-store as raffleEligible).
+ */
+export async function setReaderEligibility(
+  db: FirebaseFirestore.Firestore,
+  code: string,
+  eligible: boolean | null
+): Promise<{ raffleEligible: boolean; overridden: boolean }> {
+  const ref = db.collection('summerReads').doc(code.trim().toUpperCase());
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Code not found.');
+    const data = snap.data() as { country?: unknown };
+    if (eligible === null) {
+      // Clear the override; fall back to the country-derived value.
+      const derived = isRaffleEligible(data.country);
+      tx.update(ref, {
+        raffleEligible: derived,
+        raffleEligibleOverride: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { raffleEligible: derived, overridden: false };
+    }
+    tx.update(ref, {
+      raffleEligible: eligible,
+      raffleEligibleOverride: eligible,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return { raffleEligible: eligible, overridden: true };
   });
 }
 
@@ -337,7 +428,7 @@ export async function deleteBook(
     logged.splice(index, 1);
     const level = resolveLevel(data);
     const goal = goalForLevel(level);
-    const booksCount = logged.length;
+    const booksCount = countValidBooks(logged);
     const goalMet = booksCount >= goal;
     tx.update(ref, { booksLogged: logged, booksCount, level, goal, goalMet, tier: level as SummerTier, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     return { booksCount, level, goal, goalMet };

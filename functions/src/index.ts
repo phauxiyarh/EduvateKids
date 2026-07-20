@@ -28,8 +28,8 @@ import {
 } from './config';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
-import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail } from './email';
-import { registerReader, logBook, editBook, deleteBook, resendReaderWelcome, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
+import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
+import { registerReader, logBook, editBook, deleteBook, resendReaderWelcome, setBookValidity, setReaderEligibility, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
 admin.initializeApp();
@@ -43,6 +43,34 @@ const EMAIL_RE = /^[^\s@,<>";]+@[^\s@,<>";]+\.[^\s@,<>";]+$/;
 function isValidEmail(v: unknown): v is string {
   const s = String(v ?? '').trim();
   return s.length <= 254 && EMAIL_RE.test(s);
+}
+
+/**
+ * Bootstrap owner emails that are always admin (mirrors firestore.rules
+ * isBootstrapAdmin). Keep in sync with the rules file.
+ */
+const BOOTSTRAP_ADMIN_EMAILS = ['admin@eduvatekids.com', 'eduvatekids@gmail.com'];
+
+/**
+ * Assert the caller is an admin. These summer-admin callables run with the Admin
+ * SDK (which BYPASSES Firestore rules), so the admin check that rules would
+ * normally enforce must be re-done here. An admin is a signed-in user whose
+ * /users/{uid} doc has role 'admin', or a verified bootstrap-owner email.
+ */
+async function assertAdmin(request: { auth?: { uid?: string; token?: { email?: string; email_verified?: boolean } } }): Promise<void> {
+  const auth = request.auth;
+  if (!auth?.uid) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const email = String(auth.token?.email ?? '').toLowerCase();
+  if (auth.token?.email_verified === true && BOOTSTRAP_ADMIN_EMAILS.includes(email)) {
+    return;
+  }
+  const userSnap = await db.collection('users').doc(auth.uid).get();
+  if (userSnap.exists && (userSnap.data() as { role?: string })?.role === 'admin') {
+    return;
+  }
+  throw new HttpsError('permission-denied', 'Admin access is required.');
 }
 
 function assertValidPayload(data: CreatePaymentInput | undefined): asserts data is CreatePaymentInput {
@@ -363,6 +391,77 @@ export const resendSummerWelcome = onCall({ secrets: [RESEND_API_KEY], cors: ALL
     return await resendReaderWelcome(db, d.code);
   } catch (err) {
     throw summerError(err, 'Could not re-send the welcome email.');
+  }
+});
+
+/**
+ * ADMIN-ONLY: silently mark a reader's logged book valid or invalid. Only valid
+ * books count towards the reading goal / raffle eligibility. Recomputes the
+ * reader's count + goalMet server-side.
+ */
+export const setSummerBookValidity = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  const d = request.data as { code?: string; index?: number; valid?: boolean };
+  if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (typeof d.index !== 'number') throw new HttpsError('invalid-argument', 'A book index is required.');
+  if (typeof d.valid !== 'boolean') throw new HttpsError('invalid-argument', 'A valid flag (true/false) is required.');
+  try {
+    return await setBookValidity(db, d.code, d.index, d.valid);
+  } catch (err) {
+    throw summerError(err, 'Could not update the book.');
+  }
+});
+
+/**
+ * ADMIN-ONLY: set or clear a reader's raffle-eligibility override. Pass
+ * `eligible: true|false` to force it, or `eligible: null` to clear the override
+ * and revert to the country-derived default.
+ */
+export const setSummerReaderEligibility = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  const d = request.data as { code?: string; eligible?: boolean | null };
+  if (!d?.code?.trim()) throw new HttpsError('invalid-argument', 'A code is required.');
+  if (!(d.eligible === true || d.eligible === false || d.eligible === null)) {
+    throw new HttpsError('invalid-argument', 'eligible must be true, false, or null.');
+  }
+  try {
+    return await setReaderEligibility(db, d.code, d.eligible);
+  } catch (err) {
+    throw summerError(err, 'Could not update eligibility.');
+  }
+});
+
+/**
+ * ADMIN-ONLY: broadcast the Summer Reads reminder email to every registered
+ * parent. Recipients are read server-side from the `summerReads` collection
+ * (the client never supplies the list), de-duplicated by email. Returns how many
+ * were sent / failed.
+ */
+export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  try {
+    const snap = await db.collection('summerReads').get();
+    const byEmail = new Map<string, { email: string; parentName?: string; childName?: string }>();
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() as { parentEmail?: string; parentName?: string; childName?: string };
+      const email = String(data.parentEmail ?? '').trim();
+      if (!isValidEmail(email)) return;
+      const key = email.toLowerCase();
+      // Keep the first registration per email (its child name greets the parent).
+      if (!byEmail.has(key)) {
+        byEmail.set(key, { email, parentName: data.parentName, childName: data.childName });
+      }
+    });
+    const recipients = Array.from(byEmail.values());
+    if (recipients.length === 0) {
+      return { sent: 0, failed: 0, recipients: 0, skipped: false };
+    }
+    const result = await sendSummerReminderBroadcast(recipients);
+    logger.info('Summer reminder broadcast triggered', { recipients: recipients.length, ...result });
+    return { ...result, recipients: recipients.length };
+  } catch (err) {
+    logger.error('sendSummerReminder failed', err);
+    throw new HttpsError('internal', 'Could not send the reminder broadcast. Please try again.');
   }
 });
 

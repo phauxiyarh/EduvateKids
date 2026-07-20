@@ -204,6 +204,91 @@ export async function sendReaderWelcome(params: {
 }
 
 /**
+ * Build the Summer Reads reminder/broadcast email HTML. Pure function (no side
+ * effects) so the exact markup can be previewed in the dashboard and sent to
+ * every registered parent. Mirrors the welcome email's look. `parentName` is
+ * optional so a single generic body works for a bulk send. The deadline and
+ * key reminders (recommended-book list, valid-books-only-count) are baked in.
+ */
+export function buildSummerReminderEmailHtml(params?: { parentName?: string; childName?: string }): string {
+  const greetName = params?.parentName ? esc(params.parentName) : 'dear parent';
+  const child = params?.childName ? esc(params.childName) : 'your reader';
+  const logUrl = 'https://eduvatekids.com/summer-reads/log';
+  const booksUrl = 'https://eduvatekids.com/summer-reads';
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
+      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
+      <h1 style="margin:0;font-size:22px">📚 A little Summer Reads reminder</h1>
+      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
+    </div>
+    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
+      <p style="margin:0 0 14px"><strong>Assalamu alaikum ${greetName},</strong></p>
+      <p style="margin:0 0 14px">MashaAllah — the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with ${child} this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
+
+      <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
+        <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
+        <ul style="margin:0;padding-left:20px">
+          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations — those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
+          <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
+          <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
+        </ul>
+      </div>
+
+      <div style="text-align:center;margin:22px 0">
+        <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
+        <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush — but do aim to finish reading as soon as you comfortably can. 😊</p>
+      </div>
+
+      <div style="text-align:center;margin:22px 0">
+        <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
+      </div>
+
+      <p style="margin:18px 0 0">Keep up the wonderful reading!<br><strong>The Eduvate Kids Team</strong></p>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">You're receiving this because a child is registered for Eduvate Kids Summer Reads. Questions? Just reply to this email.</p>
+    </div>
+  </div>`;
+}
+
+/**
+ * Broadcast the Summer Reads reminder to a list of parent recipients. Sends one
+ * personalised email per recipient (so each greeting/child name is correct and
+ * no one sees another family's address). No-op if Resend isn't configured.
+ * Returns how many were sent vs failed; never throws on an individual failure so
+ * one bad address can't abort the whole broadcast.
+ */
+export async function sendSummerReminderBroadcast(
+  recipients: { email: string; parentName?: string; childName?: string }[]
+): Promise<{ sent: number; failed: number; skipped: boolean }> {
+  if (!emailConfigured()) {
+    logger.info('Summer reminder broadcast skipped — RESEND_API_KEY not set', { count: recipients.length });
+    return { sent: 0, failed: 0, skipped: true };
+  }
+  const resend = new Resend(RESEND_API_KEY.value());
+  const subject = '📚 Summer Reads reminder — keep reading from the recommended list (deadline 31 Aug)';
+  let sent = 0;
+  let failed = 0;
+  for (const r of recipients) {
+    try {
+      await resend.emails.send({
+        from: ORDER_NOTIFY_FROM,
+        to: r.email,
+        replyTo: ORDER_NOTIFY_TO,
+        subject,
+        html: buildSummerReminderEmailHtml({ parentName: r.parentName, childName: r.childName }),
+      });
+      sent++;
+    } catch (err) {
+      failed++;
+      logger.error('Summer reminder send failed for a recipient', { email: r.email, err });
+    }
+  }
+  logger.info('Summer reminder broadcast complete', { sent, failed });
+  return { sent, failed, skipped: false };
+}
+
+/**
  * Build the customer-facing purchase-confirmation email HTML. Pure function
  * (no side effects) so the exact same markup can be rendered for a preview and
  * for the actual send. Kept intentionally simple and inline-styled for email

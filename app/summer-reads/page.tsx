@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
@@ -130,10 +130,51 @@ const eligibleBooks = [
   },
 ]
 
+const summerFaqs = [
+  {
+    question: 'Can I begin to log the books I finish reading?',
+    answer: 'Yes! As soon as you finish a book, you can log it. Just let your parent or guardian know first. They will help confirm that you truly read and understood the book, and then you can go ahead and log it together.'
+  },
+  {
+    question: 'What do I need to log a book?',
+    answer: 'You need your registration code. Share it with your parent and ask for their help to log the book together, since every book is parent verified. When you are ready, head to the Log a Book page using the code above.'
+  },
+  {
+    question: 'What if I read a book outside the recommended list?',
+    answer: 'We will do our best to consider all books that align with our values and the moral nurture we seek to share within the community. However, when a book is clearly outside this scope, we are unable to count it, so it will be marked invalid. To be safe, please choose from the recommended list so every book you read counts towards your goal and the raffle draw.'
+  },
+  {
+    question: 'Can we buy a book we like online from Eduvate Kids so we can read it?',
+    answer: 'Absolutely! While we are always happy to receive your purchase, you are not required to buy any of our books to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Feel free to browse and place your order in our catalog.'
+  },
+  {
+    question: 'Why is it important to take part in the reading?',
+    answer: 'Reading nurtures the heart and the mind. Taking part helps your child build a lifelong love of reading that is rooted in faith and growing in knowledge, strengthens understanding and vocabulary, and connects them with beautiful Islamic stories and values. It is also a joyful shared habit for the whole family, and completing the goal earns a certificate and a place in the raffle draw.'
+  },
+  {
+    question: 'How many books does my child need to read?',
+    answer: 'It depends on the reading level chosen at registration. Early Readers aim for 4 books, Growing Readers aim for 6 books, and Confident Readers aim for 10 books. Only valid books from the recommended list count towards the goal.'
+  },
+  {
+    question: 'Is there a deadline?',
+    answer: 'The program runs until 31 August. There is no rush, but we encourage you to enjoy your reading and aim to finish as soon as you comfortably can.'
+  },
+  {
+    question: 'Who can enter the raffle draw?',
+    answer: 'Readers who meet their goal with valid books and reside in the USA, Nigeria, or Canada are entered into the raffle draw. Everyone is welcome to register, read, and earn a certificate regardless of location.'
+  },
+  {
+    question: 'I lost my registration code. What should I do?',
+    answer: 'No problem. Ask your parent to check the welcome email sent at registration, as the code is shown there. If you still cannot find it, contact us and we will be happy to help.'
+  },
+]
+
 export default function SummerReadsPage() {
   const stepsReveal = useReveal<HTMLDivElement>()
   const tiersReveal = useReveal<HTMLDivElement>()
   const prizeReveal = useReveal<HTMLDivElement>()
+  const faqReveal = useReveal<HTMLDivElement>()
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
 
   return (
     <div className="min-h-screen text-ink">
@@ -508,6 +549,58 @@ export default function SummerReadsPage() {
             <Link href="/summer-reads/register" className="btn-shine inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5">
               Register Your Child Now
             </Link>
+          </div>
+        </section>
+
+        {/* Frequently Asked Questions */}
+        <section className="relative py-14 sm:py-20 bg-gradient-to-br from-purple-50 via-white to-emerald-50">
+          <div ref={faqReveal} className="reveal mx-auto w-11/12 max-w-3xl">
+            <div className="text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Good To Know</p>
+              <h2 className="mt-4 font-display text-2xl sm:text-4xl">Summer Reads FAQs</h2>
+              <p className="mt-3 text-muted">Everything you and your reader might want to ask about logging books, the recommended list, and the raffle.</p>
+            </div>
+            <div className="mt-10 space-y-3">
+              {summerFaqs.map((faq, i) => {
+                const isOpen = openFaq === i
+                return (
+                  <div key={i} className="overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-soft transition-all duration-300 hover:border-primary/30">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaq(isOpen ? null : i)}
+                      className="flex w-full items-center justify-between gap-4 p-5 text-left"
+                      aria-expanded={isOpen}
+                      aria-controls={`sr-faq-panel-${i}`}
+                      id={`sr-faq-button-${i}`}
+                    >
+                      <span className="font-semibold text-primaryDark">{faq.question}</span>
+                      <svg
+                        className={`h-5 w-5 flex-shrink-0 text-primary transition-transform duration-300 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div
+                      id={`sr-faq-panel-${i}`}
+                      role="region"
+                      aria-labelledby={`sr-faq-button-${i}`}
+                      className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-[600px]' : 'max-h-0'}`}
+                    >
+                      <p className="px-5 pb-5 leading-relaxed text-ink/80">{faq.answer}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-10 flex flex-wrap justify-center gap-4">
+              <Link href="/summer-reads/log" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5">
+                Log a Book
+              </Link>
+              <Link href="/contact-us" className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white px-6 py-3 text-sm font-semibold text-primaryDark transition hover:-translate-y-0.5 hover:border-primary/40">
+                Still have a question? Contact us
+              </Link>
+            </div>
           </div>
         </section>
       </main>

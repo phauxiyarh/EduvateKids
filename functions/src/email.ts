@@ -241,7 +241,20 @@ export function buildSummerReminderEmailHtml(params?: { parentName?: string; chi
         <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
       </div>
 
-      <div style="text-align:center;margin:22px 0">
+      <div style="border-top:1px solid #eee;padding-top:18px;margin-top:22px">
+        <p style="margin:0 0 12px;font-weight:bold;font-size:16px;color:#1f2937">Frequently asked questions</p>
+        ${summerReminderFaqs
+          .map(
+            (f) =>
+              `<div style="margin:0 0 14px">
+                <p style="margin:0 0 4px;font-weight:bold;color:#4c1d95;font-size:14px">${esc(f.q)}</p>
+                <p style="margin:0;font-size:14px;color:#374151">${f.a}</p>
+              </div>`
+          )
+          .join('')}
+      </div>
+
+      <div style="text-align:center;margin:24px 0 8px">
         <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
       </div>
 
@@ -250,6 +263,33 @@ export function buildSummerReminderEmailHtml(params?: { parentName?: string; chi
     </div>
   </div>`;
 }
+
+/**
+ * FAQ content shown in the reminder email. Kept as data so the email body and
+ * the dashboard preview stay identical. Answers may contain inline links.
+ */
+const summerReminderFaqs: { q: string; a: string }[] = [
+  {
+    q: 'Can I begin to log the books I finish reading?',
+    a: 'Yes! As soon as you finish a book, let your parent know first. They will help confirm you truly read and understood it, then log it together.',
+  },
+  {
+    q: 'What do I need to log a book?',
+    a: 'Your registration code. Share it with your parent and log the book together on the <a href="https://eduvatekids.com/summer-reads/log" style="color:#7c3aed;font-weight:bold">Log a Book</a> page, since every book is parent verified.',
+  },
+  {
+    q: 'What if I read a book outside the recommended list?',
+    a: 'We do our best to consider all books that align with our values. When a book is clearly outside this scope we are unable to count it, so it is marked invalid. Choosing from the recommended list keeps every book counting.',
+  },
+  {
+    q: 'Can we buy a book we like online so we can read it?',
+    a: 'Absolutely, though you are not required to buy any book to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Browse our <a href="https://eduvatekids.com/catalog" style="color:#7c3aed;font-weight:bold">catalog</a> any time.',
+  },
+  {
+    q: 'Why is it important to take part in the reading?',
+    a: 'Reading nurtures the heart and the mind. It builds a lifelong love of reading rooted in faith and growing in knowledge, strengthens understanding, and is a joyful habit for the whole family, with a certificate and raffle entry when the goal is met.',
+  },
+];
 
 /**
  * Broadcast the Summer Reads reminder to a list of parent recipients. Sends one

@@ -209,7 +209,19 @@ function buildReminderEmailHtml(): string {
         <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
         <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
       </div>
-      <div style="text-align:center;margin:22px 0">
+      <div style="border-top:1px solid #eee;padding-top:18px;margin-top:22px">
+        <p style="margin:0 0 12px;font-weight:bold;font-size:16px;color:#1f2937">Frequently asked questions</p>
+        ${reminderEmailFaqs
+          .map(
+            (f) =>
+              `<div style="margin:0 0 14px">
+                <p style="margin:0 0 4px;font-weight:bold;color:#4c1d95;font-size:14px">${f.q}</p>
+                <p style="margin:0;font-size:14px;color:#374151">${f.a}</p>
+              </div>`
+          )
+          .join('')}
+      </div>
+      <div style="text-align:center;margin:24px 0 8px">
         <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
       </div>
       <p style="margin:18px 0 0">Keep up the wonderful reading!<br><strong>The Eduvate Kids Team</strong></p>
@@ -217,6 +229,34 @@ function buildReminderEmailHtml(): string {
     </div>
   </div>`
 }
+
+/**
+ * FAQ content mirrored in the reminder email preview. Kept identical to the
+ * server list (functions/src/email.ts summerReminderFaqs) so the dashboard
+ * preview matches what actually sends.
+ */
+const reminderEmailFaqs: { q: string; a: string }[] = [
+  {
+    q: 'Can I begin to log the books I finish reading?',
+    a: 'Yes! As soon as you finish a book, let your parent know first. They will help confirm you truly read and understood it, then log it together.',
+  },
+  {
+    q: 'What do I need to log a book?',
+    a: 'Your registration code. Share it with your parent and log the book together on the <a href="https://eduvatekids.com/summer-reads/log" style="color:#7c3aed;font-weight:bold">Log a Book</a> page, since every book is parent verified.',
+  },
+  {
+    q: 'What if I read a book outside the recommended list?',
+    a: 'We do our best to consider all books that align with our values. When a book is clearly outside this scope we are unable to count it, so it is marked invalid. Choosing from the recommended list keeps every book counting.',
+  },
+  {
+    q: 'Can we buy a book we like online so we can read it?',
+    a: 'Absolutely, though you are not required to buy any book to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Browse our <a href="https://eduvatekids.com/catalog" style="color:#7c3aed;font-weight:bold">catalog</a> any time.',
+  },
+  {
+    q: 'Why is it important to take part in the reading?',
+    a: 'Reading nurtures the heart and the mind. It builds a lifelong love of reading rooted in faith and growing in knowledge, strengthens understanding, and is a joyful habit for the whole family, with a certificate and raffle entry when the goal is met.',
+  },
+]
 
 /** Summer Reading Program registration (written to the `summerReads` collection). */
 // `valid` is an admin's silent review flag: only valid books (valid !== false)
@@ -3998,7 +4038,6 @@ export default function DashboardPage() {
   }
 
   const renderSummer = () => {
-    const scholars = summerReaders.filter((r) => readerLevel(r) === 'scholar').length
     const goalsMet = summerReaders.filter((r) => readerGoalMet(r)).length
     // Total valid books logged (only valid books count towards the record).
     const totalValidBooks = summerReaders.reduce((s, r) => s + readerValidBooksCount(r), 0)
@@ -4048,12 +4087,11 @@ export default function DashboardPage() {
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { label: 'Total Registered', value: String(summerReaders.length) },
             { label: 'Goals Met', value: String(goalsMet) },
             { label: 'Raffle Entries', value: String(raffleEntries) },
-            { label: 'Scholars', value: String(scholars) },
             { label: 'Valid Books', value: String(totalValidBooks) },
             { label: 'Invalid Books', value: String(totalInvalidBooks) },
           ].map((s) => (
@@ -4081,76 +4119,90 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Charts */}
+        {/* Program insights (charts) */}
         {hasData && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Reader distribution by level */}
-            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
-              <p className="font-display text-sm font-bold text-primaryDark">Reader distribution by level</p>
-              <p className="text-xs text-muted">Registered readers and how many have met their goal</p>
-              <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={levelData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="readers" name="Registered" fill={CAT[0]} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="met" name="Goal met" fill={CAT[1]} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+          <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-secondary/15 text-primaryDark">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 15l3-4 3 3 4-6" /></svg>
+              </span>
+              <div>
+                <p className="font-display text-base font-bold text-primaryDark">Program insights</p>
+                <p className="text-xs text-muted">Reader participation, distribution, and book validity at a glance</p>
               </div>
             </div>
 
-            {/* Reader distribution by country */}
-            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
-              <p className="font-display text-sm font-bold text-primaryDark">Reader distribution by country</p>
-              <p className="text-xs text-muted">Where our readers are joining from</p>
-              <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={countryData} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-                    <Bar dataKey="readers" name="Readers" fill={CAT[1]} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            {/* Group 1: Readers */}
+            <p className="mt-6 mb-3 text-[11px] font-bold uppercase tracking-wider text-muted">Readers</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-black/5 bg-gray-50/60 p-4">
+                <p className="text-sm font-bold text-primaryDark">Distribution by level</p>
+                <p className="text-xs text-muted">Registered readers and how many have met their goal</p>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={levelData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e9e9ef" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="readers" name="Registered" fill={CAT[0]} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="met" name="Goal met" fill={CAT[1]} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-black/5 bg-gray-50/60 p-4">
+                <p className="text-sm font-bold text-primaryDark">Distribution by country</p>
+                <p className="text-xs text-muted">Where our readers are joining from</p>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={countryData} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e9e9ef" horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <Tooltip cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                      <Bar dataKey="readers" name="Readers" fill={CAT[1]} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
 
-            {/* Raffle eligibility split */}
-            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
-              <p className="font-display text-sm font-bold text-primaryDark">Raffle eligibility</p>
-              <p className="text-xs text-muted">Readers eligible for the prize draw (US / Nigeria / Canada or admin override)</p>
-              <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={eligibilityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
-                      {eligibilityData.map((_, i) => <Cell key={i} fill={ELIG_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
+            {/* Group 2: Books & eligibility */}
+            <p className="mt-8 mb-3 text-[11px] font-bold uppercase tracking-wider text-muted">Books &amp; eligibility</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-black/5 bg-gray-50/60 p-4">
+                <p className="text-sm font-bold text-primaryDark">Raffle eligibility</p>
+                <p className="text-xs text-muted">Eligible for the draw (US / Nigeria / Canada or admin override)</p>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={eligibilityData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
+                        {eligibilityData.map((_, i) => <Cell key={i} fill={ELIG_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
 
-            {/* Book validity split */}
-            <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
-              <p className="font-display text-sm font-bold text-primaryDark">Books logged: valid vs invalid</p>
-              <p className="text-xs text-muted">Only books from the recommended list count towards the record</p>
-              <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={bookStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
-                      {bookStatusData.map((_, i) => <Cell key={i} fill={BOOK_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="rounded-2xl border border-black/5 bg-gray-50/60 p-4">
+                <p className="text-sm font-bold text-primaryDark">Books logged: valid vs invalid</p>
+                <p className="text-xs text-muted">Only books from the recommended list count towards the record</p>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={bookStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} label={(e) => `${e.name}: ${e.value}`} labelLine={false} style={{ fontSize: 11 }}>
+                        {bookStatusData.map((_, i) => <Cell key={i} fill={BOOK_COLORS[i]} stroke="#fff" strokeWidth={2} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>

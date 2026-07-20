@@ -195,11 +195,11 @@ function buildReminderEmailHtml(): string {
     </div>
     <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
       <p style="margin:0 0 14px"><strong>Assalamu alaikum dear parent,</strong></p>
-      <p style="margin:0 0 14px">MashaAllah — the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with your reader this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
+      <p style="margin:0 0 14px">MashaAllah, the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with your reader this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
       <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
         <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
         <ul style="margin:0;padding-left:20px">
-          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations — those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
+          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
           <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
           <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
         </ul>
@@ -207,7 +207,7 @@ function buildReminderEmailHtml(): string {
       <div style="text-align:center;margin:22px 0">
         <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
         <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush — but do aim to finish reading as soon as you comfortably can. 😊</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
       </div>
       <div style="text-align:center;margin:22px 0">
         <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
@@ -219,7 +219,7 @@ function buildReminderEmailHtml(): string {
 }
 
 /** Summer Reading Program registration (written to the `summerReads` collection). */
-// `valid` is an admin's silent review flag — only valid books (valid !== false)
+// `valid` is an admin's silent review flag: only valid books (valid !== false)
 // count towards the reading goal / raffle eligibility.
 type SummerBookLog = { title: string; author?: string; rating?: number; review?: string; dateFinished?: string; dateLogged?: string; valid?: boolean }
 type SummerReader = {
@@ -963,7 +963,7 @@ export default function DashboardPage() {
             // items already at 0) is always accurate without a manual sync.
             try {
               const norm = (s: unknown) => String(s ?? '').trim().toLowerCase()
-              // Live inventory (SKU, title, quantity) — fetched here so it's in
+              // Live inventory (SKU, title, quantity), fetched here so it's in
               // scope regardless of demo/live branch above.
               const invSnap = await getDocs(collection(db, 'inventory'))
               const invList = invSnap.docs
@@ -1096,9 +1096,9 @@ export default function DashboardPage() {
     (unitsSold.get(item.title.toLowerCase()) ?? 0)
 
   // Restock radar, split into groups by urgency:
-  //  1) urgentOut  — out of stock AND sold before (needs reordering now)
-  //  2) lowStock   — still has stock but at/under the threshold
-  //  3) deadOut    — out of stock but never sold (dead stock, lowest priority)
+  //  1) urgentOut  : out of stock AND sold before (needs reordering now)
+  //  2) lowStock   : still has stock but at/under the threshold
+  //  3) deadOut    : out of stock but never sold (dead stock, lowest priority)
   const restockGroups = useMemo(() => {
     const urgentOut: InventoryItem[] = []
     const lowStock: InventoryItem[] = []
@@ -1274,7 +1274,7 @@ export default function DashboardPage() {
   )
 
   // Reliable revenue breakdown. "Product revenue (net)" is what we actually earned
-  // selling items — sellingPrice×qty minus discounts — and EXCLUDES passthroughs
+  // selling items (sellingPrice×qty minus discounts) and EXCLUDES passthroughs
   // (card fees, shipping, sales tax) that we collect but don't keep. The passthrough
   // parts are surfaced separately so the headline number isn't inflated by them.
   const revenueBreakdown = useMemo(() => {
@@ -1964,7 +1964,7 @@ export default function DashboardPage() {
     if (!catalogDescription.trim()) { setCatalogMessage('Description is required.'); return }
     if (!catalogPublisher.trim()) { setCatalogMessage('Publisher is required.'); return }
     if (catalogCategories.length === 0) { setCatalogMessage('At least 1 category is required.'); return }
-    // Images are optional — an item can be added now and given images later.
+    // Images are optional: an item can be added now and given images later.
     // Until then, a book placeholder is shown wherever the item appears.
 
     setIsUploadingCatalog(true)
@@ -2277,7 +2277,7 @@ export default function DashboardPage() {
 
   // POS scan-to-cart: a scanned/typed code is matched to a bound inventory item.
   // Since the same QR/ISBN is shared by all copies of the same book, a match
-  // means "add one of this book" — we surface a confirmation before it hits the
+  // means "add one of this book", so we surface a confirmation before it hits the
   // cart. Actual stock is deducted when the sale is completed (handleRecordSale),
   // so adding to cart reserves one unit against remaining stock.
   const handlePosScan = (raw: string) => {
@@ -2767,7 +2767,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Revenue breakdown: the headline "Total Sales" is product revenue (net).
-            These are the passthroughs we collect but don't keep — shown separately
+            These are the passthroughs we collect but don't keep, shown separately
             so the numbers are transparent and reconcile to what was charged. */}
         {pulseVisible && (
           <div className="relative z-10 mt-5 rounded-2xl bg-white/80 backdrop-blur-sm p-5 shadow-soft border border-primary/10">
@@ -3113,7 +3113,7 @@ export default function DashboardPage() {
             return (
               <div className="space-y-4">
                 {urgentOut.length > 0 && (
-                  <p className="text-xs font-bold uppercase tracking-wider text-red-600">Sold out — reorder first</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-600">Sold out, reorder first</p>
                 )}
                 {topShown.map((item) => Row(item))}
 
@@ -3497,7 +3497,7 @@ export default function DashboardPage() {
   }, [activeView, userRole])
 
   // Manually send the customer their purchase-confirmation email. Not automatic
-  // on payment — the admin triggers it from the order record.
+  // on payment; the admin triggers it from the order record.
   const sendPurchaseEmailToCustomer = async (order: OnlineOrder) => {
     if (!order.customer?.email) { alert('This order has no customer email.'); return }
     if (!confirm(`Send the purchase email to ${order.customer.email}?`)) return
@@ -4068,7 +4068,7 @@ export default function DashboardPage() {
         <div className="rounded-3xl bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/5 p-5 sm:p-6 border border-primary/10">
           <p className="font-display text-lg font-bold text-primaryDark">🌟 Reading is off to a fantastic start, mashaAllah!</p>
           <p className="mt-1 text-sm text-muted">
-            {summerReaders.length} reader{summerReaders.length === 1 ? '' : 's'} registered, {goalsMet} goal{goalsMet === 1 ? '' : 's'} already met, and {totalValidBooks} valid book{totalValidBooks === 1 ? '' : 's'} logged. Keep the momentum going — the deadline is <strong>31 August</strong>.
+            {summerReaders.length} reader{summerReaders.length === 1 ? '' : 's'} registered, {goalsMet} goal{goalsMet === 1 ? '' : 's'} already met, and {totalValidBooks} valid book{totalValidBooks === 1 ? '' : 's'} logged. Keep the momentum going, the deadline is <strong>31 August</strong>.
           </p>
           <button
             type="button"
@@ -4337,10 +4337,10 @@ export default function DashboardPage() {
                 <tbody>
                   {bookRequests.map((r) => (
                     <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
-                      <td className="py-3 pr-4 text-xs text-muted">{r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : '—'}</td>
+                      <td className="py-3 pr-4 text-xs text-muted">{r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : '-'}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.bookTitle}</span></td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.name}</span><br /><span className="text-xs text-muted">{r.email}</span></td>
-                      <td className="py-3 pr-4 text-xs text-muted">{r.phone || '—'}</td>
+                      <td className="py-3 pr-4 text-xs text-muted">{r.phone || '-'}</td>
                       <td className="py-3 pr-4 font-bold text-primaryDark">{r.quantity ?? 1}</td>
                     </tr>
                   ))}
@@ -4721,7 +4721,7 @@ export default function DashboardPage() {
                 </svg>
               </div>
             </div>
-            {/* Scan to cart — an alternative to typing a search. Scans a bound
+            {/* Scan to cart: an alternative to typing a search. Scans a bound
                 QR/ISBN and, after confirmation, adds that book to the cart. */}
             <button
               type="button"
@@ -6276,7 +6276,7 @@ export default function DashboardPage() {
                   .sort((a, b) => a.title.localeCompare(b.title))
                   .map((i) => (
                     <option key={i.id} value={i.id}>
-                      {i.title}{i.publisher ? ` — ${i.publisher}` : ''}{i.sku ? ` (${i.sku})` : i.isbn ? ` (${i.isbn})` : ''}
+                      {i.title}{i.publisher ? ` (${i.publisher})` : ''}{i.sku ? ` (${i.sku})` : i.isbn ? ` (${i.isbn})` : ''}
                     </option>
                   ))}
               </select>
@@ -6437,7 +6437,7 @@ export default function DashboardPage() {
               placeholder="e.g., 12  (0 = out of stock)"
               className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
             />
-            <p className="mt-1 text-[11px] text-muted">Set to <span className="font-semibold">0</span> to mark out of stock — shoppers then get the reserve/pre-order prompt. Leave blank to keep it always available.</p>
+            <p className="mt-1 text-[11px] text-muted">Set to <span className="font-semibold">0</span> to mark out of stock, and shoppers then get the reserve/pre-order prompt. Leave blank to keep it always available.</p>
           </div>
           {/* Secondary selling price is carried from the linked inventory item. */}
 
@@ -7584,7 +7584,7 @@ export default function DashboardPage() {
               {/* Purchase email (manual): preview the draft, or send it to the customer. */}
               <div className="rounded-xl border border-primary/10 bg-primary/5 p-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted">Customer purchase email</p>
-                <p className="mt-1 text-xs text-muted break-all">To: {expandedOrder.customer?.email || '— no email on file —'}</p>
+                <p className="mt-1 text-xs text-muted break-all">To: {expandedOrder.customer?.email || 'no email on file'}</p>
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     type="button"
@@ -7672,7 +7672,7 @@ export default function DashboardPage() {
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-white/95 backdrop-blur px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">Email draft</h3>
-                <p className="text-xs text-muted break-all">To: {purchaseEmailPreview.customer?.email || '—'} · Subject: Your Eduvate Kids order — ${formatNumber(purchaseEmailPreview.total)} {String(purchaseEmailPreview.currency || 'usd').toUpperCase()}</p>
+                <p className="text-xs text-muted break-all">To: {purchaseEmailPreview.customer?.email || '-'} · Subject: Your Eduvate Kids order, ${formatNumber(purchaseEmailPreview.total)} {String(purchaseEmailPreview.currency || 'usd').toUpperCase()}</p>
               </div>
               <button type="button" onClick={() => setPurchaseEmailPreview(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -7795,7 +7795,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-muted">Registered</p>
                   <p className="mt-1 text-sm font-medium text-ink">
-                    {expandedReader.createdAt?.seconds ? new Date(expandedReader.createdAt.seconds * 1000).toLocaleString() : '—'}
+                    {expandedReader.createdAt?.seconds ? new Date(expandedReader.createdAt.seconds * 1000).toLocaleString() : '-'}
                   </p>
                   <p className="text-sm text-muted">Consent: {expandedReader.consent ? 'Given' : 'Not recorded'}</p>
                 </div>
@@ -7844,7 +7844,7 @@ export default function DashboardPage() {
                         {/* Admin silent review: toggle whether this book counts. */}
                         <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-black/5 pt-2.5">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${invalid ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {invalid ? 'Invalid — not counted' : 'Valid — counts'}
+                            {invalid ? 'Invalid, not counted' : 'Valid, counts'}
                           </span>
                           <button
                             type="button"
@@ -7908,7 +7908,7 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-4 p-5">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                This sends one email to each unique parent email on file. Recipients are gathered on the server — each parent sees only their own address.
+                This sends one email to each unique parent email on file. Recipients are gathered on the server, so each parent sees only their own address.
               </div>
               <div>
                 <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Preview</p>
@@ -7943,7 +7943,7 @@ export default function DashboardPage() {
               {reminderResult && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                   {reminderResult.test
-                    ? <>Test email sent to <strong>{reminderTestEmail.trim()}</strong>{reminderResult.failed > 0 && <span className="text-red-700"> — but it failed to send</span>}. Check the inbox, then send the broadcast below.</>
+                    ? <>Test email sent to <strong>{reminderTestEmail.trim()}</strong>{reminderResult.failed > 0 && <span className="text-red-700">, but it failed to send</span>}. Check the inbox, then send the broadcast below.</>
                     : <>Sent to {reminderResult.sent} of {reminderResult.recipients} parent{reminderResult.recipients === 1 ? '' : 's'}{reminderResult.failed > 0 && <span className="text-red-700"> · {reminderResult.failed} failed</span>}.</>}
                 </div>
               )}

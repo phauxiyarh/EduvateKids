@@ -1,10 +1,10 @@
 /**
- * Summer Reading Program — server-side integrity.
+ * Summer Reading Program: server-side integrity.
  *  - registerSummerReader: creates a registration with a guaranteed-unique code.
  *  - logSummerBook: validates the code, appends a parent-verified book, and
  *    recomputes booksCount + goalMet server-side (client can't inflate counts).
  *
- * Levels are CHOSEN at registration and are FIXED — each level's book count is
+ * Levels are CHOSEN at registration and are FIXED: each level's book count is
  * that reader's goal. Logging more books beyond the goal is welcomed (bonus
  * reading), but it NEVER moves a reader into a different level/category. Reaching
  * the goal marks the level "achieved"; readers may keep logging after that.
@@ -88,8 +88,8 @@ export interface RegisterInput {
 
 /**
  * The raffle prize draw is currently open only to residents of the USA,
- * Nigeria, or Canada. Everyone may still register, read, and earn a certificate
- * — this flag only governs prize-draw eligibility. Matches common
+ * Nigeria, or Canada. Everyone may still register, read, and earn a certificate,
+ * this flag only governs prize-draw eligibility. Matches common
  * spellings/aliases.
  */
 export const RAFFLE_ELIGIBLE_COUNTRIES = [
@@ -194,7 +194,7 @@ export async function registerReader(
 }
 
 /**
- * Re-send the warm welcome email to a parent who already registered — used by an
+ * Re-send the warm welcome email to a parent who already registered, used by an
  * admin "Resend welcome" button for readers who signed up before the welcome
  * email existed (or who never received it). Looks the reader up by code, pulls
  * the details already on file, and re-sends. Never mutates the record.
@@ -232,7 +232,7 @@ export async function resendReaderWelcome(
 /**
  * Resolve a registration's FIXED level. Prefers the explicit `level` field;
  * falls back to a legacy `tier` value; defaults to seedling. Never derived from
- * the book count — the chosen level does not change when books are logged.
+ * the book count, the chosen level does not change when books are logged.
  */
 function resolveLevel(data: { level?: unknown; tier?: unknown }): Exclude<SummerLevel, 'none'> {
   const raw = data.level ?? data.tier;
@@ -242,8 +242,8 @@ function resolveLevel(data: { level?: unknown; tier?: unknown }): Exclude<Summer
 /**
  * A book counts towards the reading goal ONLY if it has NOT been marked invalid
  * by an admin. Books logged before this feature (no `valid` field) count as
- * valid — an admin must explicitly flag one invalid to exclude it. This is the
- * single source of truth for "how many books count" — used everywhere the goal
+ * valid, an admin must explicitly flag one invalid to exclude it. This is the
+ * single source of truth for "how many books count", used everywhere the goal
  * is (re)computed so an admin's silent review of an off-list book immediately
  * affects the reader's progress and raffle eligibility.
  */
@@ -288,7 +288,7 @@ export async function logBook(
     tx.update(ref, {
       booksLogged: nextLogged,
       booksCount,
-      // level/goal are fixed — re-write them so legacy docs get backfilled too.
+      // level/goal are fixed, re-write them so legacy docs get backfilled too.
       level,
       goal,
       goalMet,
@@ -346,7 +346,7 @@ export async function editBook(
 /**
  * ADMIN-ONLY: silently mark a logged book valid or invalid. Off-list books an
  * admin spots during review can be flagged invalid so they DON'T count towards
- * the reading goal / raffle eligibility — without notifying or involving the
+ * the reading goal / raffle eligibility, without notifying or involving the
  * parent (no ownership check; this is an admin action, gated by the callable's
  * admin check). Recomputes booksCount + goalMet from the remaining valid books.
  */
@@ -377,7 +377,7 @@ export async function setBookValidity(
  * ADMIN-ONLY: manually set (or clear) a reader's raffle-eligibility override.
  * By default eligibility is derived from the reader's country
  * (isRaffleEligible). This lets an admin force a reader eligible or ineligible
- * regardless of country — e.g. a verified resident whose country text didn't
+ * regardless of country, e.g. a verified resident whose country text didn't
  * match. `eligible` writes the boolean override; `null` clears it, reverting to
  * the country-derived default (which we recompute and re-store as raffleEligible).
  */

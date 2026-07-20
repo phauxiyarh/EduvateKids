@@ -101,7 +101,7 @@ const policies: {
       },
       {
         heading: 'Cookies & Tracking',
-        content: 'We use cookies and similar technologies in two ways. Strictly necessary cookies keep the site working — for example, remembering your shopping cart, keeping you signed in, and saving your preferences; these are always active. With your permission, we also use analytics cookies (Google/Firebase Analytics) to understand how visitors use the site so we can improve it. Analytics cookies are turned off until you accept them in our cookie banner.'
+        content: 'We use cookies and similar technologies in two ways. Strictly necessary cookies keep the site working, for example, remembering your shopping cart, keeping you signed in, and saving your preferences; these are always active. With your permission, we also use analytics cookies (Google/Firebase Analytics) to understand how visitors use the site so we can improve it. Analytics cookies are turned off until you accept them in our cookie banner.'
       },
       {
         heading: 'Your Choices',

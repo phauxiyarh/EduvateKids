@@ -112,7 +112,7 @@ export function uspsConfigured(): boolean {
  * Resend only delivers to the Resend account owner's email. Using the account owner
  * (thalamuxtech@gmail.com) for now so notifications work in test mode.
  * To send to eduvatekids@gmail.com, verify a domain in Resend and switch ORDER_NOTIFY_FROM
- * to an address on that domain — then this can be any recipient.
+ * to an address on that domain, then this can be any recipient.
  */
 export const ORDER_NOTIFY_TO = 'salam@eduvatekids.com';
 /** From address for all app emails. Uses the verified eduvatekids.com domain in

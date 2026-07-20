@@ -14,7 +14,7 @@ import { COUNTRIES, US_STATES, US_COUNTRY } from '../../../lib/geo'
 const inputClass =
   'w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
 
-// The three reading levels. The chosen level is the child's goal and is FIXED —
+// The three reading levels. The chosen level is the child's goal and is FIXED,
 // reading extra books is welcome, but it never moves them to another level.
 // Pick by where the child actually reads comfortably, not strictly by age.
 const LEVELS = [
@@ -44,7 +44,7 @@ export default function SummerRegisterPage() {
 
   const isUS = form.country === US_COUNTRY
   // The prize raffle is currently open only to USA / Nigeria residents. This
-  // does not block registration — everyone may still join and earn a certificate.
+  // does not block registration, everyone may still join and earn a certificate.
   const raffleEligible = form.country === US_COUNTRY || form.country === 'Nigeria'
   const canSubmit = form.childName.trim() && form.dateOfBirth && form.parentName.trim() && form.parentEmail.trim() && form.country && (!isUS || form.state) && form.consent
 
@@ -148,7 +148,7 @@ export default function SummerRegisterPage() {
               <div className="grid gap-4">
                 <fieldset className="grid gap-2">
                   <legend className="text-sm font-semibold">Choose a Reading Level *</legend>
-                  <p className="text-xs font-normal text-muted">This is your child&apos;s goal for the summer. It stays the same all season — reading extra books is always welcome, but the level won&apos;t change.</p>
+                  <p className="text-xs font-normal text-muted">This is your child&apos;s goal for the summer. It stays the same all season, reading extra books is always welcome, but the level won&apos;t change.</p>
                   <div className="mt-1 grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Reading level">
                     {LEVELS.map((lvl) => {
                       const selected = form.level === lvl.id

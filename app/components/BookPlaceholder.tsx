@@ -6,7 +6,7 @@
  * the left, the front cover facing the viewer, and a thin page-edge strip on the
  * right for a little depth. Plain green cover carrying the Eduvate Kids sprout
  * mark (vector, so it always renders), the word "Book", and the brand name.
- * Pure SVG — scales to any container.
+ * Pure SVG, scales to any container.
  */
 export function BookPlaceholder({
   title = '',
@@ -128,7 +128,7 @@ export function BookPlaceholder({
         {/* divider */}
         <line x1="-40" y1="42" x2="40" y2="42" stroke="#ffffff" strokeOpacity="0.45" strokeWidth="1.4" />
 
-        {/* brand name — sized + spaced to sit inside the cover */}
+        {/* brand name, sized + spaced to sit inside the cover */}
         <text
           x="0" y="60" textAnchor="middle"
           fontFamily="Verdana, Geneva, sans-serif"

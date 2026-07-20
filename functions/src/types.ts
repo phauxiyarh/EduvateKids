@@ -13,7 +13,7 @@ export type OrderStatus =
   | 'shipped'
   | 'cancelled';
 
-/** A single line item as submitted by the client (quantities only — prices are recomputed server-side). */
+/** A single line item as submitted by the client (quantities only; prices are recomputed server-side). */
 export interface CartLineInput {
   id: string; // catalog/inventory document id
   quantity: number;

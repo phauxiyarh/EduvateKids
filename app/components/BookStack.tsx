@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * BookStack — a 3D stack of books that piles up in a continuous loop.
+ * BookStack: a 3D stack of books that piles up in a continuous loop.
  *
  * Each book is drawn in a light isometric projection (a cover top face, a front
  * spine face, and a page edge) so the pile reads as real, dimensional books.
@@ -39,8 +39,8 @@ export function BookStack({
   uid: string
   className?: string
   loopSeconds?: number
-  // 'loop' — pile up, fade, repeat forever (marketing).
-  // 'progress' — a real stack of `count` books that drop in once and stay
+  // 'loop': pile up, fade, repeat forever (marketing).
+  // 'progress': a real stack of `count` books that drop in once and stay
   //   (used on the log page where the height IS the child's progress).
   mode?: 'loop' | 'progress'
 }) {
@@ -59,7 +59,7 @@ export function BookStack({
 
   // One shared loop clock for every book so the pile fills in order, holds
   // together, then ALL books fade out in unison before the loop restarts.
-  // (Per-book animation-delay is avoided — it phase-shifts books so they never
+  // (Per-book animation-delay is avoided, it phase-shifts books so they never
   // clear together. Instead each book gets its own keyframes with a staggered
   // drop-in but a SHARED fade-out window.)
   const n = Math.max(count, 1)

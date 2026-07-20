@@ -1,6 +1,6 @@
 /**
  * Client-side order/cart types for Eduvate Kids.
- * Mirror of functions/src/types.ts — keep the two in sync.
+ * Mirror of functions/src/types.ts, keep the two in sync.
  * (No server secrets or logic here; purely shared shapes for the checkout UI.)
  */
 
@@ -8,7 +8,7 @@ export type PaymentProvider = 'stripe' | 'paypal'
 
 export type OrderStatus = 'pending' | 'paid' | 'failed' | 'shipped' | 'cancelled'
 
-/** What the cart sends to the payment function — quantities only; prices are computed server-side. */
+/** What the cart sends to the payment function: quantities only; prices are computed server-side. */
 export interface CartLineInput {
   id: string
   quantity: number

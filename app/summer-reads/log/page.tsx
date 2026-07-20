@@ -59,7 +59,7 @@ const LEVEL_GOALS: Record<Exclude<Level, 'none'>, number> = { seedling: 4, reade
 
 /**
  * The chosen level is FIXED. Older docs may only carry a legacy `tier`; fall
- * back to it, then to seedling. The goal is that level's book target — it never
+ * back to it, then to seedling. The goal is that level's book target, it never
  * changes based on how many books are logged.
  */
 function resolveLevel(data: Partial<ChildDoc> & { tier?: Level }): Exclude<Level, 'none'> {
@@ -295,7 +295,7 @@ export default function SummerLogPage() {
         dateFinished,
         dateLogged: todayStr(),
       }
-      // Append (not prepend) so the local order mirrors the server array —
+      // Append (not prepend) so the local order mirrors the server array,
       // otherwise edit/delete-by-index would target the wrong entry.
       setBooksLogged((prev) => [...prev, newEntry])
       setBooksCount(result.booksCount)
@@ -313,7 +313,7 @@ export default function SummerLogPage() {
     }
   }
 
-  // Progress figures — always relative to THIS reader's chosen goal.
+  // Progress figures, always relative to THIS reader's chosen goal.
   const reachedGoal = booksCount >= goal
   const booksToGoal = Math.max(0, goal - booksCount)
   const bonusBooks = Math.max(0, booksCount - goal)
@@ -398,7 +398,7 @@ export default function SummerLogPage() {
         ) : (
           /* ---------- STATE 2: progress + log form ---------- */
           <div className="animate-fadeIn">
-            {/* Animated full-screen celebration — fires for ANY level's goal. */}
+            {/* Animated full-screen celebration, fires for ANY level's goal. */}
             {celebrateGoal && (
               <SummerCelebration label={celebrateGoal} onDone={() => setCelebrateGoal(null)} />
             )}
@@ -408,7 +408,7 @@ export default function SummerLogPage() {
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
                 <div className="relative flex h-40 w-40 flex-shrink-0 items-center justify-center">
                   <div className="pointer-events-none absolute inset-3 rounded-full bg-gradient-to-br from-primary/15 to-secondary/15 blur-xl" aria-hidden="true" />
-                  {/* 3D book stack — its height IS the child's real progress. Keyed on
+                  {/* 3D book stack, its height IS the child's real progress. Keyed on
                      booksCount so a new book drops onto the pile when logged. */}
                   <BookStack
                     key={booksCount}
@@ -440,8 +440,8 @@ export default function SummerLogPage() {
                   <p className="mt-1 text-sm text-muted">
                     {reachedGoal
                       ? bonusBooks > 0
-                        ? <>You&apos;ve read <span className="font-semibold text-primaryDark">{bonusBooks}</span> bonus {bonusBooks === 1 ? 'book' : 'books'} beyond your goal — mashaAllah! Keep going.</>
-                        : <>You reached your goal — mashaAllah! Every extra book you log is a bonus.</>
+                        ? <>You&apos;ve read <span className="font-semibold text-primaryDark">{bonusBooks}</span> bonus {bonusBooks === 1 ? 'book' : 'books'} beyond your goal, mashaAllah! Keep going.</>
+                        : <>You reached your goal, mashaAllah! Every extra book you log is a bonus.</>
                       : <>Read <span className="font-semibold text-primaryDark">{booksToGoal}</span> more to reach your <span className="font-semibold text-primaryDark">{levelLabel}</span> goal.</>}
                   </p>
                 </div>
@@ -666,7 +666,7 @@ export default function SummerLogPage() {
                           </div>
                         )}
 
-                        {/* inline delete confirm — requires the parent email on file */}
+                        {/* inline delete confirm, requires the parent email on file */}
                         {isConfirming && !isEditing && (
                           <div className="animate-slideDown border-t border-red-100 bg-red-50/70 px-4 py-3 pl-5">
                             <p className="text-sm font-medium text-red-700">Delete this book from the shelf?</p>

@@ -153,7 +153,7 @@ export default function CreateCashierPage() {
       setCopiedId(id)
       setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1600)
     } catch {
-      // Clipboard unavailable — silently ignore
+      // Clipboard unavailable, silently ignore
     }
   }
 

@@ -60,7 +60,7 @@ export async function priceCart(
   destinationState = '',
   // Block the sale on insufficient stock BEFORE payment. At finalize (after the
   // customer has already paid) pass false so a paid order is always recorded
-  // rather than lost — stock is reconciled via inventory decrement instead.
+  // rather than lost, stock is reconciled via inventory decrement instead.
   enforceStock = true
 ): Promise<{
   items: OrderItem[];
@@ -114,7 +114,7 @@ export async function priceCart(
 
     items.push({
       id: snap.id,
-      // Only include optional keys when present — Firestore rejects `undefined`
+      // Only include optional keys when present, Firestore rejects `undefined`
       // values, so an item with no linked inventory/SKU must omit them entirely.
       ...(invRef ? { inventoryId: invRef.id } : {}),
       ...(sku ? { sku } : {}),

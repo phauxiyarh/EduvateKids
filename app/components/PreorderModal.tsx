@@ -1,11 +1,11 @@
 'use client'
 
 /**
- * PreorderModal — shown when a shopper tries to add an out-of-stock book to the
+ * PreorderModal: shown when a shopper tries to add an out-of-stock book to the
  * cart. Explains the book is out of stock and lets them reserve copies via a
  * pre-order request (name, email, phone, quantity). On submit it calls the
  * `submitBookRequest` Cloud Function, which records the request for the admin
- * and emails a notification. Purely a reservation of intent — no payment.
+ * and emails a notification. Purely a reservation of intent, no payment.
  */
 
 import { useEffect, useState } from 'react'
@@ -183,7 +183,7 @@ export function PreorderModal({
                 <><svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Reserving…</>
               ) : 'Reserve my copies'}
             </button>
-            <p className="mt-2 text-center text-xs text-muted">Free to reserve — no payment now.</p>
+            <p className="mt-2 text-center text-xs text-muted">Free to reserve, no payment now.</p>
           </form>
         )}
       </div>

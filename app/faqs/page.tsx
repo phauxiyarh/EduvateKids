@@ -48,7 +48,55 @@ const PaymentIcon = ({ className }: IconProps) => (
   </svg>
 )
 
+const SummerReadsIcon = ({ className }: IconProps) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+  </svg>
+)
+
 const faqCategories = [
+  {
+    category: 'Summer Reads Program',
+    Icon: SummerReadsIcon,
+    faqs: [
+      {
+        question: 'Can I begin to log the books I finish reading?',
+        answer: 'Yes! As soon as you finish a book, you can log it. Just let your parent or guardian know first. They will help confirm that you truly read and understood the book, and then you can go ahead and log it with them.'
+      },
+      {
+        question: 'What do I need to log a book?',
+        answer: 'You need your registration code. Share it with your parent and ask for their help to log the book together, since every book is parent verified. Once you are ready, head to the Log a Book page at eduvatekids.com/summer-reads/log.'
+      },
+      {
+        question: 'What if I read a book outside the recommended list?',
+        answer: 'We will do our best to consider all books that align with our values and the moral nurture we seek to share within the community. However, when a book is clearly outside this scope, we are unable to count it, so it will be marked invalid. To be safe, please choose from the recommended list so every book you read counts towards your goal and the raffle draw.'
+      },
+      {
+        question: 'Can we buy a book we like online from Eduvate Kids so we can read it?',
+        answer: 'Absolutely! While we are always happy to receive your purchase, you are not required to buy any of our books to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Feel free to browse and place your order in our catalog at eduvatekids.com/catalog.'
+      },
+      {
+        question: 'Why is it important to take part in the reading?',
+        answer: 'Reading nurtures the heart and the mind. Taking part helps your child build a lifelong love of reading that is rooted in faith and growing in knowledge, strengthens understanding and vocabulary, and connects them with beautiful Islamic stories and values. It is also a joyful shared habit for the whole family, and completing the goal earns a certificate and a place in the raffle draw.'
+      },
+      {
+        question: 'How many books does my child need to read?',
+        answer: 'It depends on the reading level chosen at registration. Early Readers aim for 4 books, Growing Readers aim for 6 books, and Confident Readers aim for 10 books. Only valid books from the recommended list count towards the goal.'
+      },
+      {
+        question: 'Is there a deadline?',
+        answer: 'The program runs until 31 August. There is no rush, but we encourage you to enjoy your reading and aim to finish as soon as you comfortably can.'
+      },
+      {
+        question: 'Who can enter the raffle draw?',
+        answer: 'Readers who meet their goal with valid books and reside in the USA, Nigeria, or Canada are entered into the raffle draw. Everyone is welcome to register, read, and earn a certificate regardless of location.'
+      },
+      {
+        question: 'I lost my registration code. What should I do?',
+        answer: 'No problem. Ask your parent to check the welcome email sent at registration, as the code is shown there. If you still cannot find it, contact us and we will be happy to help.'
+      }
+    ]
+  },
   {
     category: 'Orders & Shipping',
     Icon: ShippingIcon,

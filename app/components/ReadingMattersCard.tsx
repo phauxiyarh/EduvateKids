@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * "Rooted in Faith. Growing in Knowledge" hero card — a premium, choreographed
+ * "Rooted in Faith. Growing in Knowledge" hero card, a premium, choreographed
  * SVG scene of two happy Muslim children (a girl in hijab, a boy in a kufi)
  * reading together and earning a reading award, set in a layered, softly-lit
  * landscape with a mosque and a growing tree. Benefits scroll as a marquee.
@@ -70,7 +70,7 @@ export function ReadingMattersCard() {
            trunk rises from its foot on the ground (260,164); the crown emerges
            from the trunk top (260,120); each leaf blooms from its own centre.
            NOTE: these are qualified with 'svg' so they out-specify the generic
-           'svg [class*=rm-] { transform-box: fill-box }' rule above — otherwise
+           'svg [class*=rm-] { transform-box: fill-box }' rule above, otherwise
            the view-box origin gets clobbered and the pivot flies off (tree then
            appears to grow from the sky). */
         .reading-card :global(svg .rm-trunk) { transform-box: view-box; transform-origin: 260px 164px; }
@@ -105,7 +105,7 @@ export function ReadingMattersCard() {
         .reading-card.is-active :global(.rm-child) { animation: rm-breathe 4.6s ease-in-out infinite; }
         .reading-card.is-active :global(.rm-child-2) { animation-delay: -1.7s; }
 
-        /* rising knowledge sparkles — fade in with the brightening, drift up. */
+        /* rising knowledge sparkles, fade in with the brightening, drift up. */
         @keyframes rm-sparkcycle {
           0%,18% { opacity: 0; transform: translateY(6px) scale(.5) rotate(0); }
           40%    { opacity: 1; transform: translateY(0) scale(1) rotate(20deg); }
@@ -338,7 +338,7 @@ export function ReadingMattersCard() {
             <linearGradient id="rm-minaret" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#1A7A3C" /><stop offset="100%" stopColor="#0A4423" />
             </linearGradient>
-            {/* dusk veil — deep blue overhead easing to a warm horizon */}
+            {/* dusk veil, deep blue overhead easing to a warm horizon */}
             <linearGradient id="rm-dusk" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#243B6B" />
               <stop offset="55%" stopColor="#3E5687" />
@@ -352,11 +352,11 @@ export function ReadingMattersCard() {
           <rect width="340" height="200" fill="url(#rm-warm)" />
 
           <g className="rm-scene">
-            {/* sky glow disc — always present, its opacity is the atmosphere's warmth */}
+            {/* sky glow disc, always present, its opacity is the atmosphere's warmth */}
             <circle className="rm-glow" cx="298" cy="40" r="52" fill="url(#rm-sunrad)" />
             <circle className="rm-glow2" cx="298" cy="40" r="44" fill="url(#rm-sunrad)" />
 
-            {/* stars — appear as the sky brightens, brightest at peak */}
+            {/* stars, appear as the sky brightens, brightest at peak */}
             <g>
               {[
                 { x: 96, y: 30, r: 2.2 }, { x: 132, y: 20, r: 1.6 }, { x: 60, y: 48, r: 1.8 },
@@ -392,7 +392,7 @@ export function ReadingMattersCard() {
             <path d="M0 152 Q70 132 150 150 T340 148 L340 163 L0 163 Z" fill="#CFE5D6" opacity="0.7" />
             <path d="M0 158 Q120 146 250 156 T340 155 L340 163 L0 163 Z" fill="#C3DCCB" opacity="0.85" />
 
-            {/* mosque — dimensional / 3D shaded */}
+            {/* mosque, dimensional / 3D shaded */}
             <g>
               {/* left minaret with cap + finial */}
               <rect x="11" y="108" width="6" height="55" rx="2" fill="url(#rm-minaret)" />
@@ -423,7 +423,7 @@ export function ReadingMattersCard() {
               <path d="M44 140 a3 3 0 016 0 v6 h-6z" fill="#0D5C2E" opacity="0.45" />
             </g>
 
-            {/* tree — a real sapling-to-tree growth: the trunk rises out of the
+            {/* tree, a real sapling-to-tree growth: the trunk rises out of the
                ground (pivoting on its foot) pushing up the canopy, and the leaf
                clusters bloom in outward from the centre. Foot stays fixed at the
                ground line (y=164), same baseline as the kids. */}
@@ -582,7 +582,7 @@ export function ReadingMattersCard() {
               </g></g>
             </g>
 
-            {/* rising knowledge sparkles — soft glow (halo circles, no filter for perf) */}
+            {/* rising knowledge sparkles, soft glow (halo circles, no filter for perf) */}
             <g>
               {[
                 { x: 168, y: 92, d: '1.2s', c: '#F0C766', r: 1 },
@@ -600,7 +600,7 @@ export function ReadingMattersCard() {
             </g>
 
             {/* atmosphere: a cool dusk veil that lifts as the day brightens, then
-               settles back — this is what drives the dim → bright → dim loop */}
+               settles back, this is what drives the dim → bright → dim loop */}
             <rect className="rm-atmos" width="340" height="200" fill="url(#rm-dusk)" style={{ mixBlendMode: 'multiply' }} />
           </g>
 

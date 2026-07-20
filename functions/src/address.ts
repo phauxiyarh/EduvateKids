@@ -77,7 +77,7 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
   });
 
   // 404 = no match; 400 = the address as entered could not be resolved. Both
-  // mean "we could not verify this address" — return a soft failure so the
+  // mean "we could not verify this address", return a soft failure so the
   // customer is asked to check it, rather than throwing (which would silently
   // let a bad address through in the client's catch).
   if (res.status === 404 || res.status === 400) {
@@ -115,7 +115,7 @@ export async function validateUsAddress(addr: ShippingAddress): Promise<AddressV
   //   Y = fully confirmed, D = primary confirmed (secondary missing),
   //   S = primary confirmed (secondary present but not in USPS's table), N = not confirmed.
   // Only N means the address is genuinely undeliverable, so we reject that.
-  // Y, D and S are all real, deliverable buildings — accept them (many valid
+  // Y, D and S are all real, deliverable buildings, accept them (many valid
   // apartments simply aren't in USPS's secondary database, which returns S).
   if (dpv === 'N') {
     return { valid: false, corrected: null, changed: false, message: 'We could not verify that address. Please check the street number, city, state, and ZIP.' };

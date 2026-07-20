@@ -1,8 +1,8 @@
 /**
- * Eduvate Kids — Cloud Functions entrypoint.
+ * Eduvate Kids: Cloud Functions entrypoint.
  *
  * STRIPE is fully wired (test-mode ready). It stays guarded until the Blaze plan
- * is on and STRIPE_SECRET_KEY is set — then it creates real PaymentIntents.
+ * is on and STRIPE_SECRET_KEY is set, then it creates real PaymentIntents.
  * PAYPAL is deferred: its callables remain guarded stubs (Phase D).
  *
  * Security invariants:
@@ -219,7 +219,7 @@ export const stripeWebhook = onRequest(
         });
         logger.info('Order finalized from webhook', { orderId: result.orderId, created: result.created, pi: pi.id });
 
-        // Notify the store on the FIRST creation only (idempotent — no duplicate
+        // Notify the store on the FIRST creation only (idempotent, no duplicate
         // emails if Stripe retries the webhook). Email failures never fail the webhook.
         if (result.created) {
           await sendOrderNotification({
@@ -253,7 +253,7 @@ export const stripeWebhook = onRequest(
 /**
  * Client backstop: after the browser confirms payment, it calls this with the
  * PaymentIntent id. We fetch the PI from Stripe, verify it actually succeeded,
- * then finalize the order. Idempotent (deterministic order id) — a no-op if the
+ * then finalize the order. Idempotent (deterministic order id), a no-op if the
  * webhook already recorded it. Guarantees an order even if the webhook is delayed.
  */
 export const finalizeStripeOrder = onCall(
@@ -373,7 +373,7 @@ export const deleteSummerBook = onCall({ cors: ALLOWED_ORIGINS }, async (request
 /**
  * Re-send the Summer Reads welcome email to a reader's parent (admin action for
  * readers who signed up before the welcome email existed). Requires BOTH the code
- * and the parent email on file — a bare code is not enough to trigger an email to
+ * and the parent email on file, a bare code is not enough to trigger an email to
  * that inbox, which prevents anyone from spamming a parent by guessing codes.
  */
 export const resendSummerWelcome = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
@@ -438,8 +438,8 @@ export const setSummerReaderEligibility = onCall({ cors: ALLOWED_ORIGINS }, asyn
  * were sent / failed.
  *
  * TEST MODE: if a valid `testEmail` is supplied, the email is sent ONLY to that
- * one address (a preview send for the admin to check before the real broadcast)
- * — the registered parents are NOT contacted. The response carries `test: true`.
+ * one address (a preview send for the admin to check before the real broadcast),
+ * the registered parents are NOT contacted. The response carries `test: true`.
  */
 export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
   await assertAdmin(request);
@@ -487,7 +487,7 @@ export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLO
 /**
  * Record a shopper's reservation for an out-of-stock book and notify the admin.
  * Written to the `bookRequests` collection (admin-only read; create is locked to
- * this function via Firestore rules). No payment — a reservation of intent only.
+ * this function via Firestore rules). No payment, a reservation of intent only.
  */
 export const submitBookRequest = onCall(
   { secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS },
@@ -539,7 +539,7 @@ export const submitBookRequest = onCall(
 
 /**
  * Manually send a customer their purchase-confirmation email for an existing
- * order (admin action — this email is NOT sent automatically on payment). Loads
+ * order (admin action, this email is NOT sent automatically on payment). Loads
  * the order server-side so the email always reflects the real order record.
  */
 export const sendPurchaseEmail = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
@@ -609,7 +609,7 @@ export const validateAddress = onCall(
   }
 );
 
-// ─────────────────────────── PayPal (deferred — Phase D) ───────────────────────────
+// ─────────────────────────── PayPal (deferred, Phase D) ───────────────────────────
 // Intentionally NOT deployed yet. The PayPal callables + their secrets
 // (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET) are added in Phase D so the current
 // Stripe-only deploy doesn't prompt for PayPal secrets that don't exist yet.

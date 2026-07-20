@@ -1,11 +1,11 @@
 /**
- * Cookie / analytics consent — client-side only (this is a static-export site,
+ * Cookie / analytics consent, client-side only (this is a static-export site,
  * so there is no server to set cookies). The user's choice is stored in
  * localStorage and gates any non-essential tracking (Firebase Analytics).
  *
  * Categories:
  *  - "necessary" cookies (cart, admin session, saved preferences) are always on
- *    and are NOT covered by this consent — the site can't function without them.
+ *    and are NOT covered by this consent, the site can't function without them.
  *  - "analytics" is the only non-essential category and is OFF until the user
  *    opts in.
  */
@@ -37,7 +37,7 @@ export function setConsent(choice: ConsentChoice): void {
   try {
     window.localStorage.setItem(CONSENT_KEY, choice)
   } catch {
-    /* storage unavailable (private mode) — consent simply won't persist */
+    /* storage unavailable (private mode), consent simply won't persist */
   }
   window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: choice }))
 }

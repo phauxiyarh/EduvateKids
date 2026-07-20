@@ -740,7 +740,7 @@ export default function HomePage() {
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">Order via WhatsApp</h2>
               <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">
                 Rather chat than check out online? Scan the QR code or tap below to browse our
-                complete WhatsApp catalog and place your order directly with us — a simple
+                complete WhatsApp catalog and place your order directly with us, a simple
                 alternative to ordering through the online store.
               </p>
               <p className="mt-4 text-sm text-muted">

@@ -58,7 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
     } catch {
-      /* storage full / unavailable — non-fatal */
+      /* storage full / unavailable, non-fatal */
     }
   }, [items, hydrated])
 

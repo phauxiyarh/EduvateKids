@@ -69,7 +69,7 @@ export default function CheckoutPage() {
           setAddress(vr.corrected)
         }
       } catch {
-        /* validation unavailable — proceed with entered address */
+        /* validation unavailable, proceed with entered address */
       }
 
       const call = httpsCallable(functions, 'createStripePaymentIntent')
@@ -330,7 +330,7 @@ function BrandChip({ label, children }: { label: string; children: React.ReactNo
 
 /**
  * A friendly strip that shows the payment methods we accept, with real brand
- * marks. Informational only — which options actually appear in the Stripe
+ * marks. Informational only: which options actually appear in the Stripe
  * Payment Element is controlled by what is enabled in the Stripe Dashboard.
  */
 function AcceptedMethods() {
@@ -374,7 +374,7 @@ function AcceptedMethods() {
           <svg viewBox="0 0 44 20" className="h-4"><rect width="44" height="20" rx="4" fill="#00D66F" /><text x="22" y="14" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="10" fontWeight="700" fill="#011E0F">link</text></svg>
         </BrandChip>
       </div>
-      <p className="mt-2.5 text-xs text-muted">Credit &amp; debit cards and wallets accepted. Choose your preferred method below — all payments are processed securely.</p>
+      <p className="mt-2.5 text-xs text-muted">Credit &amp; debit cards and wallets accepted. Choose your preferred method below, all payments are processed securely.</p>
     </div>
   )
 }

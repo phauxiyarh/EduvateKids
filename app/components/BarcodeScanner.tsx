@@ -74,7 +74,7 @@ export function BarcodeScanner({
             } catch { /* no audio */ }
             onDetected(decodedText)
           },
-          () => { /* per-frame decode failure — ignore */ }
+          () => { /* per-frame decode failure, ignore */ }
         )
       } catch (err) {
         if (!cancelled) {
@@ -124,7 +124,7 @@ export function BarcodeScanner({
             </div>
           )}
 
-          {/* Manual entry fallback — always available */}
+          {/* Manual entry fallback, always available */}
           <form
             onSubmit={(e) => { e.preventDefault(); const v = manual.trim(); if (v) { onDetected(v); setManual('') } }}
             className="mt-4 flex gap-2"

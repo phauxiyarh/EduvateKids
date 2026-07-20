@@ -32,7 +32,7 @@ const steps = [
   { title: 'Register your child', text: 'Sign up in a minute and receive a unique reading code.', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { title: 'Choose great books', text: 'Pick Islamic stories, prophets & companions, Arabic readers, and more.', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   { title: 'Log each book', text: 'Enter your code and log every book your child finishes (parent-verified).', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-  { title: 'Earn your certificate', text: 'Reach your chosen level’s goal to earn its certificate — you can keep reading more books and log them.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4', highlight: true },
+  { title: 'Earn your certificate', text: 'Reach your chosen level’s goal to earn its certificate, you can keep reading more books and log them.', icon: 'M8 21h8m-4-4v4m5-16v3a5 5 0 01-10 0V5a1 1 0 011-1h8a1 1 0 011 1zm0 0h3a2 2 0 01-2 4m-12-4H4a2 2 0 002 4', highlight: true },
   { title: 'Win the raffle draw', text: 'Meet your goal and you’re entered into your category’s raffle to win a $30 store credit.', icon: 'M5 5a2 2 0 00-2 2v2a2 2 0 010 4v2a2 2 0 002 2h14a2 2 0 002-2v-2a2 2 0 010-4V7a2 2 0 00-2-2H5z', highlight: true },
 ]
 
@@ -57,7 +57,7 @@ const prizes = [
   },
   {
     text: 'Winners chosen by raffle draw',
-    sub: '1 winner per category — every qualifying reader has a chance.',
+    sub: '1 winner per category, every qualifying reader has a chance.',
     tile: 'from-secondary to-pink-600',
     icon: (
       // Ticket / raffle
@@ -210,7 +210,7 @@ export default function SummerReadsPage() {
         }
         .reveal.is-visible .sr-sheen { animation: sr-sheen 2.6s ease-in-out 0.6s 1 both; }
 
-        /* Bold, animated goal number pill — a lively pulse to draw the eye. */
+        /* Bold, animated goal number pill, a lively pulse to draw the eye. */
         @keyframes sr-numpulse {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.12); }
@@ -367,7 +367,7 @@ export default function SummerReadsPage() {
             </h1>
             <p className="mt-4 text-base sm:text-lg text-muted leading-relaxed">
               A joyful summer reading challenge for ages 4-18. Read Islamic and Arabic books,
-              log your progress, and earn a certificate when you reach your goal — plus a chance of winning $30 store credit. Early, Growing, or Confident Readers.
+              log your progress, and earn a certificate when you reach your goal, plus a chance of winning $30 store credit. Early, Growing, or Confident Readers.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
               <Link href="/summer-reads/register" className="btn-shine inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.3)] transition-all duration-300 hover:-translate-y-0.5">
@@ -440,12 +440,12 @@ export default function SummerReadsPage() {
             <div className="text-center">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Reading Levels</p>
               <h2 className="mt-4 font-display text-2xl sm:text-4xl">Choose your reading level</h2>
-              <p className="mt-3 text-muted">Pick one level as your summer goal at registration — it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Every reader who meets their goal is entered into their category&apos;s raffle to win a $30 store credit (raffle open to USA &amp; Nigeria residents).</p>
+              <p className="mt-3 text-muted">Pick one level as your summer goal at registration, it stays the same all season. Reach the goal to earn its certificate; reading extra books is always welcome. Every reader who meets their goal is entered into their category&apos;s raffle to win a $30 store credit (raffle open to USA &amp; Nigeria residents).</p>
             </div>
             <div className="reveal-stagger mt-10 grid gap-6 sm:grid-cols-3">
               {tiers.map((t) => (
                 <div key={t.name} className="card-hover rounded-3xl bg-white p-6 text-center shadow-soft border border-primary/10 hover:-translate-y-1.5">
-                  {/* 3D book stack that piles up on a loop — height reflects the goal */}
+                  {/* 3D book stack that piles up on a loop, height reflects the goal */}
                   <div className="relative mx-auto h-32 w-32">
                     <BookStack count={t.books} palette={STACK_PALETTES[t.stack]} uid={t.stack} className="h-full w-full" loopSeconds={6} />
                     <span className={`sr-numpill pointer-events-none absolute -right-1 -top-1 flex h-12 w-12 flex-col items-center justify-center rounded-full bg-gradient-to-br ${t.color} font-display text-2xl font-extrabold leading-none text-white shadow-[0_8px_22px_rgba(0,0,0,0.22)] ring-2 ring-white`}>
@@ -483,7 +483,7 @@ export default function SummerReadsPage() {
                   </li>
                 ))}
               </ul>
-              <p className="relative mt-5 text-xs text-muted">Winners are drawn by raffle after the program ends — one per reading category — and announced by email. The prize raffle draw is currently open only to residents of the USA and Nigeria. Every reader who meets their category&apos;s book goal keeps their certificate, wherever they live.</p>
+              <p className="relative mt-5 text-xs text-muted">Winners are drawn by raffle after the program ends, one per reading category, and announced by email. The prize raffle draw is currently open only to residents of the USA and Nigeria. Every reader who meets their category&apos;s book goal keeps their certificate, wherever they live.</p>
             </div>
             <div className="rounded-3xl bg-gradient-to-br from-purple-50 to-pink-50 p-6 sm:p-8 shadow-soft border border-primary/10">
               <h3 className="font-display text-2xl gradient-text">Eligible Books</h3>

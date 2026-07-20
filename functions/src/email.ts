@@ -27,7 +27,7 @@ export async function sendOrderNotification(params: {
   live: boolean;
 }): Promise<void> {
   if (!emailConfigured()) {
-    logger.info('Order email skipped — RESEND_API_KEY not set', { orderId: params.orderId });
+    logger.info('Order email skipped: RESEND_API_KEY not set', { orderId: params.orderId });
     return;
   }
 
@@ -78,19 +78,19 @@ export async function sendOrderNotification(params: {
       from: ORDER_NOTIFY_FROM,
       to: ORDER_NOTIFY_TO,
       replyTo: params.customer.email,
-      subject: `New order — $${params.total.toFixed(2)} ${cur}${params.live ? '' : ' (TEST)'}`,
+      subject: `New order: $${params.total.toFixed(2)} ${cur}${params.live ? '' : ' (TEST)'}`,
       html,
     });
     logger.info('Order notification email sent', { orderId: params.orderId });
   } catch (err) {
-    // Never fail the webhook because of email — just log.
+    // Never fail the webhook because of email, just log.
     logger.error('Failed to send order notification email', err);
   }
 }
 
 /**
  * Notify the admin that a shopper reserved (pre-ordered) an out-of-stock book.
- * No-op (logged) if RESEND_API_KEY is not configured — never blocks the request.
+ * No-op (logged) if RESEND_API_KEY is not configured, never blocks the request.
  */
 export async function sendBookRequestNotification(params: {
   requestId: string;
@@ -101,7 +101,7 @@ export async function sendBookRequestNotification(params: {
   phone?: string;
 }): Promise<void> {
   if (!emailConfigured()) {
-    logger.info('Book-request email skipped — RESEND_API_KEY not set', { requestId: params.requestId });
+    logger.info('Book-request email skipped: RESEND_API_KEY not set', { requestId: params.requestId });
     return;
   }
   const resend = new Resend(RESEND_API_KEY.value());
@@ -124,7 +124,7 @@ export async function sendBookRequestNotification(params: {
       from: ORDER_NOTIFY_FROM,
       to: ORDER_NOTIFY_TO,
       replyTo: params.email,
-      subject: `Book reservation — ${params.quantity}× ${params.bookTitle}`,
+      subject: `Book reservation: ${params.quantity}× ${params.bookTitle}`,
       html,
     });
     logger.info('Book-request notification email sent', { requestId: params.requestId });
@@ -147,7 +147,7 @@ export async function sendReaderWelcome(params: {
   goal: number;
 }): Promise<void> {
   if (!emailConfigured()) {
-    logger.info('Reader welcome email skipped — RESEND_API_KEY not set', { code: params.code });
+    logger.info('Reader welcome email skipped: RESEND_API_KEY not set', { code: params.code });
     return;
   }
   const resend = new Resend(RESEND_API_KEY.value());
@@ -163,17 +163,17 @@ export async function sendReaderWelcome(params: {
     <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
       <p style="margin:0 0 14px"><strong>Assalamu alaikum ${esc(params.parentName)},</strong></p>
       <p style="margin:0 0 14px">JazakAllahu khayran for registering <strong>${child}</strong> for Summer Reads! We're so excited to have your family join us this summer, insha'Allah. 🎉</p>
-      <p style="margin:0 0 18px">You've taken a beautiful step — nurturing a love of reading that's <em>rooted in faith and growing in knowledge.</em></p>
+      <p style="margin:0 0 18px">You've taken a beautiful step, nurturing a love of reading that's <em>rooted in faith and growing in knowledge.</em></p>
 
       <div style="text-align:center;margin:22px 0">
         <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">${child}'s reading code</p>
         <div style="display:inline-block;border:2px dashed #7c3aed;border-radius:14px;padding:12px 26px;font-size:26px;font-weight:bold;letter-spacing:3px;color:#4c1d95">${esc(params.code)}</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Keep this handy — you'll need it every time you want to log a book.</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">Keep this handy, you'll need it every time you want to log a book.</p>
       </div>
 
       <p style="margin:20px 0 8px;font-weight:bold">Here's how it works:</p>
       <ul style="margin:0 0 18px;padding-left:20px">
-        <li style="margin-bottom:6px">📚 <strong>Choose great books</strong> — Islamic stories, prophets &amp; companions, Arabic readers, and more.</li>
+        <li style="margin-bottom:6px">📚 <strong>Choose great books:</strong> Islamic stories, prophets &amp; companions, Arabic readers, and more.</li>
         <li style="margin-bottom:6px">✍️ <strong>Log each book:</strong> when ${child} finishes a book, go to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">Log a Book</a> using the code above (parent-verified).</li>
         <li style="margin-bottom:6px">🏅 <strong>${child}'s goal:</strong> read <strong>${params.goal} books</strong> to complete the <strong>${esc(params.levelName)}</strong> level and earn a certificate.</li>
         <li style="margin-bottom:6px">🎁 Reach the goal and you're entered into the <strong>raffle to win a $30 store credit!</strong></li>
@@ -194,7 +194,7 @@ export async function sendReaderWelcome(params: {
       from: ORDER_NOTIFY_FROM,
       to: params.parentEmail,
       replyTo: ORDER_NOTIFY_TO,
-      subject: `🌱 Welcome to Summer Reads — ${params.childName}'s reading code is ${params.code}`,
+      subject: `🌱 Welcome to Summer Reads: ${params.childName}'s reading code is ${params.code}`,
       html,
     });
     logger.info('Reader welcome email sent', { code: params.code });
@@ -224,12 +224,12 @@ export function buildSummerReminderEmailHtml(params?: { parentName?: string; chi
     </div>
     <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
       <p style="margin:0 0 14px"><strong>Assalamu alaikum ${greetName},</strong></p>
-      <p style="margin:0 0 14px">MashaAllah — the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with ${child} this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
+      <p style="margin:0 0 14px">MashaAllah, the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with ${child} this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
 
       <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
         <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
         <ul style="margin:0;padding-left:20px">
-          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations — those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
+          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
           <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
           <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
         </ul>
@@ -238,7 +238,7 @@ export function buildSummerReminderEmailHtml(params?: { parentName?: string; chi
       <div style="text-align:center;margin:22px 0">
         <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
         <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush — but do aim to finish reading as soon as you comfortably can. 😊</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
       </div>
 
       <div style="text-align:center;margin:22px 0">
@@ -262,11 +262,11 @@ export async function sendSummerReminderBroadcast(
   recipients: { email: string; parentName?: string; childName?: string }[]
 ): Promise<{ sent: number; failed: number; skipped: boolean }> {
   if (!emailConfigured()) {
-    logger.info('Summer reminder broadcast skipped — RESEND_API_KEY not set', { count: recipients.length });
+    logger.info('Summer reminder broadcast skipped: RESEND_API_KEY not set', { count: recipients.length });
     return { sent: 0, failed: 0, skipped: true };
   }
   const resend = new Resend(RESEND_API_KEY.value());
-  const subject = '📚 Summer Reads reminder — keep reading from the recommended list (deadline 31 Aug)';
+  const subject = '📚 Summer Reads reminder: keep reading from the recommended list (deadline 31 Aug)';
   let sent = 0;
   let failed = 0;
   for (const r of recipients) {
@@ -376,7 +376,7 @@ export async function sendCustomerPurchaseEmail(params: {
     from: ORDER_NOTIFY_FROM,
     to: params.customer.email,
     replyTo: ORDER_NOTIFY_TO,
-    subject: `Your Eduvate Kids order — $${params.total.toFixed(2)} ${cur}`,
+    subject: `Your Eduvate Kids order: $${params.total.toFixed(2)} ${cur}`,
     html: buildCustomerPurchaseEmailHtml(params),
   });
   logger.info('Customer purchase email sent', { orderId: params.orderId, to: params.customer.email });

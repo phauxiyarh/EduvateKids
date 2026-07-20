@@ -91,7 +91,7 @@ export function AddressAutocomplete({
         })
       })
       .catch(() => {
-        /* Google unavailable — plain input still works */
+        /* Google unavailable, plain input still works */
       })
 
     return () => {

@@ -33,7 +33,7 @@ const sections = [
   {
     title: 'Ongoing effort',
     body: [
-      'Accessibility is an ongoing process. We review new pages and features for accessibility and work to fix issues as we find them. Some third-party content or older material may not yet fully meet our target — we are actively working to improve these areas.',
+      'Accessibility is an ongoing process. We review new pages and features for accessibility and work to fix issues as we find them. Some third-party content or older material may not yet fully meet our target, we are actively working to improve these areas.',
     ],
   },
 ]
@@ -101,7 +101,7 @@ export default function AccessibilityPage() {
             <h2 className="font-display text-xl text-primaryDark">Request an accommodation or report a problem</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted">
               If you have trouble accessing any part of this site, or you need information in a different
-              format (such as large print or a screen-reader-friendly document), please tell us — we will
+              format (such as large print or a screen-reader-friendly document), please tell us, we will
               work with you to provide the information or service you need. When you contact us, it helps to
               include the page address, a description of the problem, and the device or assistive technology
               you are using.

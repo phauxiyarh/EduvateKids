@@ -77,7 +77,7 @@ export function SummerCelebration({
         </span>
         <p className="mt-4 text-xs font-bold uppercase tracking-[0.2em] text-accentThree">Goal reached</p>
         <h2 className="mt-1 font-display text-2xl font-bold gradient-text">{label} complete! 🎉</h2>
-        <p className="mt-2 text-sm text-muted">MashaAllah! Keep reading — every extra book is a bonus.</p>
+        <p className="mt-2 text-sm text-muted">MashaAllah! Keep reading, every extra book is a bonus.</p>
       </div>
 
       <style jsx>{`

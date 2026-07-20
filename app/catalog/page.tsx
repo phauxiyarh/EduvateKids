@@ -330,12 +330,13 @@ export default function CatalogPage() {
             ))}
           </div>
 
-          {/* Results count */}
-          <p className="text-center text-muted mb-8">
-            Showing {filteredItems.length} {filteredItems.length === 1 ? 'product' : 'products'}
-            {catalogFilter !== 'All' && ` in ${catalogFilter}`}
-            {normalizedQuery !== '' && ` matching "${searchQuery.trim()}"`}
-          </p>
+          {/* Active filter / search context (product count intentionally omitted) */}
+          {(catalogFilter !== 'All' || normalizedQuery !== '') && (
+            <p className="text-center text-muted mb-8">
+              {catalogFilter !== 'All' && `Showing ${catalogFilter}`}
+              {normalizedQuery !== '' && `${catalogFilter !== 'All' ? ' ' : 'Showing results '}matching "${searchQuery.trim()}"`}
+            </p>
+          )}
 
           {/* Product Grid */}
           <div ref={gridReveal} className="reveal reveal-stagger grid gap-4 sm:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">

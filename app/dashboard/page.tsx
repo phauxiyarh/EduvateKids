@@ -607,7 +607,11 @@ export default function DashboardPage() {
   // Reminder-broadcast modal: open state, sending state, and last result.
   const [reminderOpen, setReminderOpen] = useState(false)
   const [reminderSending, setReminderSending] = useState(false)
-  const [reminderResult, setReminderResult] = useState<{ sent: number; failed: number; recipients: number } | null>(null)
+  const [reminderResult, setReminderResult] = useState<{ sent: number; failed: number; recipients: number; test?: boolean } | null>(null)
+  // Test-send: a custom recipient to preview the email in a real inbox before
+  // the full broadcast, and its own in-flight flag.
+  const [reminderTestEmail, setReminderTestEmail] = useState('')
+  const [reminderTestSending, setReminderTestSending] = useState(false)
   const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
   const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
   // Daily Pulse figures are hidden by default (privacy on a shared screen);
@@ -3822,24 +3826,29 @@ export default function DashboardPage() {
     }
   }
 
-  // Admin: broadcast the Summer Reads reminder email to every registered parent.
-  // Recipients are gathered server-side; the client just triggers the send.
-  const sendReminderBroadcast = async () => {
-    setReminderSending(true)
+  // Admin: send the Summer Reads reminder. With no args it broadcasts to every
+  // registered parent (recipients gathered server-side); with a testEmail it
+  // sends only to that address so the admin can preview it in a real inbox.
+  const sendReminder = async (opts?: { testEmail?: string }) => {
+    const isTest = Boolean(opts?.testEmail)
+    if (isTest) setReminderTestSending(true)
+    else setReminderSending(true)
     setReminderResult(null)
     try {
-      const callable = httpsCallable<Record<string, never>, { sent: number; failed: number; recipients: number; skipped?: boolean }>(
-        functions,
-        'sendSummerReminder'
-      )
-      const res = await callable({})
+      const callable = httpsCallable<
+        { testEmail?: string },
+        { sent: number; failed: number; recipients: number; skipped?: boolean; test?: boolean }
+      >(functions, 'sendSummerReminder')
+      const res = await callable(isTest ? { testEmail: opts!.testEmail } : {})
       const data = res.data
-      setReminderResult({ sent: data.sent ?? 0, failed: data.failed ?? 0, recipients: data.recipients ?? 0 })
+      setReminderResult({ sent: data.sent ?? 0, failed: data.failed ?? 0, recipients: data.recipients ?? 0, test: data.test })
     } catch (error) {
-      console.error('Failed to send reminder broadcast:', error)
-      alert('Could not send the reminder. Please try again.')
+      console.error('Failed to send reminder:', error)
+      const msg = (error as { message?: string })?.message
+      alert(msg && /email/i.test(msg) ? msg : 'Could not send the reminder. Please try again.')
     } finally {
-      setReminderSending(false)
+      if (isTest) setReminderTestSending(false)
+      else setReminderSending(false)
     }
   }
 
@@ -7907,31 +7916,56 @@ export default function DashboardPage() {
                   <div className="overflow-hidden rounded-xl bg-white" dangerouslySetInnerHTML={{ __html: buildReminderEmailHtml() }} />
                 </div>
               </div>
+              {/* Test send: preview the exact email in a real inbox first. */}
+              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">Send a test first</p>
+                <p className="mt-0.5 text-xs text-muted">Send this exact email to one address to check how it looks. Registered parents are not contacted.</p>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    value={reminderTestEmail}
+                    onChange={(e) => setReminderTestEmail(e.target.value)}
+                    placeholder="test@example.com"
+                    className="flex-1 rounded-full border border-primary/20 bg-white px-4 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => sendReminder({ testEmail: reminderTestEmail.trim() })}
+                    disabled={reminderTestSending || reminderSending || !reminderTestEmail.trim()}
+                    className="flex shrink-0 items-center justify-center gap-2 rounded-full border-2 border-primary/30 bg-white px-5 py-2 text-sm font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
+                  >
+                    {reminderTestSending ? (
+                      <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
+                    ) : 'Send test'}
+                  </button>
+                </div>
+              </div>
               {reminderResult && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  Sent to {reminderResult.sent} of {reminderResult.recipients} parent{reminderResult.recipients === 1 ? '' : 's'}
-                  {reminderResult.failed > 0 && <span className="text-red-700"> · {reminderResult.failed} failed</span>}.
+                  {reminderResult.test
+                    ? <>Test email sent to <strong>{reminderTestEmail.trim()}</strong>{reminderResult.failed > 0 && <span className="text-red-700"> — but it failed to send</span>}. Check the inbox, then send the broadcast below.</>
+                    : <>Sent to {reminderResult.sent} of {reminderResult.recipients} parent{reminderResult.recipients === 1 ? '' : 's'}{reminderResult.failed > 0 && <span className="text-red-700"> · {reminderResult.failed} failed</span>}.</>}
                 </div>
               )}
               <div className="flex flex-col-reverse gap-3 border-t border-black/5 pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setReminderOpen(false)}
-                  disabled={reminderSending}
+                  disabled={reminderSending || reminderTestSending}
                   className="rounded-full border-2 border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-ink transition hover:bg-gray-50 disabled:opacity-60"
                 >
                   Close
                 </button>
                 <button
                   type="button"
-                  onClick={sendReminderBroadcast}
-                  disabled={reminderSending || summerReaders.length === 0}
+                  onClick={() => sendReminder()}
+                  disabled={reminderSending || reminderTestSending || summerReaders.length === 0}
                   className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow transition hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0"
                 >
                   {reminderSending ? (
                     <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending…</>
                   ) : (
-                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>{reminderResult ? 'Send again' : `Send to all ${summerReaders.length}`}</>
+                    <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>{reminderResult && !reminderResult.test ? 'Send again' : `Send to all ${summerReaders.length}`}</>
                   )}
                 </button>
               </div>

@@ -436,10 +436,24 @@ export const setSummerReaderEligibility = onCall({ cors: ALLOWED_ORIGINS }, asyn
  * parent. Recipients are read server-side from the `summerReads` collection
  * (the client never supplies the list), de-duplicated by email. Returns how many
  * were sent / failed.
+ *
+ * TEST MODE: if a valid `testEmail` is supplied, the email is sent ONLY to that
+ * one address (a preview send for the admin to check before the real broadcast)
+ * — the registered parents are NOT contacted. The response carries `test: true`.
  */
 export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
   await assertAdmin(request);
+  const testEmail = String((request.data as { testEmail?: string })?.testEmail ?? '').trim();
   try {
+    // Test send: one email to the given address only; nobody else is contacted.
+    if (testEmail) {
+      if (!isValidEmail(testEmail)) {
+        throw new HttpsError('invalid-argument', 'The test email address is not valid.');
+      }
+      const result = await sendSummerReminderBroadcast([{ email: testEmail }]);
+      logger.info('Summer reminder TEST send', { testEmail, ...result });
+      return { ...result, recipients: 1, test: true };
+    }
     const snap = await db.collection('summerReads').get();
     const byEmail = new Map<string, { email: string; parentName?: string; childName?: string }>();
     snap.forEach((docSnap) => {
@@ -460,6 +474,9 @@ export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLO
     logger.info('Summer reminder broadcast triggered', { recipients: recipients.length, ...result });
     return { ...result, recipients: recipients.length };
   } catch (err) {
+    // Preserve explicit validation errors (e.g. a bad test email) so the admin
+    // sees the specific message rather than a generic failure.
+    if (err instanceof HttpsError) throw err;
     logger.error('sendSummerReminder failed', err);
     throw new HttpsError('internal', 'Could not send the reminder broadcast. Please try again.');
   }

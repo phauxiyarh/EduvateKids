@@ -2,7 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useCart } from '../../lib/cart'
@@ -106,7 +107,7 @@ function PhotoIcon({ className }: { className?: string }) {
   )
 }
 
-export default function CatalogPage() {
+function CatalogInner() {
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [catalogFilter, setCatalogFilter] = useState<string>('All')
@@ -120,6 +121,36 @@ export default function CatalogPage() {
   const headerReveal = useReveal<HTMLDivElement>()
   const gridReveal = useReveal<HTMLDivElement>()
   const { addItem, items: cartItems, setQuantity } = useCart()
+
+  // Each item has a shareable URL: /catalog?product=<id>. The URL is the source
+  // of truth for which item's detail is open, so opening/closing just changes it.
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const productParam = searchParams.get('product')
+
+  // Open the item detail by pushing its id into the URL (browser shows it,
+  // back button closes it). Closing returns to the bare /catalog URL.
+  const openItem = (item: CatalogItem) => {
+    setExpandedSlider(0)
+    router.push(`/catalog?product=${encodeURIComponent(item.id)}`, { scroll: false })
+  }
+  const closeItem = () => {
+    router.push('/catalog', { scroll: false })
+  }
+
+  // Sync the open modal to the URL param. Runs whenever the param or the loaded
+  // items change, so a shared/bookmarked link opens the right item once data is in.
+  useEffect(() => {
+    if (!productParam) {
+      setExpandedItem(null)
+      return
+    }
+    const match = catalogItems.find((i) => i.id === productParam)
+    if (match) {
+      setExpandedItem(match)
+      setExpandedSlider(0)
+    }
+  }, [productParam, catalogItems])
 
   useEffect(() => {
     getDocs(collection(db, 'catalog')).then((snap) => {
@@ -153,16 +184,19 @@ export default function CatalogPage() {
     }).catch(() => {})
   }, [])
 
-  // Lock body scroll while the modal is open.
+  // Lock body scroll and enable Escape-to-close while the modal is open.
   useEffect(() => {
     if (expandedItem) {
       const previous = document.body.style.overflow
       document.body.style.overflow = 'hidden'
+      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeItem() }
+      window.addEventListener('keydown', onKey)
       return () => {
         document.body.style.overflow = previous
+        window.removeEventListener('keydown', onKey)
       }
     }
-  }, [expandedItem])
+  }, [expandedItem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const allCategories = ['All', ...new Set(catalogItems.flatMap((i) => i.category))]
   const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -343,7 +377,11 @@ export default function CatalogPage() {
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                onClick={() => { setExpandedItem(item); setExpandedSlider(0) }}
+                role="link"
+                tabIndex={0}
+                aria-label={`View details for ${item.title}`}
+                onClick={() => openItem(item)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(item) } }}
                 className="card-hover group flex flex-col rounded-3xl bg-white shadow-[0_2px_24px_rgba(0,0,0,0.06)] border border-gray-100 overflow-hidden hover:-translate-y-1.5 hover:shadow-[0_16px_48px_rgba(124,58,237,0.16)] cursor-pointer"
               >
                 {/* Image */}
@@ -505,7 +543,7 @@ export default function CatalogPage() {
       {expandedItem && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn"
-          onClick={() => setExpandedItem(null)}
+          onClick={closeItem}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -514,7 +552,7 @@ export default function CatalogPage() {
             <button
               type="button"
               aria-label="Close product details"
-              onClick={() => setExpandedItem(null)}
+              onClick={closeItem}
               className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -707,5 +745,22 @@ export default function CatalogPage() {
         </div>
       </footer>
     </div>
+  )
+}
+
+// useSearchParams must sit inside a Suspense boundary for the static export
+// build. The fallback matches the page's loading state.
+export default function CatalogPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center text-muted">
+        <svg className="h-10 w-10 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-4a6 6 0 0 0-6-6V2z" />
+        </svg>
+      </div>
+    }>
+      <CatalogInner />
+    </Suspense>
   )
 }

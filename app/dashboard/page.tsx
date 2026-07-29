@@ -199,7 +199,7 @@ function buildReminderEmailHtml(): string {
       <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
         <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
         <ul style="margin:0;padding-left:20px">
-          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. You can browse the recommended titles on the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
+          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. Ensure to review the recommended books from the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
           <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
           <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
         </ul>

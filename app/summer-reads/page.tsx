@@ -161,7 +161,7 @@ const summerFaqs = [
   },
   {
     question: 'Who can enter the raffle draw?',
-    answer: 'Readers who meet their goal with valid books and reside in the USA, Nigeria, or Canada are entered into the raffle draw. Everyone is welcome to register, read, and earn a certificate regardless of location.'
+    answer: 'Readers who meet their goal with valid books and reside in the USA or Nigeria are entered into the raffle draw. Everyone is welcome to register, read, and earn a certificate regardless of location.'
   },
   {
     question: 'I lost my registration code. What should I do?',

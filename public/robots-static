@@ -1,0 +1,44 @@
+# Served at /robots.txt via a rewrite in firebase.json.
+#
+# The file is deliberately NOT named robots.txt: Firebase Hosting's
+# `cleanUrls: true` strips .txt extensions, so a literal public/robots.txt
+# never resolves and falls through to the SPA catch-all, returning HTML.
+# Edit this file — there is no other copy.
+
+User-agent: *
+Allow: /
+
+# Admin, staff and transactional routes — no value in search results, and
+# several are behind auth anyway.
+Disallow: /dashboard
+Disallow: /pos
+Disallow: /settings
+Disallow: /auth/
+Disallow: /create-cashier
+Disallow: /checkout
+Disallow: /order-confirmation
+
+# AI assistants and answer engines. Explicitly allowed: being cited in
+# ChatGPT / Perplexity / Claude answers is a discovery channel for us.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://eduvatekids.com/sitemap.xml

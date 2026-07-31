@@ -23,14 +23,26 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /**
  * Resolve the INVENTORY document that a catalog item corresponds to, so online
  * orders draw from the same single stock ledger as POS/event/general sales.
- * Match priority: shared SKU, then ISBN, then exact title. Returns null if none.
- * Inventory is the source of truth; catalog carries a mirrored display count.
+ * Match priority: unified `code`, then the legacy sku/isbn mirrors, then exact
+ * title. Returns null if none. Inventory is the source of truth; catalog
+ * carries a mirrored display count.
+ *
+ * Inventory now stores one identifier in `code`, but the dashboard keeps
+ * writing sku/isbn as mirrors, so the legacy lookups below still resolve docs
+ * that have not been re-saved since the migration.
  */
 async function resolveInventoryRef(
   db: FirebaseFirestore.Firestore,
   catalog: { sku?: string; isbn?: string; title?: string }
 ): Promise<FirebaseFirestore.DocumentReference | null> {
   const inv = db.collection('inventory');
+  // The catalog's sku/isbn are both just item codes; try each against `code`.
+  for (const raw of [catalog.sku, catalog.isbn]) {
+    const value = String(raw ?? '').trim();
+    if (!value) continue;
+    const q = await inv.where('code', '==', value).limit(1).get();
+    if (!q.empty) return q.docs[0].ref;
+  }
   const sku = String(catalog.sku ?? '').trim();
   if (sku) {
     const q = await inv.where('sku', '==', sku).limit(1).get();

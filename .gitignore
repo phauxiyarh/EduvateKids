@@ -24,6 +24,8 @@ out
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.cpuprofile
+*.heapsnapshot
 
 # Local env files
 .env*.local

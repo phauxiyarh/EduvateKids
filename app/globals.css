@@ -447,3 +447,30 @@ textarea:focus-visible,
     transform: none !important;
   }
 }
+
+/* Inventory table scrollbars.
+   Both the mirrored bar above the header and the native one under the rows
+   use this, so the horizontal scrollbar is always visible rather than the
+   overlay style macOS/Windows hide until you actively scroll. */
+.inv-scroll {
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: rgba(109, 40, 217, 0.45) rgba(109, 40, 217, 0.08);
+}
+.inv-scroll::-webkit-scrollbar {
+  height: 12px;
+  -webkit-appearance: none;
+}
+.inv-scroll::-webkit-scrollbar-track {
+  background: rgba(109, 40, 217, 0.08);
+  border-radius: 999px;
+}
+.inv-scroll::-webkit-scrollbar-thumb {
+  background: rgba(109, 40, 217, 0.45);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.inv-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(109, 40, 217, 0.7);
+  background-clip: content-box;
+}

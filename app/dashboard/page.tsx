@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import {
@@ -43,6 +43,20 @@ type InventoryItem = {
   title: string
   category: InventoryCategory
   publisher: string
+  /**
+   * The item's single scannable identifier — an ISBN-13 for books, a UPC for
+   * non-book stock, or an internal EK- code. Replaces the old sku/isbn pair,
+   * which split one concept across two fields and let the same book land in
+   * two rows depending on which field an upload happened to fill.
+   */
+  code: string
+  /** Secondary identifier kept so an older printed label still resolves. */
+  altCode: string
+  /**
+   * Legacy mirrors of `code`. Still written on every save so the orders Cloud
+   * Function (which queries inventory by sku/isbn) keeps resolving until it is
+   * redeployed. Never read for display — read `code`.
+   */
   sku: string
   isbn: string
   rrp: number
@@ -50,6 +64,26 @@ type InventoryItem = {
   quantity: number
   sellingPrice: number
   weight: number
+}
+
+/** An ISBN-13 / EAN barcode: exactly 13 digits once separators are stripped. */
+const isIsbn13 = (value: string) => /^\d{13}$/.test(value.replace(/[\s-]/g, ''))
+
+/**
+ * Pick the single best identifier from a record that may carry the legacy
+ * sku/isbn pair. A real 13-digit barcode wins over an internal code, because
+ * it is what actually scans off the physical item.
+ */
+const resolveItemCode = (data: { code?: string; sku?: string; isbn?: string }) => {
+  const candidates = [data.code, data.isbn, data.sku]
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+  if (!candidates.length) return { code: '', altCode: '' }
+  const scannable = candidates.find(isIsbn13)
+  const code = scannable ?? candidates[0]
+  // Anything else that is genuinely different is preserved, not discarded.
+  const altCode = candidates.find((c) => c !== code) ?? ''
+  return { code, altCode }
 }
 
 type Sale = {
@@ -443,6 +477,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'My First Quran Stories',
     category: 'Books',
     publisher: 'Noor Press',
+    code: '',
+    altCode: '',
     sku: '',
     isbn: '',
     rrp: 22,
@@ -456,6 +492,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Ramadan Activity Kit',
     category: 'Crafts',
     publisher: 'Little Lanterns',
+    code: '',
+    altCode: '',
     sku: '',
     isbn: '',
     rrp: 35,
@@ -469,6 +507,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Hajj Adventure Puzzle',
     category: 'Puzzles',
     publisher: 'Kite & Compass',
+    code: '',
+    altCode: '',
     sku: '',
     isbn: '',
     rrp: 28,
@@ -482,6 +522,8 @@ const defaultInventory: InventoryItem[] = [
     title: 'Eid Gift Bundle',
     category: 'Gifts',
     publisher: 'Barakah Box',
+    code: '',
+    altCode: '',
     sku: '',
     isbn: '',
     rrp: 40,
@@ -531,13 +573,100 @@ const parseNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+/**
+ * Loose text key for matching the "same" item across spreadsheet uploads.
+ * Collapses case, internal whitespace, punctuation and unicode variants so
+ * "Allah Loves  Me!" and "allah loves me" resolve to the same key.
+ */
+const normalizeText = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+
+/**
+ * Canonical form of a scannable code, so "978-1-0681500-0-5" and
+ * "9781068150005" are one key. Digit-ish codes keep only digits and X;
+ * internal codes (EK-…) fall back to loose text normalization.
+ */
+const normalizeCode = (value: unknown) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const digits = raw.replace(/[^0-9xX]/g, '').toLowerCase()
+  // Treat as a barcode only if stripping separators leaves a plausible one.
+  if (digits.length >= 8 && /^[0-9]/.test(raw.replace(/[\s-]/g, ''))) return digits
+  return normalizeText(raw)
+}
+
+/**
+ * Identity keys for an item, most-authoritative first: its code (including any
+ * legacy sku/isbn still on the record), then normalized title+publisher. Two
+ * items are "the same" if they share ANY key. Used by both the upload merge
+ * and the duplicate finder so the two always agree.
+ */
+const itemMatchKeys = (
+  item: Partial<Pick<InventoryItem, 'code' | 'altCode' | 'sku' | 'isbn'>> &
+    Pick<InventoryItem, 'title' | 'publisher'>
+): string[] => {
+  const keys: string[] = []
+  // One namespace for every identifier: a value that used to live in `sku` now
+  // matches the same value living in `code`, which is what collapsed the 136
+  // duplicate groups in the first place.
+  const codes = [item.code, item.altCode, item.sku, item.isbn]
+    .map(normalizeCode)
+    .filter(Boolean)
+  new Set(codes).forEach((c) => keys.push(`code:${c}`))
+  const title = normalizeText(item.title)
+  if (title) keys.push(`tp:${title}|${normalizeText(item.publisher)}`)
+  return keys
+}
+
+/**
+ * Does a scanned/typed value identify this item? Checks the unified code, the
+ * preserved alternate code, the legacy sku/isbn mirrors, and the doc id — all
+ * in canonical form, so a hyphenated ISBN still matches its bare digits.
+ */
+const itemMatchesCode = (
+  item: Partial<Pick<InventoryItem, 'code' | 'altCode' | 'sku' | 'isbn'>> & { id?: string },
+  raw: string
+) => {
+  const wanted = normalizeCode(raw)
+  if (!wanted) return false
+  if (item.id && item.id.toLowerCase() === raw.trim().toLowerCase()) return true
+  return [item.code, item.altCode, item.sku, item.isbn]
+    .map(normalizeCode)
+    .filter(Boolean)
+    .includes(wanted)
+}
+
+/**
+ * True when a row's cost fields are placeholders rather than real data: no
+ * discount, and an RRP that merely echoes the selling price. This is the
+ * signature of a sheet imported without a Discount column — RRP got filled
+ * with the sale price. Such a row's rrp/discount/weight carry no information,
+ * so a merge must never let them win over a row that has genuine trade data.
+ */
+const isPlaceholderPriced = (i: InventoryItem) =>
+  i.discount === 0 && i.rrp > 0 && Math.abs(i.rrp - i.sellingPrice) < 0.005
+
+/** Resolve a free-text category against the full category list (not a subset). */
+const resolveCategory = (input: unknown): InventoryCategory => {
+  const wanted = normalizeText(input)
+  if (!wanted) return 'Books'
+  const exact = ALL_CATALOG_CATEGORIES.find((c) => normalizeText(c) === wanted)
+  if (exact) return exact
+  // Tolerate singular/plural drift from hand-typed sheets ("Card", "Puzzle").
+  const loose = ALL_CATALOG_CATEGORIES.find(
+    (c) => normalizeText(c) === `${wanted}s` || `${normalizeText(c)}s` === wanted
+  )
+  return loose ?? 'Books'
+}
+
 const normalizeInventoryItem = (data: Partial<InventoryItem>, id: string): InventoryItem => {
   const title = String(data.title ?? '').trim()
-  const categoryInput = String(data.category ?? 'Books').trim()
-  const category =
-    (['Books', 'Crafts', 'Puzzles', 'Gifts'].find(
-      (item) => item.toLowerCase() === categoryInput.toLowerCase()
-    ) as InventoryCategory) ?? 'Books'
+  const category = resolveCategory(data.category ?? 'Books')
   const rrp = parseNumber(data.rrp)
   const discount = parseNumber(data.discount)
   const quantity = Math.max(0, Math.round(parseNumber(data.quantity)))
@@ -545,13 +674,19 @@ const normalizeInventoryItem = (data: Partial<InventoryItem>, id: string): Inven
   const sellingPrice = sellingPriceRaw || Number((rrp * (1 - discount / 100)).toFixed(2))
   const weight = Math.max(0, parseNumber(data.weight))
 
+  // Older docs carry sku/isbn instead of code; resolve them to the one field.
+  const { code, altCode } = resolveItemCode(data)
+
   return {
     id,
     title,
     category,
     publisher: String(data.publisher ?? '').trim(),
-    sku: String(data.sku ?? '').trim(),
-    isbn: String(data.isbn ?? '').trim(),
+    code,
+    altCode: String(data.altCode ?? '').trim() || altCode,
+    // Legacy mirrors, kept in sync so the orders function still resolves.
+    sku: code,
+    isbn: isIsbn13(code) ? code : '',
     rrp,
     discount,
     quantity,
@@ -588,27 +723,92 @@ const normalizeHeader = (value: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 
+// NOTE: keys here are the output of normalizeHeader() — lowercased, bracketed
+// text stripped, non-alphanumerics collapsed to single spaces. So "Weight (g)"
+// and "Weight g" and "WEIGHT_G" all arrive as "weight g".
 const headerMap: Record<string, keyof InventoryItem> = {
   title: 'title',
+  name: 'title',
+  'item': 'title',
+  'item name': 'title',
+  'product': 'title',
+  'product name': 'title',
+  'book title': 'title',
   category: 'category',
+  cat: 'category',
+  type: 'category',
   publisher: 'publisher',
-  sku: 'sku',
-  'sku code': 'sku',
-  isbn: 'isbn',
-  'isbn 13': 'isbn',
-  'barcode': 'isbn',
+  brand: 'publisher',
+  supplier: 'publisher',
+  vendor: 'publisher',
+  // Every identifier column lands in the single `code` field. Which header a
+  // sheet happens to use no longer decides whether a row matches existing stock.
+  code: 'code',
+  'alt code': 'code',
+  'alternate code': 'code',
+  sku: 'code',
+  'sku code': 'code',
+  'product code': 'code',
+  'item code': 'code',
+  'stock code': 'code',
+  ref: 'code',
+  isbn: 'code',
+  'isbn 13': 'code',
+  isbn13: 'code',
+  'isbn 10': 'code',
+  'barcode': 'code',
+  'bar code': 'code',
+  ean: 'code',
+  upc: 'code',
   rrp: 'rrp',
+  'rrp price': 'rrp',
+  'list price': 'rrp',
+  'retail price': 'rrp',
+  'recommended retail price': 'rrp',
+  'cover price': 'rrp',
+  msrp: 'rrp',
   discount: 'discount',
+  disc: 'discount',
+  'disc percent': 'discount',
+  'discount percent': 'discount',
+  'discount percentage': 'discount',
+  'discount rate': 'discount',
+  'discount %': 'discount',
   quantity: 'quantity',
+  qty: 'quantity',
+  stock: 'quantity',
+  'stock qty': 'quantity',
+  'stock quantity': 'quantity',
+  'in stock': 'quantity',
+  'on hand': 'quantity',
+  count: 'quantity',
+  units: 'quantity',
   'selling price': 'sellingPrice',
   'sellingprice': 'sellingPrice',
-  'discount percent': 'discount',
-  'discount %': 'discount',
-  'recommended retail price': 'rrp',
+  'sale price': 'sellingPrice',
+  'sell price': 'sellingPrice',
+  price: 'sellingPrice',
+  'our price': 'sellingPrice',
+  'net price': 'sellingPrice',
   weight: 'weight',
+  wt: 'weight',
   'weight g': 'weight',
-  'weight grams': 'weight'
+  'weight gr': 'weight',
+  'weight gram': 'weight',
+  'weight grams': 'weight',
+  'item weight': 'weight',
+  'shipping weight': 'weight',
+  'ship weight': 'weight',
+  'weight kg': 'weight',
+  'weight kgs': 'weight'
 }
+
+/**
+ * Headers whose unit is kilograms rather than grams. Inventory stores weight in
+ * grams throughout (shipping-zone maths in lib/geo.ts assumes grams), so these
+ * columns are scaled on import instead of being silently 1000x too small.
+ */
+const KG_WEIGHT_HEADERS = new Set(['weight kg', 'weight kgs'])
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -669,6 +869,24 @@ export default function DashboardPage() {
   const [inventorySortKey, setInventorySortKey] = useState<keyof InventoryItem | ''>('')
   const [inventorySortDir, setInventorySortDir] = useState<'asc' | 'desc'>('asc')
   const [inventorySearch, setInventorySearch] = useState('')
+  // How an upload treats the Quantity column for items that already exist:
+  //  'add'     — new arrivals; quantity is added to what's on the shelf
+  //  'replace' — a stocktake; quantity becomes the sheet's number
+  const [uploadMode, setUploadMode] = useState<'add' | 'replace'>('add')
+  // Duplicate review panel (grouped by shared SKU / ISBN / title+publisher).
+  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [mergingGroup, setMergingGroup] = useState<string | null>(null)
+  // Resizable Current Stock columns. Widths are in px, keyed by column id, and
+  // persisted so a layout tuned for one screen survives a reload.
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const saved = localStorage.getItem('eduvate-inv-col-widths')
+      return saved ? (JSON.parse(saved) as Record<string, number>) : {}
+    } catch {
+      return {}
+    }
+  })
   const [eventMessage, setEventMessage] = useState('')
   const [newEventName, setNewEventName] = useState('')
   const [newEventCost, setNewEventCost] = useState('')
@@ -738,8 +956,8 @@ export default function DashboardPage() {
   const [invEditTitle, setInvEditTitle] = useState('')
   const [invEditCategory, setInvEditCategory] = useState<InventoryCategory>('Books')
   const [invEditPublisher, setInvEditPublisher] = useState('')
-  const [invEditSku, setInvEditSku] = useState('')
-  const [invEditIsbn, setInvEditIsbn] = useState('')
+  const [invEditCode, setInvEditCode] = useState('')
+  const [invEditAltCode, setInvEditAltCode] = useState('')
   const [invEditRrp, setInvEditRrp] = useState('')
   const [invEditDiscount, setInvEditDiscount] = useState('')
   const [invEditQuantity, setInvEditQuantity] = useState('')
@@ -787,7 +1005,7 @@ export default function DashboardPage() {
     setCatalogSellingPrice(String(inv.sellingPrice || ''))
     setCatalogQty(String(inv.quantity ?? ''))
     // Prefer the item's SKU; if none, its ISBN, so the catalog links to stock.
-    setCatalogSku((inv.sku || inv.isbn || '').trim())
+    setCatalogSku((inv.code || inv.sku || inv.isbn || '').trim())
   }
 
   useEffect(() => {
@@ -1132,7 +1350,7 @@ export default function DashboardPage() {
 
   const soldUnits = (item: InventoryItem) =>
     (unitsSold.get(item.id.toLowerCase()) ?? 0) +
-    (item.sku ? (unitsSold.get(item.sku.toLowerCase()) ?? 0) : 0) +
+    (item.code ? (unitsSold.get(item.code.toLowerCase()) ?? 0) : 0) +
     (unitsSold.get(item.title.toLowerCase()) ?? 0)
 
   // Restock radar, split into groups by urgency:
@@ -1464,8 +1682,8 @@ export default function DashboardPage() {
 
   const handleDownloadTemplate = () => {
     const rows = [
-      ['Title', 'Category', 'Publisher', 'SKU', 'ISBN', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)'],
-      ['Sample Title', 'Books', 'Sample Publisher', 'SKU-001', '9781234567897', 20, 10, 5, 18, 350]
+      ['Title', 'Category', 'Publisher', 'Code', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)'],
+      ['Sample Title', 'Books', 'Sample Publisher', '9781234567897', 20, 10, 5, 18, 350]
     ]
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1489,9 +1707,9 @@ export default function DashboardPage() {
       setUploadMessage('No inventory data to export.')
       return
     }
-    const header = ['Title', 'Category', 'Publisher', 'SKU', 'ISBN', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)']
+    const header = ['Title', 'Category', 'Publisher', 'Code', 'Alt Code', 'RRP', 'Discount %', 'Quantity', 'Selling Price', 'Weight (g)']
     const rows = inventory.map((item) => [
-      item.title, item.category, item.publisher, item.sku || '', item.isbn || '', item.rrp, item.discount, item.quantity, item.sellingPrice, item.weight
+      item.title, item.category, item.publisher, item.code || '', item.altCode || '', item.rrp, item.discount, item.quantity, item.sellingPrice, item.weight
     ])
     const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
     const workbook = XLSX.utils.book_new()
@@ -1532,36 +1750,70 @@ export default function DashboardPage() {
 
       const headerRow = rows[0].map((value) => String(value))
       const normalizedHeaders = headerRow.map(normalizeHeader)
-      const headerMatches = normalizedHeaders.filter(
-        (header) => headerMap[header]
+      const mappedHeaders = normalizedHeaders.filter((header) => headerMap[header])
+      // A real header row must identify the item AND at least one data column.
+      // The old bar (any 3 matches) let a data row masquerade as a header, which
+      // silently switched the whole file to positional parsing.
+      const hasTitleHeader = mappedHeaders.some((h) => headerMap[h] === 'title')
+      const hasHeader = hasTitleHeader && mappedHeaders.length >= 3
+
+      if (!hasHeader) {
+        // Positional parsing is a guess about column order. Refuse rather than
+        // shredding a sheet into wrong columns (the old behaviour, and the
+        // reason uploaded rows arrived with blank weight/discount).
+        setUploadMessage(
+          '⚠️ Could not read the column headers. Make sure row 1 has a "Title" column plus at least two of: Category, Publisher, Code, RRP, Discount %, Quantity, Selling Price, Weight (g). Download the template for the expected format.'
+        )
+        event.target.value = ''
+        return
+      }
+
+      // Which fields the sheet actually carries. Columns that are absent must
+      // never overwrite existing values on merge — that is separate from a
+      // column that is present but blank for a given row.
+      const presentFields = new Set<keyof InventoryItem>(
+        mappedHeaders.map((h) => headerMap[h])
       )
-      const hasHeader = headerMatches.length >= 3
 
       const parsedItems: InventoryItem[] = []
+      let skippedRows = 0
 
-      rows.slice(hasHeader ? 1 : 0).forEach((row, index) => {
+      rows.slice(1).forEach((row, index) => {
         const rowValues = row.map((cell) => (cell ?? '').toString())
         const rowData: Partial<InventoryItem> = {}
+        let weightIsKg = false
 
-        if (hasHeader) {
-          normalizedHeaders.forEach((header, colIndex) => {
-            const key = headerMap[header]
-            if (!key) return
-            rowData[key] = rowValues[colIndex] as never
-          })
-        } else {
-          ;[rowData.title, rowData.category, rowData.publisher, rowData.sku, rowData.isbn, rowData.rrp, rowData.discount, rowData.quantity, rowData.sellingPrice, rowData.weight] =
-            rowValues as never[]
-        }
+        // A sheet may carry several identifier columns (SKU and ISBN and
+        // Barcode) that all map to `code`. Collect them all rather than letting
+        // the last column win, then pick the best one below.
+        const codeCandidates: string[] = []
+
+        normalizedHeaders.forEach((header, colIndex) => {
+          const key = headerMap[header]
+          if (!key) return
+          const raw = rowValues[colIndex]
+          if (key === 'code') {
+            const v = String(raw ?? '').trim()
+            if (v) codeCandidates.push(v)
+            return
+          }
+          // Don't let a trailing blank column clobber a value already read from
+          // an earlier alias of the same field (e.g. both "Price" and "Selling Price").
+          if (rowData[key] !== undefined && !String(raw ?? '').trim()) return
+          rowData[key] = raw as never
+          if (key === 'weight' && KG_WEIGHT_HEADERS.has(header)) weightIsKg = true
+        })
 
         const title = String(rowData.title ?? '').trim()
-        if (!title) return
+        if (!title) {
+          if (rowValues.some((v) => v.trim())) skippedRows += 1
+          return
+        }
 
-        const categoryInput = String(rowData.category ?? 'Books').trim()
-        const category =
-          (['Books', 'Crafts', 'Puzzles', 'Gifts'].find(
-            (item) => item.toLowerCase() === categoryInput.toLowerCase()
-          ) as InventoryCategory) ?? 'Books'
+        // Prefer a scannable barcode; keep any other identifier as altCode.
+        const uniqueCodes = [...new Set(codeCandidates)]
+        const code = uniqueCodes.find(isIsbn13) ?? uniqueCodes[0] ?? ''
+        const altCode = uniqueCodes.find((c) => c !== code) ?? ''
 
         const rrp = parseNumber(rowData.rrp)
         const discount = parseNumber(rowData.discount)
@@ -1569,15 +1821,18 @@ export default function DashboardPage() {
         const sellingPriceRaw = parseNumber(rowData.sellingPrice)
         const sellingPrice =
           sellingPriceRaw || Number((rrp * (1 - discount / 100)).toFixed(2))
-        const weight = Math.max(0, parseNumber(rowData.weight))
+        const weightRaw = Math.max(0, parseNumber(rowData.weight))
+        const weight = weightIsKg ? Math.round(weightRaw * 1000) : weightRaw
 
         parsedItems.push({
           id: `inv-${Date.now()}-${index}`,
           title,
-          category,
+          category: resolveCategory(rowData.category ?? 'Books'),
           publisher: String(rowData.publisher ?? '').trim(),
-          sku: String(rowData.sku ?? '').trim(),
-          isbn: String(rowData.isbn ?? '').trim(),
+          code,
+          altCode,
+          sku: code,
+          isbn: isIsbn13(code) ? code : '',
           rrp,
           discount,
           quantity,
@@ -1587,45 +1842,131 @@ export default function DashboardPage() {
       })
 
       if (!parsedItems.length) {
-        setUploadMessage('No valid rows found. Please check the spreadsheet format.')
+        setUploadMessage('No valid rows found. Every row needs a Title.')
+        event.target.value = ''
         return
       }
 
+      const addToStock = uploadMode === 'add'
       let added = 0
       let updated = 0
+      let mergedWithinFile = 0
       const currentInventory = [...inventory]
 
-      parsedItems.forEach((item) => {
-        const matchIndex = currentInventory.findIndex(
-          (existing) =>
-            existing.title.toLowerCase() === item.title.toLowerCase() &&
-            existing.publisher.toLowerCase() === item.publisher.toLowerCase()
-        )
+      // Index every identity key of every existing item so a match on ANY of
+      // code (any identifier) or normalized title+publisher finds the same row. Rebuilt
+      // incrementally as items are appended, so duplicates inside one file
+      // collapse together too.
+      const keyIndex = new Map<string, number>()
+      currentInventory.forEach((existing, idx) => {
+        itemMatchKeys(existing).forEach((key) => {
+          if (!keyIndex.has(key)) keyIndex.set(key, idx)
+        })
+      })
 
-        if (matchIndex >= 0) {
-          const existing = currentInventory[matchIndex]
-          currentInventory[matchIndex] = {
-            ...existing,
-            ...item,
-            quantity: existing.quantity + item.quantity,
-            // Keep an existing binding if the uploaded row left SKU/ISBN blank,
-            // so re-uploading a sheet without those columns never unbinds a book.
-            sku: item.sku || existing.sku,
-            isbn: item.isbn || existing.isbn,
-          }
-          updated += 1
-        } else {
+      const indexItem = (item: InventoryItem, idx: number) => {
+        itemMatchKeys(item).forEach((key) => {
+          if (!keyIndex.has(key)) keyIndex.set(key, idx)
+        })
+      }
+
+      // Which incoming rows have already been folded into a given existing row
+      // this upload. First touch replaces/sets the quantity; later touches of
+      // the SAME target add to it, so a sheet listing one book on two rows sums
+      // correctly even in Replace mode.
+      const touched = new Set<number>()
+
+      parsedItems.forEach((item) => {
+        // Priority order: SKU beats ISBN beats title+publisher.
+        const matchIndex = itemMatchKeys(item)
+          .map((key) => keyIndex.get(key))
+          .find((idx) => idx !== undefined)
+
+        if (matchIndex === undefined) {
           currentInventory.push(item)
+          indexItem(item, currentInventory.length - 1)
+          touched.add(currentInventory.length - 1)
           added += 1
+          return
         }
+
+        const existing = currentInventory[matchIndex]
+        const alreadyTouched = touched.has(matchIndex)
+
+        // Only overwrite a field when the sheet actually supplies a value for
+        // it. A missing column, or a blank cell, leaves the existing value
+        // alone — this is what stops a partial sheet wiping weight/discount.
+        const keep = <K extends keyof InventoryItem>(
+          field: K,
+          incoming: InventoryItem[K],
+          isBlank: (v: InventoryItem[K]) => boolean
+        ): InventoryItem[K] =>
+          presentFields.has(field) && !isBlank(incoming) ? incoming : existing[field]
+
+        const blankStr = (v: string) => !String(v ?? '').trim()
+        const blankNum = (v: number) => !Number.isFinite(v) || v === 0
+
+        const nextQuantity = presentFields.has('quantity')
+          ? addToStock || alreadyTouched
+            ? existing.quantity + item.quantity
+            : item.quantity
+          : existing.quantity
+
+        const rrp = keep('rrp', item.rrp, blankNum)
+        const discount = presentFields.has('discount') ? item.discount : existing.discount
+        // Selling price: take the sheet's if given, else recompute from the
+        // resulting rrp/discount, else keep what was there.
+        const sellingPrice = presentFields.has('sellingPrice') && !blankNum(item.sellingPrice)
+          ? item.sellingPrice
+          : rrp > 0 && discount > 0
+          ? Number((rrp * (1 - discount / 100)).toFixed(2))
+          : existing.sellingPrice || item.sellingPrice
+
+        const nextCode = keep('code', item.code, blankStr)
+        // A second, different identifier is preserved rather than dropped.
+        const nextAltCode =
+          [existing.altCode, existing.code, item.altCode, item.code]
+            .map((v) => String(v ?? '').trim())
+            .find((v) => v && normalizeCode(v) !== normalizeCode(nextCode)) ?? ''
+
+        currentInventory[matchIndex] = {
+          ...existing,
+          title: keep('title', item.title, blankStr),
+          category: presentFields.has('category') ? item.category : existing.category,
+          publisher: keep('publisher', item.publisher, blankStr),
+          code: nextCode,
+          altCode: nextAltCode,
+          sku: nextCode,
+          isbn: isIsbn13(nextCode) ? nextCode : '',
+          rrp,
+          discount,
+          sellingPrice,
+          weight: keep('weight', item.weight, blankNum),
+          quantity: nextQuantity
+        }
+        // Newly supplied codes become match keys for later rows in this file.
+        indexItem(currentInventory[matchIndex], matchIndex)
+
+        if (alreadyTouched) mergedWithinFile += 1
+        else updated += 1
+        touched.add(matchIndex)
       })
 
       setInventory(currentInventory)
-      setUploadMessage(`Upload complete. Added ${added} items, updated ${updated}.`)
+      const notes = [
+        `Added ${added}`,
+        `${addToStock ? 'stock added to' : 'updated'} ${updated}`
+      ]
+      if (mergedWithinFile) notes.push(`${mergedWithinFile} duplicate row${mergedWithinFile === 1 ? '' : 's'} merged`)
+      if (skippedRows) notes.push(`${skippedRows} row${skippedRows === 1 ? '' : 's'} skipped (no title)`)
+      setUploadMessage(`✅ Upload complete. ${notes.join(', ')}.`)
       await persistInventory(currentInventory)
     } catch (error) {
       console.error('Upload error:', error)
       setUploadMessage('Upload failed. Please check the .xlsx file and try again.')
+    } finally {
+      // Allow re-selecting the same file (e.g. after fixing headers).
+      event.target.value = ''
     }
   }
 
@@ -1967,7 +2308,11 @@ export default function DashboardPage() {
     sellingPrice: number
   }): Promise<string> => {
     const sku = opts.sku.trim()
-    const existing = inventory.find((i) => (i.sku || '').trim() && (i.sku || '').trim() === sku)
+    // The catalog's "sku" is just an item code; match it against the unified
+    // code field (falling back to the legacy mirror on not-yet-migrated docs).
+    const existing = inventory.find(
+      (i) => sku && normalizeCode(i.code || i.sku) === normalizeCode(sku)
+    )
     const invId = existing ? existing.id : `inv-${Date.now()}`
     const invItem: InventoryItem = existing
       ? {
@@ -1975,7 +2320,9 @@ export default function DashboardPage() {
           title: opts.title,
           publisher: opts.publisher,
           category: opts.category,
-          sku,
+          code: sku || existing.code,
+          sku: sku || existing.sku,
+          isbn: isIsbn13(sku) ? sku : existing.isbn,
           quantity: opts.quantity,
           sellingPrice: opts.sellingPrice || opts.price
         }
@@ -1984,8 +2331,10 @@ export default function DashboardPage() {
           title: opts.title,
           category: opts.category,
           publisher: opts.publisher,
+          code: sku,
+          altCode: '',
           sku,
-          isbn: '',
+          isbn: isIsbn13(sku) ? sku : '',
           rrp: opts.price,
           discount: 0,
           quantity: opts.quantity,
@@ -2323,12 +2672,7 @@ export default function DashboardPage() {
   const handlePosScan = (raw: string) => {
     const code = raw.trim().toLowerCase()
     if (!code) return
-    const match = inventory.find(
-      (i) =>
-        (i.sku || '').toLowerCase() === code ||
-        (i.isbn || '').toLowerCase() === code ||
-        i.id.toLowerCase() === code
-    )
+    const match = inventory.find((i) => itemMatchesCode(i, raw))
     if (!match) {
       setEventMessage(`No bound book matches "${raw.trim()}". Bind it to an item in Inventory first.`)
       return
@@ -3204,11 +3548,519 @@ export default function DashboardPage() {
     </div>
   )
 
+  /**
+   * Group inventory into duplicate clusters using the same identity keys the
+   * upload merge uses (SKU, then ISBN, then normalized title+publisher).
+   * Union-find, because A can match B by SKU while B matches C by title — all
+   * three belong in one group.
+   */
+  const duplicateGroups = useMemo(() => {
+    const parent = inventory.map((_, i) => i)
+    const find = (i: number): number => {
+      while (parent[i] !== i) {
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+      }
+      return i
+    }
+    const union = (a: number, b: number) => {
+      const ra = find(a)
+      const rb = find(b)
+      if (ra !== rb) parent[rb] = ra
+    }
+
+    const seen = new Map<string, number>()
+    inventory.forEach((item, idx) => {
+      itemMatchKeys(item).forEach((key) => {
+        const prev = seen.get(key)
+        if (prev === undefined) seen.set(key, idx)
+        else union(prev, idx)
+      })
+    })
+
+    const clusters = new Map<number, InventoryItem[]>()
+    inventory.forEach((item, idx) => {
+      const root = find(idx)
+      const bucket = clusters.get(root)
+      if (bucket) bucket.push(item)
+      else clusters.set(root, [item])
+    })
+
+    return Array.from(clusters.entries())
+      .filter(([, items]) => items.length > 1)
+      .map(([root, items]) => ({
+        // Stable per-cluster id so the merge button survives re-renders.
+        id: items.map((i) => i.id).sort().join('|'),
+        root,
+        items,
+        // What actually tied them together — shown so the admin can sanity-check
+        // before merging (a title-only match is weaker than a SKU match).
+        reason: (() => {
+          const codes = new Set(
+            items.flatMap((i) => [i.code, i.altCode, i.sku, i.isbn]).map(normalizeCode).filter(Boolean)
+          )
+          if (codes.size === 1 && items.length > 1) return 'Same code'
+          return 'Same title & publisher'
+        })()
+      }))
+      .sort((a, b) => b.items.length - a.items.length)
+  }, [inventory])
+
+  /** Ids of every item that sits in a duplicate cluster — for the row badge. */
+  const duplicateIds = useMemo(
+    () => new Set(duplicateGroups.flatMap((g) => g.items.map((i) => i.id))),
+    [duplicateGroups]
+  )
+
+  /**
+   * Compute the single row a duplicate cluster collapses into: quantities are
+   * summed, and every other field takes the first non-empty value found
+   * (preferring the row that already has the most data filled in). The survivor
+   * keeps the oldest id so existing catalog links and sale records still resolve.
+   */
+  const computeMerge = (items: InventoryItem[]): { merged: InventoryItem; removeIds: string[] } => {
+    // Richest row first: most non-empty fields wins ties for each field below.
+    // Placeholder-priced rows sort last regardless of score, so a real trade
+    // RRP always beats an RRP that is just a copy of the selling price.
+    const score = (i: InventoryItem) =>
+      [i.code, i.publisher, i.title].filter((v) => String(v ?? '').trim()).length +
+      [i.rrp, i.discount, i.sellingPrice, i.weight].filter((v) => Number(v) > 0).length
+    const ranked = [...items].sort(
+      (a, b) =>
+        Number(isPlaceholderPriced(a)) - Number(isPlaceholderPriced(b)) || score(b) - score(a)
+    )
+    // Keep the oldest id (ids are `inv-<timestamp>`), not the richest row's, so
+    // anything already pointing at this item keeps working.
+    const survivorId = [...items].sort((a, b) => a.id.localeCompare(b.id))[0].id
+
+    const firstStr = (pick: (i: InventoryItem) => string) =>
+      ranked.map(pick).find((v) => String(v ?? '').trim())?.trim() ?? ''
+    const firstNum = (pick: (i: InventoryItem) => number) =>
+      ranked.map(pick).find((v) => Number(v) > 0) ?? 0
+
+    const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
+    const rrp = firstNum((i) => i.rrp)
+    const discount = firstNum((i) => i.discount)
+
+    // Gather every identifier the cluster carries, prefer a scannable barcode,
+    // and keep one genuinely different survivor as altCode so a printed label
+    // that used the old code still resolves.
+    const allCodes = [
+      ...new Set(
+        ranked
+          .flatMap((i) => [i.code, i.altCode, i.sku, i.isbn])
+          .map((v) => String(v ?? '').trim())
+          .filter(Boolean)
+      )
+    ]
+    const code = allCodes.find(isIsbn13) ?? allCodes[0] ?? ''
+    const altCode = allCodes.find((c) => normalizeCode(c) !== normalizeCode(code)) ?? ''
+
+    const merged: InventoryItem = {
+      id: survivorId,
+      title: firstStr((i) => i.title) || items[0].title,
+      // Prefer a real category over the 'Books' fallback when the rows disagree.
+      category: ranked.find((i) => i.category && i.category !== 'Books')?.category ?? items[0].category,
+      publisher: firstStr((i) => i.publisher),
+      code,
+      altCode,
+      sku: code,
+      isbn: isIsbn13(code) ? code : '',
+      rrp,
+      discount,
+      sellingPrice:
+        firstNum((i) => i.sellingPrice) ||
+        (rrp > 0 ? Number((rrp * (1 - discount / 100)).toFixed(2)) : 0),
+      quantity: totalQty,
+      weight: firstNum((i) => i.weight)
+    }
+
+    return { merged, removeIds: items.map((i) => i.id).filter((id) => id !== survivorId) }
+  }
+
+  /**
+   * A cluster is "safe" to merge unattended only when collapsing it loses no
+   * information: every row agrees on selling price, and no field holds two
+   * DIFFERENT real values across rows. Anything else (two genuine prices, two
+   * different ISBNs) needs a human.
+   */
+  const isSafeMerge = (items: InventoryItem[]): boolean => {
+    const distinctStr = (list: InventoryItem[], pick: (i: InventoryItem) => string) =>
+      new Set(list.map((i) => normalizeText(pick(i))).filter(Boolean)).size
+    const distinctNum = (list: InventoryItem[], pick: (i: InventoryItem) => number) =>
+      new Set(list.map((i) => Number(pick(i))).filter((v) => v > 0)).size
+
+    // Price must be unanimous among rows that state one at all.
+    if (distinctNum(items, (i) => i.sellingPrice) > 1) return false
+    // No conflicting identities. Codes are compared in canonical form, so a
+    // hyphenated ISBN and its bare digits are not treated as a conflict.
+    if (new Set(items.map((i) => normalizeCode(i.code)).filter(Boolean)).size > 1) return false
+    if (distinctStr(items, (i) => i.publisher) > 1) return false
+    // Differing real categories (ignoring the 'Books' default) is a judgment call.
+    if (new Set(items.map((i) => i.category).filter((c) => c && c !== 'Books')).size > 1) return false
+
+    // Cost fields are judged only against rows that actually carry cost data.
+    // A placeholder row states no discount and an RRP that merely echoes the
+    // selling price — the signature of a sheet imported without a discount
+    // column. Its rrp/weight hold no information, so they cannot conflict.
+    const real = items.filter((i) => !isPlaceholderPriced(i))
+    const judge = real.length > 0 ? real : items
+    if (distinctNum(judge, (i) => i.rrp) > 1) return false
+    if (distinctNum(judge, (i) => i.discount) > 1) return false
+    if (distinctNum(judge, (i) => i.weight) > 1) return false
+    return true
+  }
+
+  const handleMergeDuplicates = async (group: { id: string; items: InventoryItem[] }) => {
+    const { items } = group
+    const { merged, removeIds } = computeMerge(items)
+    const totalQty = merged.quantity
+    if (
+      !confirm(
+        `Merge ${items.length} entries of "${merged.title}" into one?\n\n` +
+          `• Combined quantity: ${totalQty}\n` +
+          `• Keeps: code ${merged.code || '—'}${merged.altCode ? ` (+ ${merged.altCode})` : ''}, ` +
+          `weight ${merged.weight || '—'}g, discount ${merged.discount || 0}%\n` +
+          `• Deletes ${removeIds.length} duplicate row${removeIds.length === 1 ? '' : 's'}\n\n` +
+          `This cannot be undone.`
+      )
+    )
+      return
+
+    setMergingGroup(group.id)
+    setInventory((current) => [
+      ...current.filter((i) => !removeIds.includes(i.id) && i.id !== merged.id),
+      merged
+    ])
+    try {
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'inventory', merged.id), { ...merged, _live: true })
+      removeIds.forEach((id) => batch.delete(doc(db, 'inventory', id)))
+      await batch.commit()
+      await mirrorStockToCatalog(merged, merged.quantity)
+      setUploadMessage(`✅ Merged ${items.length} entries of "${merged.title}" (quantity ${totalQty}).`)
+    } catch (error) {
+      console.error('Merge duplicates error:', error)
+      setUploadMessage(`⚠️ "${merged.title}" merged locally but failed to sync to cloud.`)
+    } finally {
+      setMergingGroup(null)
+    }
+  }
+
+  /** Clusters that collapse without losing information — see isSafeMerge. */
+  const safeDuplicateGroups = useMemo(
+    () => duplicateGroups.filter((g) => isSafeMerge(g.items)),
+    [duplicateGroups]
+  )
+
+  /**
+   * Merge every safe cluster in one pass. Groups needing a judgment call are
+   * left untouched for manual review. Firestore caps a batch at 500 writes, so
+   * this chunks conservatively; a failed chunk aborts before local state is
+   * committed, leaving the remaining groups for a retry.
+   */
+  /**
+   * Items whose Firestore doc predates the unified `code` field, or whose
+   * mirrors have drifted out of sync with it. Backfilling these is what lets
+   * the orders Cloud Function and any older reader keep resolving stock.
+   */
+  const itemsNeedingCodeMigration = useMemo(
+    () =>
+      inventory.filter((i) => {
+        const code = (i.code || '').trim()
+        const expectedIsbn = isIsbn13(code) ? code : ''
+        return (i.sku || '') !== code || (i.isbn || '') !== expectedIsbn
+      }),
+    [inventory]
+  )
+
+  /**
+   * One-time backfill: write `code` (and its sku/isbn mirrors) onto every
+   * inventory doc. Safe to re-run — it only touches docs that are actually out
+   * of sync, and the value written is already what the UI is displaying.
+   */
+  const handleMigrateCodes = async () => {
+    const targets = itemsNeedingCodeMigration
+    if (!targets.length) return
+    if (
+      !confirm(
+        `Save the unified code field to ${targets.length} item${targets.length === 1 ? '' : 's'}?\n\n` +
+          `• Writes each item's code, plus sku/isbn mirrors so online orders keep resolving\n` +
+          `• Values are exactly what the dashboard already shows — nothing is recalculated\n` +
+          `• Safe to run more than once`
+      )
+    )
+      return
+
+    setMergingGroup('__migrate__')
+    try {
+      const CHUNK = 400
+      for (let start = 0; start < targets.length; start += CHUNK) {
+        const batch = writeBatch(db)
+        targets.slice(start, start + CHUNK).forEach((item) => {
+          const code = (item.code || '').trim()
+          batch.update(doc(db, 'inventory', item.id), {
+            code,
+            altCode: (item.altCode || '').trim(),
+            sku: code,
+            isbn: isIsbn13(code) ? code : '',
+            _live: true
+          })
+        })
+        await batch.commit()
+      }
+      // Mirror local state so the banner clears without a reload.
+      setInventory((current) =>
+        current.map((i) => {
+          const code = (i.code || '').trim()
+          return { ...i, code, sku: code, isbn: isIsbn13(code) ? code : '' }
+        })
+      )
+      setUploadMessage(`✅ Saved the code field to ${targets.length} item${targets.length === 1 ? '' : 's'}.`)
+    } catch (error) {
+      console.error('Code migration error:', error)
+      setUploadMessage('⚠️ Code migration failed partway. Reload and try again — it is safe to re-run.')
+    } finally {
+      setMergingGroup(null)
+    }
+  }
+
+  const handleMergeAllSafe = async () => {
+    const groups = safeDuplicateGroups
+    if (!groups.length) return
+
+    const rowsRemoved = groups.reduce((n, g) => n + g.items.length - 1, 0)
+    const skipped = duplicateGroups.length - groups.length
+    if (
+      !confirm(
+        `Merge ${groups.length} duplicate group${groups.length === 1 ? '' : 's'} automatically?\n\n` +
+          `• ${rowsRemoved} duplicate row${rowsRemoved === 1 ? '' : 's'} will be deleted\n` +
+          `• Quantities are summed; every other field keeps its first non-empty value\n` +
+          `• Only groups that lose no information are included` +
+          (skipped
+            ? `\n• ${skipped} group${skipped === 1 ? '' : 's'} left for manual review (conflicting values)`
+            : '') +
+          `\n\nThis cannot be undone.`
+      )
+    )
+      return
+
+    setMergingGroup('__all__')
+    const results = groups.map((g) => computeMerge(g.items))
+    const allRemoved = new Set(results.flatMap((r) => r.removeIds))
+    const mergedById = new Map(results.map((r) => [r.merged.id, r.merged]))
+
+    try {
+      // Chunk by writes, not groups: each group costs 1 set + N deletes.
+      const CHUNK = 400
+      let batch = writeBatch(db)
+      let writes = 0
+      for (const { merged, removeIds } of results) {
+        const cost = 1 + removeIds.length
+        if (writes + cost > CHUNK) {
+          await batch.commit()
+          batch = writeBatch(db)
+          writes = 0
+        }
+        batch.set(doc(db, 'inventory', merged.id), { ...merged, _live: true })
+        removeIds.forEach((id) => batch.delete(doc(db, 'inventory', id)))
+        writes += cost
+      }
+      if (writes > 0) await batch.commit()
+
+      setInventory((current) =>
+        current
+          .filter((i) => !allRemoved.has(i.id))
+          .map((i) => mergedById.get(i.id) ?? i)
+      )
+
+      // Push the new combined quantities to the storefront. Sequential and
+      // best-effort: a catalog mirror failure must not undo a committed merge.
+      let mirrorFailures = 0
+      for (const { merged } of results) {
+        try {
+          await mirrorStockToCatalog(merged, merged.quantity)
+        } catch {
+          mirrorFailures += 1
+        }
+      }
+
+      setUploadMessage(
+        `✅ Merged ${groups.length} group${groups.length === 1 ? '' : 's'}, removed ${rowsRemoved} duplicate row${rowsRemoved === 1 ? '' : 's'}.` +
+          (skipped ? ` ${skipped} left for manual review.` : '') +
+          (mirrorFailures ? ` (${mirrorFailures} catalog stock mirror${mirrorFailures === 1 ? '' : 's'} failed.)` : '')
+      )
+    } catch (error) {
+      console.error('Merge all duplicates error:', error)
+      setUploadMessage('⚠️ Bulk merge failed partway. Reload the page to see the current state, then try again.')
+    } finally {
+      setMergingGroup(null)
+    }
+  }
+
+  // ---- Current Stock column layout -------------------------------------
+  // Default widths in px. A fixed table-layout plus explicit widths is what
+  // makes dragging feel stable — with auto layout the browser re-flows every
+  // column as content changes.
+  const INVENTORY_COLUMNS = useMemo(
+    () =>
+      [
+        { id: 'title', label: 'Item', sortKey: 'title' as keyof InventoryItem, align: 'left', width: 280, min: 160 },
+        { id: 'category', label: 'Category', sortKey: 'category' as keyof InventoryItem, align: 'left', width: 130, min: 90 },
+        { id: 'publisher', label: 'Publisher', sortKey: 'publisher' as keyof InventoryItem, align: 'left', width: 160, min: 90 },
+        { id: 'rrp', label: 'RRP', sortKey: 'rrp' as keyof InventoryItem, align: 'right', width: 100, min: 70 },
+        { id: 'discount', label: 'Discount %', sortKey: 'discount' as keyof InventoryItem, align: 'center', width: 110, min: 80 },
+        { id: 'sellingPrice', label: 'Selling Price', sortKey: 'sellingPrice' as keyof InventoryItem, align: 'right', width: 120, min: 80 },
+        { id: 'quantity', label: 'Stock', sortKey: 'quantity' as keyof InventoryItem, align: 'center', width: 90, min: 70 },
+        { id: 'weight', label: 'Weight', sortKey: 'weight' as keyof InventoryItem, align: 'right', width: 100, min: 70 }
+      ] as const,
+    []
+  )
+  const ACTION_COLUMNS = useMemo(
+    () =>
+      [
+        { id: 'code', label: 'Code', width: 150, min: 110 },
+        { id: 'manage', label: 'Manage', width: 130, min: 110 }
+      ] as const,
+    []
+  )
+
+  const columnWidth = (id: string, fallback: number) => colWidths[id] ?? fallback
+
+  // Two scrollbars drive the same table: one pinned above the header (always
+  // reachable without scrolling to the bottom of a 300-row table) and the
+  // native one under the rows. Each mirrors the other's scrollLeft, with a
+  // guard so the echoed scroll event doesn't bounce back.
+  const tableScrollRef = useRef<HTMLDivElement | null>(null)
+  const topScrollRef = useRef<HTMLDivElement | null>(null)
+  const syncingScroll = useRef(false)
+  const syncScroll = (from: 'top' | 'table') => () => {
+    if (syncingScroll.current) {
+      syncingScroll.current = false
+      return
+    }
+    const src = from === 'top' ? topScrollRef.current : tableScrollRef.current
+    const dst = from === 'top' ? tableScrollRef.current : topScrollRef.current
+    if (!src || !dst || src.scrollLeft === dst.scrollLeft) return
+    syncingScroll.current = true
+    dst.scrollLeft = src.scrollLeft
+  }
+
+  /**
+   * Sum of the current column widths. Setting this on the table (rather than
+   * w-full) is what produces a genuine horizontal scrollbar once the columns
+   * are widened past the container.
+   */
+  const totalTableWidth = useMemo(() => {
+    const cols = [...INVENTORY_COLUMNS, ...(userRole === 'admin' ? ACTION_COLUMNS : [])]
+    return cols.reduce((sum, c) => sum + (colWidths[c.id] ?? c.width), 0)
+  }, [colWidths, INVENTORY_COLUMNS, ACTION_COLUMNS, userRole])
+
+  /** Persist widths (debounced by React's batching — one write per drag end). */
+  const saveColWidths = (next: Record<string, number>) => {
+    setColWidths(next)
+    try {
+      localStorage.setItem('eduvate-inv-col-widths', JSON.stringify(next))
+    } catch {
+      /* storage unavailable (private mode) — resizing still works this session */
+    }
+  }
+
+  const resetColWidths = () => {
+    setColWidths({})
+    try {
+      localStorage.removeItem('eduvate-inv-col-widths')
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Drag handle sitting on a header's right edge. Tracks pointer movement on
+   * the window so the drag survives the cursor leaving the thin handle, and
+   * commits to localStorage once on release rather than on every mousemove.
+   */
+  const ColumnResizer = ({ col }: { col: string }) => {
+    const all = [...INVENTORY_COLUMNS, ...ACTION_COLUMNS]
+    const def = all.find((c) => c.id === col)
+    const minWidth = def?.min ?? 70
+    const startWidth = columnWidth(col, def?.width ?? 120)
+
+    const beginResize = (startX: number) => {
+      let latest = startWidth
+      const onMove = (clientX: number) => {
+        latest = Math.max(minWidth, Math.round(startWidth + (clientX - startX)))
+        // Live feedback without a state write per pixel.
+        setColWidths((prev) => ({ ...prev, [col]: latest }))
+      }
+      const onMouseMove = (e: MouseEvent) => onMove(e.clientX)
+      const onTouchMove = (e: TouchEvent) => onMove(e.touches[0].clientX)
+      const stop = () => {
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('mouseup', stop)
+        window.removeEventListener('touchmove', onTouchMove)
+        window.removeEventListener('touchend', stop)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        setColWidths((prev) => {
+          const next = { ...prev, [col]: latest }
+          try {
+            localStorage.setItem('eduvate-inv-col-widths', JSON.stringify(next))
+          } catch {
+            /* ignore */
+          }
+          return next
+        })
+      }
+      // Suppress text selection while dragging.
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'col-resize'
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', stop)
+      window.addEventListener('touchmove', onTouchMove)
+      window.addEventListener('touchend', stop)
+    }
+
+    return (
+      <span
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Resize ${def?.label ?? col} column`}
+        title="Drag to resize · double-click to reset"
+        onMouseDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          beginResize(e.clientX)
+        }}
+        onTouchStart={(e) => {
+          e.stopPropagation()
+          beginResize(e.touches[0].clientX)
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          setColWidths((prev) => {
+            const next = { ...prev }
+            delete next[col]
+            try {
+              localStorage.setItem('eduvate-inv-col-widths', JSON.stringify(next))
+            } catch {
+              /* ignore */
+            }
+            return next
+          })
+        }}
+        className="group absolute right-0 top-0 z-10 flex h-full w-3 translate-x-1/2 cursor-col-resize items-center justify-center touch-none"
+      >
+        <span className="h-1/2 w-0.5 rounded bg-primaryDark/15 transition-colors group-hover:bg-primary" />
+      </span>
+    )
+  }
+
   const sortedInventory = useMemo(() => {
     const query = inventorySearch.trim().toLowerCase()
     const base = query
       ? inventory.filter((item) =>
-          [item.title, item.publisher, item.category, item.sku, item.isbn]
+          [item.title, item.publisher, item.category, item.code, item.altCode]
             .some((field) => (field ?? '').toString().toLowerCase().includes(query))
         )
       : inventory
@@ -3254,8 +4106,8 @@ export default function DashboardPage() {
     setInvEditTitle(item.title)
     setInvEditCategory(item.category)
     setInvEditPublisher(item.publisher)
-    setInvEditSku(item.sku ?? '')
-    setInvEditIsbn(item.isbn ?? '')
+    setInvEditCode(item.code ?? '')
+    setInvEditAltCode(item.altCode ?? '')
     setInvEditRrp(String(item.rrp))
     setInvEditDiscount(String(item.discount))
     setInvEditQuantity(String(item.quantity))
@@ -3268,8 +4120,8 @@ export default function DashboardPage() {
     setInvEditTitle('')
     setInvEditCategory('Books')
     setInvEditPublisher('')
-    setInvEditSku('')
-    setInvEditIsbn('')
+    setInvEditCode('')
+    setInvEditAltCode('')
     setInvEditRrp('')
     setInvEditDiscount('0')
     setInvEditQuantity('')
@@ -3280,12 +4132,7 @@ export default function DashboardPage() {
   const handleInventoryScan = (raw: string) => {
     const code = raw.trim().toLowerCase()
     if (!code) return
-    const exact = inventory.find(
-      (i) =>
-        (i.sku || '').toLowerCase() === code ||
-        (i.isbn || '').toLowerCase() === code ||
-        i.id.toLowerCase() === code
-    )
+    const exact = inventory.find((i) => itemMatchesCode(i, raw))
     if (exact) {
       // Matched a bound book → confirm how many to add to its stock.
       setInventoryScannerOpen(false)
@@ -3301,13 +4148,8 @@ export default function DashboardPage() {
       return
     }
     // No or ambiguous match → open the Add form pre-filled with the scanned code.
-    const looksLikeIsbn = /^\d{13}$/.test(raw.trim())
     openAddInventoryItem()
-    if (looksLikeIsbn) {
-      setInvEditIsbn(raw.trim())
-    } else {
-      setInvEditSku(raw.trim())
-    }
+    setInvEditCode(raw.trim())
     setUploadMessage(`No item matched "${raw.trim()}". Add it as a new item.`)
     setInventoryScannerOpen(false)
   }
@@ -3339,8 +4181,11 @@ export default function DashboardPage() {
       title: invEditTitle.trim(),
       category: invEditCategory,
       publisher: invEditPublisher.trim(),
-      sku: invEditSku.trim(),
-      isbn: invEditIsbn.trim(),
+      code: invEditCode.trim(),
+      altCode: invEditAltCode.trim(),
+      // Legacy mirrors so the orders Cloud Function still resolves this item.
+      sku: invEditCode.trim(),
+      isbn: isIsbn13(invEditCode.trim()) ? invEditCode.trim() : '',
       rrp: Number(invEditRrp) || 0,
       discount: Number(invEditDiscount) || 0,
       quantity: Number(invEditQuantity) || 0,
@@ -3389,18 +4234,23 @@ export default function DashboardPage() {
     }
   }
 
-  // Bind a scanned/typed code to an existing inventory item.
-  // 13 digits -> isbn, otherwise -> sku. Persists via the same setDoc path used when editing.
+  // Bind a scanned/typed code to an existing inventory item. Everything lands
+  // in the one `code` field; any code already on the item is kept as altCode so
+  // a previously printed label still scans.
   const handleBindCode = async (item: InventoryItem, rawValue: string) => {
     const value = rawValue.trim()
     if (!value) return
-    const isIsbn = /^\d{13}$/.test(value)
-    const updatedItem: InventoryItem = isIsbn
-      ? { ...item, isbn: value }
-      : { ...item, sku: value }
+    const priorCode = (item.code || '').trim()
+    const updatedItem: InventoryItem = {
+      ...item,
+      code: value,
+      altCode: priorCode && normalizeCode(priorCode) !== normalizeCode(value) ? priorCode : item.altCode,
+      sku: value,
+      isbn: isIsbn13(value) ? value : ''
+    }
     setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
     setBindTargetItem(null)
-    setUploadMessage(`Bound ${isIsbn ? 'ISBN' : 'SKU'} "${value}" to "${item.title}".`)
+    setUploadMessage(`Bound code "${value}" to "${item.title}".`)
     try {
       await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
     } catch (error) {
@@ -3409,12 +4259,12 @@ export default function DashboardPage() {
     }
   }
 
-  // Remove the SKU and/or ISBN bound to an item so a mistaken code can be
-  // corrected (then re-bind). Persists via the same setDoc path.
+  // Clear the code bound to an item so a mistaken one can be corrected
+  // (then re-bind). Persists via the same setDoc path.
   const handleUnbindCode = async (item: InventoryItem) => {
-    if (!item.sku && !item.isbn) return
-    if (!confirm(`Unbind the code from "${item.title}"? You can re-bind a new QR/ISBN afterwards.`)) return
-    const updatedItem: InventoryItem = { ...item, sku: '', isbn: '' }
+    if (!item.code && !item.altCode) return
+    if (!confirm(`Unbind the code from "${item.title}"? You can re-bind a new QR/barcode afterwards.`)) return
+    const updatedItem: InventoryItem = { ...item, code: '', altCode: '', sku: '', isbn: '' }
     setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
     setQrModalItem((cur) => (cur && cur.id === updatedItem.id ? updatedItem : cur))
     setUploadMessage(`Unbound the code from "${item.title}".`)
@@ -3426,9 +4276,9 @@ export default function DashboardPage() {
     }
   }
 
-  // Generate a QR image for an item's sku (or id if no sku) and open the label modal.
+  // Generate a QR image for an item's code (or id if it has none) and open the label modal.
   const openQrLabel = async (item: InventoryItem) => {
-    const value = (item.sku || item.id).trim()
+    const value = (item.code || item.id).trim()
     setQrModalItem(item)
     setQrDataUrl('')
     try {
@@ -4400,9 +5250,53 @@ export default function DashboardPage() {
             <p className="text-xs text-muted">Add new arrivals or update existing stock</p>
           </div>
         </div>
-        <p className="text-sm text-muted mb-6 p-4 bg-primary/5 rounded-xl border border-primary/10">
-          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, SKU, ISBN, RRP, Discount %, Quantity, Selling Price, Weight (g)
+        <p className="text-sm text-muted mb-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
+          <span className="font-semibold text-primaryDark">💡 Tip:</span> Upload an .xlsx file with columns: Title, Category, Publisher, Code, RRP, Discount %, Quantity, Selling Price, Weight (g).
+          <span className="block mt-1">Rows are matched to existing stock by <strong>code</strong> (ISBN, barcode, or your own), then title + publisher. Columns you leave out are never overwritten.</span>
         </p>
+
+        {/* How the Quantity column is applied to items that already exist. */}
+        <div className="mb-6 rounded-2xl border-2 border-primary/15 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-primaryDark mb-3">
+            For items already in stock, the Quantity column should:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              ['add', 'Add to stock', 'New arrivals — quantities are added to what is on the shelf.'],
+              ['replace', 'Replace stock count', 'A stocktake — quantities become exactly what the sheet says.']
+            ] as const).map(([mode, label, help]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setUploadMode(mode)}
+                aria-pressed={uploadMode === mode}
+                className={`rounded-xl border-2 p-3 text-left transition-all ${
+                  uploadMode === mode
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-black/10 bg-white hover:border-primary/40'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                      uploadMode === mode ? 'border-primary' : 'border-black/25'
+                    }`}
+                  >
+                    {uploadMode === mode && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <span className="text-sm font-bold text-primaryDark">{label}</span>
+                </span>
+                <span className="mt-1 block pl-6 text-xs text-muted">{help}</span>
+              </button>
+            ))}
+          </div>
+          {uploadMode === 'replace' && (
+            <p className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-medium text-amber-800">
+              Replace mode overwrites stock counts. Export your stock first if you need a backup.
+            </p>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center gap-4">
           <label className="cursor-pointer">
             <input
@@ -4496,6 +5390,186 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* One-time backfill of the unified code field onto older docs. */}
+      {userRole === 'admin' && itemsNeedingCodeMigration.length > 0 && (
+        <div className="panel-card rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-200 text-blue-800">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-bold text-blue-900">
+                {itemsNeedingCodeMigration.length} item{itemsNeedingCodeMigration.length === 1 ? '' : 's'} still store the old SKU/ISBN pair
+              </p>
+              <p className="text-xs text-blue-800">
+                SKU and ISBN are now one <strong>Code</strong> field. Save it to these items so scanning and online orders resolve consistently.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleMigrateCodes}
+            disabled={mergingGroup !== null}
+            className="shrink-0 rounded-full bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-soft transition-all hover:bg-blue-700 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            {mergingGroup === '__migrate__' ? 'Saving…' : 'Save code field'}
+          </button>
+        </div>
+      )}
+
+      {/* Duplicate review: groups sharing a code or title+publisher. */}
+      {userRole === 'admin' && duplicateGroups.length > 0 && (
+        <div id="inventory-duplicates" className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border-2 border-amber-300 scroll-mt-24">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-50 px-6 py-5">
+            <button
+              type="button"
+              onClick={() => setShowDuplicates((v) => !v)}
+              aria-expanded={showDuplicates}
+              aria-controls="inventory-duplicates-list"
+              className="flex flex-1 items-center gap-3 text-left"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-200 text-amber-800">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </span>
+              <div className="flex-1">
+                <h3 className="font-display text-xl text-amber-900">
+                  {duplicateGroups.length} possible duplicate{duplicateGroups.length === 1 ? '' : ' groups'}
+                </h3>
+                <p className="text-xs font-medium text-amber-800">
+                  {duplicateGroups.reduce((n, g) => n + g.items.length, 0)} entries share a code or title
+                  {safeDuplicateGroups.length > 0 && (
+                    <> · <strong>{safeDuplicateGroups.length}</strong> can be merged automatically</>
+                  )}
+                  {duplicateGroups.length - safeDuplicateGroups.length > 0 && (
+                    <> · <strong>{duplicateGroups.length - safeDuplicateGroups.length}</strong> need review</>
+                  )}
+                </p>
+              </div>
+              <svg
+                className={`h-5 w-5 shrink-0 text-amber-800 transition-transform ${showDuplicates ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {safeDuplicateGroups.length > 0 && (
+              <button
+                type="button"
+                onClick={handleMergeAllSafe}
+                disabled={mergingGroup !== null}
+                className="shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-xs font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                {mergingGroup === '__all__'
+                  ? 'Merging…'
+                  : `Merge ${safeDuplicateGroups.length} safe group${safeDuplicateGroups.length === 1 ? '' : 's'}`}
+              </button>
+            )}
+          </div>
+
+          {showDuplicates && (
+            <div id="inventory-duplicates-list" className="divide-y divide-amber-200/60">
+              {duplicateGroups.map((group) => {
+                const totalQty = group.items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
+                const safe = isSafeMerge(group.items)
+                return (
+                  <div key={group.id} className="px-6 py-5">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-primaryDark">{group.items[0].title}</span>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-300">
+                          {group.reason}
+                        </span>
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600 border border-gray-200">
+                          {group.items.length} entries · {totalQty} total qty
+                        </span>
+                        {safe ? (
+                          <span
+                            title="No field holds two different real values, so merging loses nothing."
+                            className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200"
+                          >
+                            Safe to merge
+                          </span>
+                        ) : (
+                          <span
+                            title="These rows disagree on a selling price, code, publisher, or category. Check which is correct before merging."
+                            className="rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-bold text-red-700 border border-red-200"
+                          >
+                            Needs review
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleMergeDuplicates(group)}
+                        disabled={mergingGroup !== null}
+                        className="rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-xs font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                      >
+                        {mergingGroup === group.id ? 'Merging…' : 'Merge into one'}
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[720px] text-xs">
+                        <thead>
+                          <tr className="text-left text-[10px] font-bold uppercase tracking-wider text-muted">
+                            <th className="py-2 pr-3">Title</th>
+                            <th className="py-2 pr-3">Publisher</th>
+                            <th className="py-2 pr-3">Category</th>
+                            <th className="py-2 pr-3">Code</th>
+                            <th className="py-2 pr-3">Alt code</th>
+                            <th className="py-2 pr-3 text-right">Qty</th>
+                            <th className="py-2 pr-3 text-right">Disc %</th>
+                            <th className="py-2 pr-3 text-right">Weight</th>
+                            <th className="py-2 text-right">Price</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-black/5">
+                          {group.items.map((item) => {
+                            // Grey out what this row is missing — makes it obvious
+                            // which entry is the thin duplicate.
+                            const missing = 'text-red-500 font-semibold'
+                            const placeholder = isPlaceholderPriced(item)
+                            return (
+                              <tr key={item.id} className={placeholder ? 'opacity-70' : ''}>
+                                <td className="py-2 pr-3 font-medium">
+                                  {item.title}
+                                  {placeholder && (
+                                    <span
+                                      title="No discount and RRP equals the selling price — imported without cost data. The other row's values win."
+                                      className="ml-1.5 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500 border border-gray-200 align-middle"
+                                    >
+                                      no cost data
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`py-2 pr-3 ${item.publisher ? 'text-muted' : missing}`}>{item.publisher || 'missing'}</td>
+                                <td className="py-2 pr-3 text-muted">{item.category}</td>
+                                <td className={`py-2 pr-3 ${item.code ? 'text-muted' : missing}`}>{item.code || 'missing'}</td>
+                                <td className={`py-2 pr-3 ${item.altCode ? 'text-muted' : 'text-muted/40'}`}>{item.altCode || '—'}</td>
+                                <td className="py-2 pr-3 text-right font-bold">{item.quantity}</td>
+                                <td className={`py-2 pr-3 text-right ${item.discount > 0 ? '' : missing}`}>{item.discount > 0 ? `${item.discount}%` : 'missing'}</td>
+                                <td className={`py-2 pr-3 text-right ${item.weight > 0 ? '' : missing}`}>{item.weight > 0 ? `${formatNumber(item.weight)} g` : 'missing'}</td>
+                                <td className="py-2 text-right font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted">
+                      Merging sums the quantities and keeps the first non-empty value for every other field.
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
         <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -4525,7 +5599,7 @@ export default function DashboardPage() {
                 type="text"
                 value={inventorySearch}
                 onChange={(event) => setInventorySearch(event.target.value)}
-                placeholder="Search stock by title, publisher, category, SKU, or ISBN..."
+                placeholder="Search stock by title, publisher, category, or code..."
                 className="w-full rounded-2xl border-2 border-primary/20 bg-white pl-11 pr-11 py-3 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
               />
               {inventorySearch && (
@@ -4545,53 +5619,128 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l-4 3 4 3m8-6l4 3-4 3" />
+            </svg>
+            Scroll sideways with the bar above the table · drag a divider between headers to resize · double-click a divider to reset it
+            {Object.keys(colWidths).length > 0 && (
+              <button
+                type="button"
+                onClick={resetColWidths}
+                className="rounded-full border border-primary/30 px-2.5 py-0.5 text-[11px] font-bold text-primaryDark transition-colors hover:bg-primary/5"
+              >
+                Reset widths
+              </button>
+            )}
+          </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-sm">
-            <thead className="bg-gradient-to-r from-primary/10 to-secondary/10 text-left">
+        {/* Scrollbar above the header, mirroring the table's. Without it the
+            only horizontal scrollbar sits below ~350 rows, off-screen. */}
+        <div
+          ref={topScrollRef}
+          onScroll={syncScroll('top')}
+          className="inv-scroll overflow-x-auto overflow-y-hidden border-b border-primary/10"
+          aria-hidden="true"
+        >
+          <div style={{ width: totalTableWidth, minWidth: '100%', height: 1 }} />
+        </div>
+
+        {/* Horizontal scroller. table-fixed + an explicit colgroup is what lets
+            the drag handles set real widths; without it the browser re-flows
+            every column whenever cell content changes. */}
+        <div
+          ref={tableScrollRef}
+          onScroll={syncScroll('table')}
+          className="inv-scroll overflow-x-auto overscroll-x-contain"
+        >
+          <table className="text-sm table-fixed" style={{ width: totalTableWidth, minWidth: '100%' }}>
+            <colgroup>
+              {INVENTORY_COLUMNS.map((c) => (
+                <col key={c.id} style={{ width: columnWidth(c.id, c.width) }} />
+              ))}
+              {userRole === 'admin' &&
+                ACTION_COLUMNS.map((c) => (
+                  <col key={c.id} style={{ width: columnWidth(c.id, c.width) }} />
+                ))}
+            </colgroup>
+            <thead className="sticky top-0 z-20 bg-gradient-to-r from-purple-50 to-pink-50 text-left shadow-sm">
               <tr>
-                {([['title', 'Title'], ['category', 'Category'], ['publisher', 'Publisher'], ['rrp', 'RRP'], ['discount', 'Discount %'], ['quantity', 'Quantity'], ['sellingPrice', 'Selling Price'], ['weight', 'Weight (g)']] as [keyof InventoryItem, string][]).map(([key, label]) => (
-                  <th key={key} className="px-3 sm:px-6 py-3 sm:py-4">
+                {INVENTORY_COLUMNS.map((c) => (
+                  <th
+                    key={c.id}
+                    className={`relative px-3 sm:px-4 py-3 sm:py-4 ${
+                      c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'
+                    }`}
+                  >
                     <button
                       type="button"
-                      onClick={() => handleInventorySort(key)}
-                      className="inline-flex items-center text-xs font-bold uppercase tracking-wider text-primaryDark hover:text-primary transition-colors cursor-pointer select-none"
+                      onClick={() => handleInventorySort(c.sortKey)}
+                      className="inline-flex max-w-full items-center truncate text-xs font-bold uppercase tracking-wider text-primaryDark hover:text-primary transition-colors cursor-pointer select-none"
                     >
-                      {label}<SortIcon col={key} />
+                      <span className="truncate">{c.label}</span>
+                      <SortIcon col={c.sortKey} />
                     </button>
+                    <ColumnResizer col={c.id} />
                   </th>
                 ))}
                 {userRole === 'admin' && (
-                  <th className="px-3 sm:px-6 py-3 sm:py-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Actions</span>
-                  </th>
+                  <>
+                    {/* Actions split by intent so the column stops wrapping into
+                        an unpredictable pile of pills. */}
+                    <th className="relative px-3 sm:px-4 py-3 sm:py-4 text-center">
+                      <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Code</span>
+                      <ColumnResizer col="code" />
+                    </th>
+                    <th className="relative px-3 sm:px-4 py-3 sm:py-4 text-center">
+                      <span className="text-xs font-bold uppercase tracking-wider text-primaryDark">Manage</span>
+                      <ColumnResizer col="manage" />
+                    </th>
+                  </>
                 )}
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {sortedInventory.map((item, index) => (
                 <tr key={item.id} className={`hover:bg-primary/5 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium">
-                    <span className="block">{item.title}</span>
-                    {item.isbn || item.sku ? (
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
-                        {item.isbn ? `ISBN ${item.isbn}` : `SKU ${item.sku}`}
-                      </span>
-                    ) : (
-                      <span className="mt-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 border border-gray-200">
-                        No code
-                      </span>
-                    )}
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 font-medium">
+                    <span className="block truncate" title={item.title}>{item.title}</span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                      {item.code ? (
+                        <span
+                          title={item.altCode ? `Also recognised: ${item.altCode}` : undefined}
+                          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200"
+                        >
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
+                          {item.code}
+                          {item.altCode && <span className="opacity-60">+1</span>}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500 border border-gray-200">
+                          No code
+                        </span>
+                      )}
+                      {duplicateIds.has(item.id) && (
+                        <button
+                          type="button"
+                          onClick={() => { setShowDuplicates(true); document.getElementById('inventory-duplicates')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+                          title="This item shares a code or title with another entry. Click to review."
+                          className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                        >
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          Duplicate
+                        </button>
+                      )}
+                    </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4">
-                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark border border-primary/20">
+                  <td className="px-3 sm:px-4 py-3 sm:py-4">
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primaryDark border border-primary/20 whitespace-nowrap">
                       {item.category}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-muted">{item.publisher}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-semibold">${formatNumber(item.rrp)}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4">
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-muted truncate">{item.publisher || <span className="text-red-400">—</span>}</td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-right font-semibold whitespace-nowrap">${formatNumber(item.rrp)}</td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
                     {item.discount > 0 ? (
                       <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">
                         {item.discount}%
@@ -4600,8 +5749,9 @@ export default function DashboardPage() {
                       <span className="text-muted">-</span>
                     )}
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4">
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-right font-bold text-primaryDark whitespace-nowrap">${formatNumber(item.sellingPrice)}</td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
+                    <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
                       item.quantity <= 5
                         ? 'bg-red-100 text-red-700 border border-red-200'
                         : item.quantity <= restockThreshold
@@ -4611,77 +5761,90 @@ export default function DashboardPage() {
                       {item.quantity}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</td>
-                  <td className="px-3 sm:px-6 py-3 sm:py-4 text-muted whitespace-nowrap">{item.weight ? `${formatNumber(item.weight)} g` : '-'}</td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-right text-muted whitespace-nowrap">
+                    {item.weight ? `${formatNumber(item.weight)} g` : <span className="text-red-400">—</span>}
+                  </td>
                   {userRole === 'admin' && (
-                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => openEditInventoryItem(item)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
-                          type="button"
-                          aria-label={`Edit ${item.title}`}
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          Edit
-                        </button>
-                        {!(item.sku || item.isbn) && (
+                    <>
+                      {/* Code: everything that touches the item's identity. */}
+                      <td className="px-3 sm:px-4 py-3 sm:py-4">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {item.code ? (
+                            <button
+                              onClick={() => handleUnbindCode(item)}
+                              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors whitespace-nowrap"
+                              type="button"
+                              aria-label={`Unbind code from ${item.title}`}
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1M4 4l16 16" />
+                              </svg>
+                              Unbind
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setBindTargetItem(item)}
+                              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-purple-50 text-primaryDark border border-primary/30 hover:bg-purple-100 transition-colors whitespace-nowrap"
+                              type="button"
+                              aria-label={`Bind a code to ${item.title}`}
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
+                              </svg>
+                              Bind
+                            </button>
+                          )}
                           <button
-                            onClick={() => setBindTargetItem(item)}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-purple-50 text-primaryDark border border-primary/30 hover:scale-105 transition-all"
+                            onClick={() => openQrLabel(item)}
+                            className="inline-flex items-center justify-center rounded-full p-1.5 bg-pink-50 text-secondary border border-secondary/30 hover:bg-pink-100 transition-colors"
                             type="button"
-                            aria-label={`Bind a code to ${item.title}`}
+                            title="Print QR label"
+                            aria-label={`Print QR label for ${item.title}`}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v3" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Manage: full record edit and removal. */}
+                      <td className="px-3 sm:px-4 py-3 sm:py-4">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => openEditInventoryItem(item)}
+                            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                            type="button"
+                            aria-label={`Edit ${item.title}`}
                           >
                             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            Bind QR
+                            Edit
                           </button>
-                        )}
-                        <button
-                          onClick={() => openQrLabel(item)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-pink-50 text-secondary border border-secondary/30 hover:scale-105 transition-all"
-                          type="button"
-                          aria-label={`Print QR label for ${item.title}`}
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v3" />
-                          </svg>
-                          QR Label
-                        </button>
-                        {(item.sku || item.isbn) && (
                           <button
-                            onClick={() => handleUnbindCode(item)}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
+                            onClick={() => handleDeleteInventoryItem(item)}
+                            className="inline-flex items-center justify-center rounded-full p-1.5 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
                             type="button"
-                            aria-label={`Unbind code from ${item.title}`}
+                            title="Delete item"
+                            aria-label={`Delete ${item.title}`}
                           >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1M4 4l16 16" />
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
-                            Unbind
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteInventoryItem(item)}
-                          className="inline-flex items-center justify-center rounded-full p-2 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
-                          type="button"
-                          aria-label={`Delete ${item.title}`}
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
+                        </div>
+                      </td>
+                    </>
                   )}
                 </tr>
               ))}
               {sortedInventory.length === 0 && (
                 <tr>
-                  <td colSpan={userRole === 'admin' ? 9 : 8} className="px-6 py-10 text-center text-sm text-muted">
+                  <td
+                    colSpan={INVENTORY_COLUMNS.length + (userRole === 'admin' ? ACTION_COLUMNS.length : 0)}
+                    className="px-6 py-10 text-center text-sm text-muted"
+                  >
                     {inventorySearch.trim()
                       ? <>No items match &ldquo;{inventorySearch.trim()}&rdquo;.</>
                       : 'No inventory items yet.'}
@@ -6311,7 +7474,7 @@ export default function DashboardPage() {
                   .sort((a, b) => a.title.localeCompare(b.title))
                   .map((i) => (
                     <option key={i.id} value={i.id}>
-                      {i.title}{i.publisher ? ` (${i.publisher})` : ''}{i.sku ? ` (${i.sku})` : i.isbn ? ` (${i.isbn})` : ''}
+                      {i.title}{i.publisher ? ` (${i.publisher})` : ''}{i.code ? ` (${i.code})` : ''}
                     </option>
                   ))}
               </select>
@@ -7175,7 +8338,7 @@ export default function DashboardPage() {
                 <div className="flex h-56 w-56 items-center justify-center rounded-xl border border-dashed border-primary/30 text-sm text-muted">Generating…</div>
               )}
               <p className="mt-4 font-display text-base font-bold text-primaryDark">{qrModalItem.title}</p>
-              <p className="mt-1 font-mono text-xs text-muted">{qrModalItem.sku || qrModalItem.id}</p>
+              <p className="mt-1 font-mono text-xs text-muted">{qrModalItem.code || qrModalItem.id}</p>
             </div>
             <button
               onClick={() => window.print()}
@@ -7247,25 +8410,32 @@ export default function DashboardPage() {
                   className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
               </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">SKU</label>
+              {/* One identifier field. Books use their ISBN, other stock a
+                  barcode or internal code — splitting this across SKU and ISBN
+                  is what let the same item be entered twice. */}
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+                  Code <span className="normal-case text-[10px] font-medium">(ISBN, barcode, or your own)</span>
+                </label>
                 <input
                   type="text"
-                  value={invEditSku}
-                  onChange={(e) => setInvEditSku(e.target.value)}
-                  placeholder="e.g., LR-ABC-001"
+                  value={invEditCode}
+                  onChange={(e) => setInvEditCode(e.target.value)}
+                  placeholder="e.g., 9781234567890 or EK-my-item"
                   className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
                 />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">ISBN / Barcode</label>
-                <input
-                  type="text"
-                  value={invEditIsbn}
-                  onChange={(e) => setInvEditIsbn(e.target.value)}
-                  placeholder="e.g., 9781234567890"
-                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-                />
+                {invEditAltCode.trim() && (
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    Also recognised: <span className="font-semibold">{invEditAltCode}</span>{' '}
+                    <button
+                      type="button"
+                      onClick={() => setInvEditAltCode('')}
+                      className="text-red-600 underline hover:no-underline"
+                    >
+                      remove
+                    </button>
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">RRP ($)</label>

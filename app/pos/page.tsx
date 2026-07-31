@@ -19,8 +19,9 @@ type InventoryItem = {
   discount: number
   quantity: number
   sellingPrice: number
-  sku: string
-  isbn: string
+  /** Unified scannable identifier. Legacy docs still carry sku/isbn instead. */
+  code: string
+  altCode: string
 }
 
 type Sale = {
@@ -87,8 +88,10 @@ export default function POSPage() {
                 discount: Number(data.discount ?? 0),
                 quantity: Number(data.quantity ?? 0),
                 sellingPrice: Number(data.sellingPrice ?? 0),
-                sku: String(data.sku ?? ''),
-                isbn: String(data.isbn ?? '')
+                // Fall back to the legacy sku/isbn pair for docs that predate
+                // the unified code field.
+                code: String(data.code ?? data.isbn ?? data.sku ?? ''),
+                altCode: String(data.altCode ?? '')
               }
             })
             .filter((item) => item.title) // Only include items with titles
@@ -159,13 +162,22 @@ export default function POSPage() {
     setMessage(`${item.title} added to cart.`)
   }
 
-  // Resolve a scanned/typed code to an inventory item: exact sku/isbn/id first,
+  // Resolve a scanned/typed code to an inventory item: exact code/id first,
   // then a loose title match. Adds to cart on a confident single match.
   const handleScanDetected = (raw: string) => {
     const code = raw.trim().toLowerCase()
     if (!code) return
+    // Compare digits-only so a hyphenated barcode still matches its bare form.
+    const canon = (v: string) => {
+      const digits = v.replace(/[^0-9xX]/g, '').toLowerCase()
+      return digits.length >= 8 ? digits : v.trim().toLowerCase()
+    }
+    const wanted = canon(raw)
     const exact = inventory.find(
-      (i) => i.sku.toLowerCase() === code || i.isbn.toLowerCase() === code || i.id.toLowerCase() === code
+      (i) =>
+        i.id.toLowerCase() === code ||
+        (i.code && canon(i.code) === wanted) ||
+        (i.altCode && canon(i.altCode) === wanted)
     )
     if (exact) {
       handleAddToCart(exact.id)

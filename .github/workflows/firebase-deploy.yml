@@ -5,6 +5,11 @@ on:
     branches:
       - master
   workflow_dispatch:
+  # Fired by the publishProductPages Cloud Function when the catalog changes,
+  # so a book added in the dashboard gets its static /book/<slug> page without
+  # anyone having to push a commit. See functions/src/publish.ts.
+  repository_dispatch:
+    types: [publish-catalog]
 
 jobs:
   build_and_deploy:

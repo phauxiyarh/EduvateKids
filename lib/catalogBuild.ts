@@ -103,12 +103,21 @@ export async function getCatalogProducts(): Promise<CatalogProduct[]> {
   try {
     do {
       const url = `${REST_BASE}/catalog?pageSize=300${pageToken ? `&pageToken=${pageToken}` : ''}`
-      // `force-cache` (the default) is required: `no-store` marks the caller
-      // as dynamic, which a static export rejects outright. The build process
-      // is short-lived, so caching within it is exactly what we want — one
-      // network read shared by generateStaticParams, 241 metadata calls and
-      // the sitemap.
-      const res = await fetch(url, { cache: 'force-cache' })
+      // Must stay cacheable: `no-store` marks the caller dynamic, which a
+      // static export rejects outright.
+      //
+      // The build logs two "Failed to set Next.js data cache, items over 2MB"
+      // warnings here. They are benign — the fetch itself succeeds and all 241
+      // pages generate — because catalog rows carry inlined base64 images that
+      // push each response past Next's 2MB cache-entry ceiling. Next simply
+      // skips caching it. The module-level `cached` below already guarantees a
+      // single read per build, so nothing is refetched.
+      //
+      // Tried and rejected: `mask.fieldPaths` to slim the payload (Firestore
+      // then omits the `images` array entirely, losing every product image).
+      // The real fix is migrating those base64 images to Storage URLs — 80 of
+      // 522 remain inlined.
+      const res = await fetch(url, { next: { revalidate: false } })
       if (!res.ok) throw new Error(`Firestore REST ${res.status}: ${await res.text()}`)
       const json = (await res.json()) as {
         documents?: Array<{ name: string; fields?: Record<string, FsValue> }>

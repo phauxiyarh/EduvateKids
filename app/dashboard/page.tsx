@@ -13,6 +13,7 @@ import {
   deleteDoc,
   writeBatch,
   getDoc,
+  onSnapshot,
   serverTimestamp,
   increment
 } from 'firebase/firestore'
@@ -984,6 +985,16 @@ export default function DashboardPage() {
   const [catalogExistingImages, setCatalogExistingImages] = useState<string[]>([])
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogCategoryFilter, setCatalogCategoryFilter] = useState<'All' | InventoryCategory>('All')
+  // Static /book/<slug> pages are generated at build time, so catalog edits
+  // are not on the public site until a rebuild runs. This mirrors
+  // system/publishState so the admin can see whether one is pending.
+  const [publishState, setPublishState] = useState<{
+    lastCatalogChangeAt?: number
+    lastDispatchAt?: number
+    lastError?: string | null
+  }>({})
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [publishMessage, setPublishMessage] = useState('')
   const [isUploadingCatalog, setIsUploadingCatalog] = useState(false)
   const [catalogMessage, setCatalogMessage] = useState('')
   const [catalogSliderIndex, setCatalogSliderIndex] = useState<Record<string, number>>({})
@@ -2507,6 +2518,64 @@ export default function DashboardPage() {
   // inventory item also lacks a SKU, generate one and write it to BOTH. Runs only
   // on click. Batches all writes and updates local state.
   const [isLinkingCatalog, setIsLinkingCatalog] = useState(false)
+  // Live view of publish state, so the Catalog tab can say whether the public
+  // product pages are behind the catalog.
+  useEffect(() => {
+    if (userRole !== 'admin' || demoMode) return
+    const unsub = onSnapshot(
+      doc(db, 'system', 'publishState'),
+      (snap) => {
+        const d = snap.data() as
+          | {
+              lastCatalogChangeAt?: { toMillis: () => number }
+              lastDispatchAt?: { toMillis: () => number }
+              lastError?: string | null
+            }
+          | undefined
+        setPublishState({
+          lastCatalogChangeAt: d?.lastCatalogChangeAt?.toMillis(),
+          lastDispatchAt: d?.lastDispatchAt?.toMillis(),
+          lastError: d?.lastError ?? null
+        })
+      },
+      // A missing doc or a rules denial should not break the Catalog tab.
+      () => setPublishState({})
+    )
+    return () => unsub()
+  }, [userRole, demoMode])
+
+  /** True when the catalog changed after the most recent site build. */
+  const publishPending =
+    !!publishState.lastCatalogChangeAt &&
+    publishState.lastCatalogChangeAt > (publishState.lastDispatchAt ?? 0)
+
+  const handlePublishNow = async () => {
+    setIsPublishing(true)
+    setPublishMessage('')
+    try {
+      const callable = httpsCallable<
+        Record<string, never>,
+        { status: 'dispatched' | 'throttled'; retryAfterSeconds?: number }
+      >(functions, 'requestPublish')
+      const { data } = await callable({})
+      if (data.status === 'throttled') {
+        const mins = Math.ceil((data.retryAfterSeconds ?? 0) / 60)
+        setPublishMessage(
+          `A build ran very recently. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`
+        )
+      } else {
+        setPublishMessage(
+          '✅ Publishing started. The product pages go live in about 2 minutes.'
+        )
+      }
+    } catch (error) {
+      console.error('Publish error:', error)
+      setPublishMessage('⚠️ Could not start publishing. Please try again.')
+    } finally {
+      setIsPublishing(false)
+    }
+  }
+
   const handleLinkCatalogInventory = async () => {
     setIsLinkingCatalog(true)
     setCatalogLinkMessage('')
@@ -7766,6 +7835,63 @@ export default function DashboardPage() {
         {catalogLinkMessage && (
           <div className="mt-3 rounded-xl bg-green-50 border border-green-200 p-3 text-xs font-medium text-green-700">
             {catalogLinkMessage}
+          </div>
+        )}
+
+        {/* Each book also has a static /book/<slug> page built from this
+            catalog. Those only refresh when the site rebuilds, so surface
+            whether the public pages are currently behind. */}
+        {!demoMode && (
+          <div
+            className={`mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 ${
+              publishPending ? 'border-amber-300 bg-amber-50' : 'border-primary/15 bg-primary/5'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                  publishPending ? 'bg-amber-200 text-amber-800' : 'bg-primary/15 text-primaryDark'
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6" />
+                </svg>
+              </span>
+              <div>
+                <p className={`text-sm font-bold ${publishPending ? 'text-amber-900' : 'text-primaryDark'}`}>
+                  {publishPending
+                    ? 'Catalog changes are not on the public site yet'
+                    : 'Public product pages are up to date'}
+                </p>
+                <p className={`text-xs ${publishPending ? 'text-amber-800' : 'text-muted'}`}>
+                  {publishPending
+                    ? 'Each book has its own page for Google and AI search. These rebuild automatically about 10 minutes after your last edit, or publish now.'
+                    : `Last published ${
+                        publishState.lastDispatchAt
+                          ? new Date(publishState.lastDispatchAt).toLocaleString()
+                          : 'not yet'
+                      }.`}
+                </p>
+                {publishState.lastError && (
+                  <p className="mt-1 text-xs font-semibold text-red-600">
+                    Last publish attempt failed. Try again, or check the deploy logs.
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handlePublishNow}
+              disabled={isPublishing}
+              className="shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-xs font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+            >
+              {isPublishing ? 'Starting…' : 'Publish now'}
+            </button>
+          </div>
+        )}
+        {publishMessage && (
+          <div className="mt-3 rounded-xl bg-primary/5 border border-primary/20 p-3 text-xs font-medium text-primaryDark">
+            {publishMessage}
           </div>
         )}
       </div>

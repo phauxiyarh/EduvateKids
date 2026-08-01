@@ -12,6 +12,8 @@
  */
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
@@ -22,10 +24,12 @@ import {
   RESEND_API_KEY,
   USPS_CLIENT_ID,
   USPS_CLIENT_SECRET,
+  GITHUB_DISPATCH_TOKEN,
   ALLOWED_ORIGINS,
   stripeConfigured,
   uspsConfigured,
 } from './config';
+import { noteCatalogChange, publishIfDue, publishNow } from './publish';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
@@ -607,6 +611,50 @@ export const validateAddress = onCall(
       return { available: false };
     }
   }
+);
+
+// ─────────────────────── Publish static product pages ────────────────────────
+// /book/<slug> pages are generated at build time from `catalog`, so a new book
+// has no page until the site rebuilds. These fire the GitHub Actions deploy.
+
+/**
+ * Record every catalog change. Deliberately does no network work: it only
+ * stamps a timestamp, and the scheduled sweep below decides when to build, so
+ * editing ten books in a row costs ten cheap writes and one build.
+ */
+export const onCatalogWrite = onDocumentWritten('catalog/{docId}', async () => {
+  await noteCatalogChange(db);
+});
+
+/**
+ * Debounce sweep. Runs every 5 minutes and builds only once the catalog has
+ * been quiet for DEBOUNCE_MS and no build has happened since the last change.
+ */
+export const publishCatalogIfDue = onSchedule(
+  { schedule: 'every 5 minutes', secrets: [GITHUB_DISPATCH_TOKEN] },
+  async () => {
+    try {
+      const result = await publishIfDue(db, GITHUB_DISPATCH_TOKEN.value());
+      if (result === 'built') logger.info('Scheduled catalog publish dispatched');
+    } catch (error) {
+      // Never throw: a failed dispatch must not retry-storm the scheduler.
+      logger.error('Scheduled catalog publish failed', error);
+    }
+  },
+);
+
+/** Dashboard "Publish now" button. Admin-only, rate-limited inside publishNow. */
+export const requestPublish = onCall(
+  { secrets: [GITHUB_DISPATCH_TOKEN], cors: ALLOWED_ORIGINS },
+  async (request) => {
+    await assertAdmin(request);
+    try {
+      return await publishNow(db, GITHUB_DISPATCH_TOKEN.value());
+    } catch (error) {
+      logger.error('Manual publish failed', error);
+      throw new HttpsError('internal', 'Could not start the publish. Please try again.');
+    }
+  },
 );
 
 // ─────────────────────────── PayPal (deferred, Phase D) ───────────────────────────

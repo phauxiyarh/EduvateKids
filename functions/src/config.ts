@@ -19,6 +19,12 @@ export const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 export const USPS_CLIENT_ID = defineSecret('USPS_CLIENT_ID');
 export const USPS_CLIENT_SECRET = defineSecret('USPS_CLIENT_SECRET');
 
+// Fine-grained GitHub PAT with only "Contents: read and write" on the site
+// repo, used to POST a repository_dispatch that rebuilds the static product
+// pages. Kept server-side: the site repo is public, so a browser-held token
+// would be extractable from the JS bundle.
+export const GITHUB_DISPATCH_TOKEN = defineSecret('GITHUB_DISPATCH_TOKEN');
+
 // PayPal secrets are intentionally NOT declared yet (Phase D). Declaring a secret
 // makes Firebase prompt for it at deploy time even if unused, so we keep these
 // commented until PayPal is wired. Restore in Phase D:

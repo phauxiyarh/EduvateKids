@@ -25,9 +25,11 @@ export type CatalogProduct = {
   price: number
   publisher: string
   showPublisher: boolean
-  /** Only http(s) images — base64 data URIs are unusable in metadata/JSON-LD. */
+  /** Only http(s) images. Base64 data URIs are unusable in metadata/JSON-LD. */
   images: string[]
   stock?: number
+  /** Slugs of the shelves this product appears on. Empty is normal. */
+  shelves: string[]
 }
 
 // ---- Firestore REST value decoding -------------------------------------
@@ -143,7 +145,8 @@ export async function getCatalogProducts(): Promise<CatalogProduct[]> {
           // They cannot be referenced from JSON-LD or og:image, so only real
           // hosted URLs are kept here.
           images: toArray(d.images).filter((u) => /^https?:\/\//i.test(u)),
-          stock: typeof d.stock === 'number' ? (d.stock as number) : undefined
+          stock: typeof d.stock === 'number' ? (d.stock as number) : undefined,
+          shelves: toArray(d.shelves)
         })
       }
       pageToken = json.nextPageToken ?? ''
@@ -168,6 +171,50 @@ export async function getCatalogProducts(): Promise<CatalogProduct[]> {
 export async function getProductBySlug(slug: string): Promise<CatalogProduct | undefined> {
   const all = await getCatalogProducts()
   return all.find((p) => p.slug === slug)
+}
+
+/**
+ * Generic build-time reader for a public collection. Same REST + memoisation
+ * approach as the catalog: these collections are world-readable, so no
+ * service-account key is needed in CI.
+ */
+const collectionCache = new Map<string, Array<Record<string, unknown> & { id: string }>>()
+
+export async function getPublicCollection(
+  name: string
+): Promise<Array<Record<string, unknown> & { id: string }>> {
+  const hit = collectionCache.get(name)
+  if (hit) return hit
+
+  const out: Array<Record<string, unknown> & { id: string }> = []
+  let pageToken = ''
+  try {
+    do {
+      const url = `${REST_BASE}/${name}?pageSize=300${pageToken ? `&pageToken=${pageToken}` : ''}`
+      const res = await fetch(url, { next: { revalidate: false } })
+      // A collection that does not exist yet returns 404. That is a normal
+      // state before the first document is created, not a build failure.
+      if (res.status === 404) break
+      if (!res.ok) throw new Error(`Firestore REST ${res.status}: ${await res.text()}`)
+      const json = (await res.json()) as {
+        documents?: Array<{ name: string; fields?: Record<string, FsValue> }>
+        nextPageToken?: string
+      }
+      for (const doc of json.documents ?? []) {
+        out.push({ id: doc.name.split('/').pop() as string, ...decodeFields(doc.fields ?? {}) })
+      }
+      pageToken = json.nextPageToken ?? ''
+    } while (pageToken)
+  } catch (error) {
+    // Content collections are additive: an empty blog or shelf list is a valid
+    // site. Failing the whole build over one would be worse than shipping
+    // without that section, so log and continue.
+    console.warn(`[build] could not read "${name}": ${(error as Error).message}`)
+    return []
+  }
+
+  collectionCache.set(name, out)
+  return out
 }
 
 /** A tracked stock of 0 or less means out of stock; untracked means available. */

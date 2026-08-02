@@ -86,6 +86,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Shelves: public read, admin write ───────────────────────────────────
+    // Curated collections shown on /shelves. Read publicly so the storefront
+    // and the build-time page generator can list them without credentials.
+    match /shelves/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── System state: admin read only, written by Cloud Functions ───────────
     // Holds system/publishState, which tells the dashboard whether the static
     // product pages are behind the catalog. Only the Admin SDK writes here.

@@ -18,6 +18,7 @@ import {
   increment
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
+import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -364,6 +365,16 @@ const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[
   { id: 'orders', label: 'Orders', title: 'Online Orders', subtitle: 'Online store orders paid via Stripe. Review details and mark items as shipped.' },
   { id: 'summer', label: 'Summer Reads', title: 'Summer Reads', subtitle: 'Registrations and reading progress for the Summer Reads program.' },
   { id: 'bookRequests', label: 'Book Requests', title: 'Book Requests', subtitle: 'Out-of-stock pre-orders reserved by shoppers. Follow up when items are back in stock.' },
+  { id: 'website', label: 'Website', title: 'Website Content', subtitle: 'Manage the shelves, blog posts and freebies that appear on the public site.' },
+]
+
+type WebsiteTab = 'shelves' | 'blog' | 'freebies'
+
+/** Sub-tabs inside the Website section. */
+const WEBSITE_TABS: { id: WebsiteTab; label: string; blurb: string }[] = [
+  { id: 'shelves', label: 'Shelves', blurb: 'Curated collections of books shown on the /shelves page.' },
+  { id: 'blog', label: 'Blog', blurb: 'Articles and reading guides shown on the /blog page.' },
+  { id: 'freebies', label: 'Freebies', blurb: 'Free downloads unlocked when a visitor subscribes.' },
 ]
 
 /** The icon path(s) for a nav item id. */
@@ -378,6 +389,7 @@ function NavIcon({ id, className }: { id: string; className?: string }) {
       {id === 'orders' && <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />}
       {id === 'summer' && <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />}
       {id === 'bookRequests' && <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />}
+      {id === 'website' && <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z" />}
     </svg>
   )
 }
@@ -470,6 +482,12 @@ type CatalogItem = {
   // Mirrored stock count so the storefront knows in/out of stock. Kept in sync
   // with the linked inventory item's quantity from the catalog form.
   stock?: number
+  /**
+   * Slugs of the shelves this product appears on. Held on the product rather
+   * than the shelf so a book can sit on several shelves and assignment is one
+   * field edit in the catalog form.
+   */
+  shelves?: string[]
 }
 
 const defaultInventory: InventoryItem[] = [
@@ -824,9 +842,21 @@ export default function DashboardPage() {
     }
     return true
   })
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer' | 'bookRequests'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer' | 'bookRequests' | 'website'>(
     'home'
   )
+  const [websiteTab, setWebsiteTab] = useState<WebsiteTab>('shelves')
+
+  // Shelves: curated collections rendered on /shelves. Membership is stored on
+  // each catalog product, so creating a shelf here only defines the container.
+  const [shelves, setShelves] = useState<Shelf[]>([])
+  const [shelvesLoading, setShelvesLoading] = useState(false)
+  const [shelfName, setShelfName] = useState('')
+  const [shelfDescription, setShelfDescription] = useState('')
+  const [shelfOrder, setShelfOrder] = useState('')
+  const [editingShelf, setEditingShelf] = useState<Shelf | null>(null)
+  const [shelfMessage, setShelfMessage] = useState('')
+  const [isSavingShelf, setIsSavingShelf] = useState(false)
   const [orders, setOrders] = useState<OnlineOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
@@ -977,6 +1007,8 @@ export default function DashboardPage() {
   const [catalogPublisher, setCatalogPublisher] = useState('')
   // Whether the publisher name is shown to shoppers on the storefront.
   const [catalogShowPublisher, setCatalogShowPublisher] = useState(true)
+  /** Shelf slugs this product belongs to. A product may sit on several. */
+  const [catalogShelves, setCatalogShelves] = useState<string[]>([])
   const [catalogSku, setCatalogSku] = useState('')
   const [catalogQty, setCatalogQty] = useState('')
   const [catalogSellingPrice, setCatalogSellingPrice] = useState('')
@@ -1218,6 +1250,9 @@ export default function DashboardPage() {
                 publisher: String(data.publisher ?? ''),
                 showPublisher: data.showPublisher !== false, // default visible
                 stock: data.stock ?? (data as { quantity?: number }).quantity,
+                shelves: Array.isArray((data as { shelves?: unknown }).shelves)
+                  ? ((data as { shelves: unknown[] }).shelves.map(String))
+                  : [],
                 sku: data.sku ? String(data.sku) : undefined,
                 images: Array.isArray(data.images) ? data.images : [],
                 createdAt: String(data.createdAt ?? new Date().toISOString())
@@ -2210,6 +2245,7 @@ export default function DashboardPage() {
     setCatalogImagePreviews([])
     setCatalogExistingImages([])
     setCatalogFromInventoryId('')
+    setCatalogShelves([])
   }
 
   // Open the catalog create form prefilled from an inventory item that lacks a
@@ -2390,6 +2426,7 @@ export default function DashboardPage() {
         images: imageUrls,
         createdAt: new Date().toISOString(),
         sku: skuVal,
+        shelves: catalogShelves,
         ...(stockVal !== undefined ? { stock: stockVal } : {})
       }
 
@@ -2425,6 +2462,7 @@ export default function DashboardPage() {
 
   const openEditCatalogItem = (item: CatalogItem) => {
     setEditingCatalogItem(item)
+    setCatalogShelves(item.shelves || [])
     setCatalogTitle(item.title)
     setCatalogDescription(item.description)
     setCatalogCategories(Array.isArray(item.category) ? item.category : [item.category])
@@ -2475,6 +2513,7 @@ export default function DashboardPage() {
         showPublisher: catalogShowPublisher,
         images: allImages,
         sku: skuVal,
+        shelves: catalogShelves,
         ...(stockVal !== undefined ? { stock: stockVal } : {})
       }
 
@@ -2575,6 +2614,134 @@ export default function DashboardPage() {
       setIsPublishing(false)
     }
   }
+
+  // ── Shelves ────────────────────────────────────────────────────────────────
+  // Loaded for the Website tab and for the catalog form's shelf picker.
+  useEffect(() => {
+    if ((activeView !== 'website' && activeView !== 'catalog') || demoMode) return
+    let cancelled = false
+    setShelvesLoading(true)
+    getDocs(collection(db, 'shelves'))
+      .then((snap) => {
+        if (cancelled) return
+        setShelves(
+          snap.docs.map((d) => normalizeShelf(d.data() as Record<string, unknown>, d.id)).sort(sortShelves)
+        )
+      })
+      .catch((error) => {
+        console.error('Load shelves error:', error)
+        if (!cancelled) setShelfMessage('Could not load shelves.')
+      })
+      .finally(() => !cancelled && setShelvesLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, demoMode])
+
+  const resetShelfForm = () => {
+    setEditingShelf(null)
+    setShelfName('')
+    setShelfDescription('')
+    setShelfOrder('')
+  }
+
+  const handleSaveShelf = async () => {
+    const name = shelfName.trim()
+    if (!name) {
+      setShelfMessage('Give the shelf a name.')
+      return
+    }
+    // The slug is the key products store, so it must stay stable once created.
+    // Renaming an existing shelf keeps its original slug to avoid orphaning
+    // every product already assigned to it.
+    const slug = editingShelf ? editingShelf.slug : shelfSlug(name)
+    if (!slug) {
+      setShelfMessage('That name cannot be turned into a web address. Try adding a letter or number.')
+      return
+    }
+    const clash = shelves.find((s) => s.slug === slug && s.id !== editingShelf?.id)
+    if (clash) {
+      setShelfMessage(`"${clash.name}" already uses that web address. Pick a different name.`)
+      return
+    }
+
+    setIsSavingShelf(true)
+    setShelfMessage('')
+    const id = editingShelf ? editingShelf.id : `shelf-${Date.now()}`
+    const record: Shelf = {
+      id,
+      name,
+      slug,
+      description: shelfDescription.trim(),
+      order: shelfOrder.trim() === '' ? shelves.length : Math.round(parseNumber(shelfOrder)),
+      active: editingShelf ? editingShelf.active : true,
+      createdAt: editingShelf?.createdAt || new Date().toISOString()
+    }
+
+    try {
+      await setDoc(doc(db, 'shelves', id), record)
+      setShelves((prev) =>
+        (editingShelf ? prev.map((s) => (s.id === id ? record : s)) : [...prev, record]).sort(sortShelves)
+      )
+      setShelfMessage(editingShelf ? `Updated "${name}".` : `Created "${name}".`)
+      resetShelfForm()
+    } catch (error) {
+      console.error('Save shelf error:', error)
+      setShelfMessage('Could not save the shelf. Please try again.')
+    } finally {
+      setIsSavingShelf(false)
+    }
+  }
+
+  const handleToggleShelfActive = async (shelf: Shelf) => {
+    const next = { ...shelf, active: !shelf.active }
+    setShelves((prev) => prev.map((s) => (s.id === shelf.id ? next : s)))
+    try {
+      await updateDoc(doc(db, 'shelves', shelf.id), { active: next.active })
+    } catch (error) {
+      console.error('Toggle shelf error:', error)
+      setShelves((prev) => prev.map((s) => (s.id === shelf.id ? shelf : s)))
+      setShelfMessage('Could not change visibility. Please try again.')
+    }
+  }
+
+  const handleDeleteShelf = async (shelf: Shelf) => {
+    const assigned = catalogItems.filter((c) => (c.shelves || []).includes(shelf.slug))
+    const warning = assigned.length
+      ? `\n\n${assigned.length} book${assigned.length === 1 ? ' is' : 's are'} on this shelf. ` +
+        `They will stay in the catalog but lose this shelf.`
+      : ''
+    if (!confirm(`Delete the shelf "${shelf.name}"?${warning}`)) return
+
+    try {
+      const batch = writeBatch(db)
+      batch.delete(doc(db, 'shelves', shelf.id))
+      // Strip the slug from every product that referenced it, so no product is
+      // left pointing at a shelf that no longer exists.
+      assigned.forEach((c) => {
+        batch.update(doc(db, 'catalog', c.id), {
+          shelves: (c.shelves || []).filter((s) => s !== shelf.slug)
+        })
+      })
+      await batch.commit()
+      setShelves((prev) => prev.filter((s) => s.id !== shelf.id))
+      setCatalogItems((prev) =>
+        prev.map((c) =>
+          (c.shelves || []).includes(shelf.slug)
+            ? { ...c, shelves: (c.shelves || []).filter((s) => s !== shelf.slug) }
+            : c
+        )
+      )
+      setShelfMessage(`Deleted "${shelf.name}".`)
+    } catch (error) {
+      console.error('Delete shelf error:', error)
+      setShelfMessage('Could not delete the shelf. Please try again.')
+    }
+  }
+
+  /** How many catalog products sit on a given shelf. */
+  const shelfBookCount = (slug: string) =>
+    catalogItems.filter((c) => (c.shelves || []).includes(slug)).length
 
   const handleLinkCatalogInventory = async () => {
     setIsLinkingCatalog(true)
@@ -7639,6 +7806,50 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+
+          {/* Shelves: optional, and a book may sit on several. Shelves are
+              created under Website > Shelves. */}
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+              Shelves <span className="normal-case font-medium">(optional, select any)</span>
+            </label>
+            {shelves.length === 0 ? (
+              <p className="rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted">
+                No shelves yet. Create one under <span className="font-semibold text-primaryDark">Website &rsaquo; Shelves</span>, then come back to assign this book.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {shelves.map((shelf) => (
+                  <label
+                    key={shelf.id}
+                    className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all ${
+                      catalogShelves.includes(shelf.slug)
+                        ? 'border-primary bg-primary/5'
+                        : 'border-primary/20 hover:border-primary/40'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={catalogShelves.includes(shelf.slug)}
+                      onChange={(e) =>
+                        setCatalogShelves((prev) =>
+                          e.target.checked
+                            ? [...prev, shelf.slug]
+                            : prev.filter((s) => s !== shelf.slug)
+                        )
+                      }
+                      className="h-4 w-4 rounded border-primary/30 text-primary focus:ring-primary/50"
+                    />
+                    <span className="text-xs font-semibold text-primaryDark truncate">
+                      {shelf.name}
+                      {!shelf.active && <span className="ml-1 font-normal text-muted">(hidden)</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Price ($) *</label>
             <input
@@ -7801,6 +8012,213 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+    </div>
+  )
+
+  /** Shelves manager: create, reorder, hide and delete curated collections. */
+  const renderShelvesTab = () => (
+    <div className="space-y-6">
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
+        <h3 className="font-display text-xl gradient-text">
+          {editingShelf ? `Edit "${editingShelf.name}"` : 'Create a shelf'}
+        </h3>
+        <p className="mt-1 text-xs text-muted">
+          Shelves group books on the public <span className="font-semibold">/shelves</span> page.
+          Assign books to a shelf from the Catalog tab when adding or editing an item.
+        </p>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Shelf name *</label>
+            <input
+              type="text"
+              value={shelfName}
+              onChange={(e) => setShelfName(e.target.value)}
+              placeholder="e.g. Ramadan Picks"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+            {editingShelf ? (
+              <p className="mt-1.5 text-[11px] text-muted">
+                Web address stays <span className="font-mono">/shelves#{editingShelf.slug}</span> so books already on this shelf keep their link.
+              </p>
+            ) : (
+              shelfName.trim() && (
+                <p className="mt-1.5 text-[11px] text-muted">
+                  Web address: <span className="font-mono">{shelfSlug(shelfName) || '(needs a letter or number)'}</span>
+                </p>
+              )
+            )}
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Short description</label>
+            <input
+              type="text"
+              value={shelfDescription}
+              onChange={(e) => setShelfDescription(e.target.value)}
+              placeholder="One line shown under the shelf name"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
+            <input
+              type="number"
+              value={shelfOrder}
+              onChange={(e) => setShelfOrder(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+            <p className="mt-1.5 text-[11px] text-muted">Lower numbers appear first.</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveShelf}
+            disabled={isSavingShelf}
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            {isSavingShelf ? 'Saving...' : editingShelf ? 'Save changes' : 'Create shelf'}
+          </button>
+          {editingShelf && (
+            <button
+              type="button"
+              onClick={resetShelfForm}
+              className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+          {shelfMessage && (
+            <span className="rounded-full bg-primary/5 border border-primary/20 px-4 py-2 text-xs font-medium text-primaryDark">
+              {shelfMessage}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+        <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
+          <h3 className="font-display text-xl gradient-text">
+            Shelves ({shelves.length})
+          </h3>
+        </div>
+        {shelvesLoading ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">Loading shelves...</p>
+        ) : shelves.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">
+            No shelves yet. Create your first one above.
+          </p>
+        ) : (
+          <ul className="divide-y divide-black/5">
+            {shelves.map((shelf) => {
+              const count = shelfBookCount(shelf.slug)
+              return (
+                <li key={shelf.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-primaryDark">{shelf.name}</span>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600 border border-gray-200">
+                        {count} {count === 1 ? 'book' : 'books'}
+                      </span>
+                      {!shelf.active && (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                          Hidden
+                        </span>
+                      )}
+                      {shelf.active && count === 0 && (
+                        <span
+                          title="A shelf with no books is skipped on the public page."
+                          className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 border border-blue-200"
+                        >
+                          Not shown yet
+                        </span>
+                      )}
+                    </div>
+                    {shelf.description && (
+                      <p className="mt-1 text-xs text-muted">{shelf.description}</p>
+                    )}
+                    <p className="mt-1 text-[11px] text-muted">
+                      order {shelf.order} &middot; <span className="font-mono">{shelf.slug}</span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingShelf(shelf)
+                        setShelfName(shelf.name)
+                        setShelfDescription(shelf.description)
+                        setShelfOrder(String(shelf.order))
+                        setShelfMessage('')
+                      }}
+                      className="rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleShelfActive(shelf)}
+                      className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                    >
+                      {shelf.active ? 'Hide' : 'Show'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteShelf(shelf)}
+                      className="rounded-full bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+
+  /** Website content: tabbed shell over shelves, blog and freebies. */
+  const renderWebsite = () => (
+    <div className="fade-up space-y-6">
+      <div className="panel-card rounded-3xl bg-white p-2 shadow-xl border border-primary/10">
+        <div className="flex flex-wrap gap-1">
+          {WEBSITE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setWebsiteTab(tab.id)}
+              aria-current={websiteTab === tab.id ? 'page' : undefined}
+              className={`flex-1 min-w-[120px] rounded-2xl px-5 py-3 text-sm font-bold transition-all ${
+                websiteTab === tab.id
+                  ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-md'
+                  : 'text-primaryDark hover:bg-primary/5'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-sm text-muted">
+        {WEBSITE_TABS.find((t) => t.id === websiteTab)?.blurb}
+      </p>
+
+      {demoMode ? (
+        <div className="panel-card rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+          Website content is only editable in <strong>Live</strong> mode. Switch modes using the toggle in the header.
+        </div>
+      ) : websiteTab === 'shelves' ? (
+        renderShelvesTab()
+      ) : (
+        <div className="panel-card rounded-3xl bg-white p-10 text-center shadow-xl border border-primary/10">
+          <p className="text-sm text-muted">This section is coming next.</p>
+        </div>
+      )}
     </div>
   )
 
@@ -8277,6 +8695,7 @@ export default function DashboardPage() {
               {activeView === 'orders' && renderOrders()}
               {activeView === 'summer' && renderSummer()}
               {activeView === 'bookRequests' && renderBookRequests()}
+              {activeView === 'website' && renderWebsite()}
             </section>
           </div>
         </main>

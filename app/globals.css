@@ -474,3 +474,23 @@ textarea:focus-visible,
   background: rgba(109, 40, 217, 0.7);
   background-clip: content-box;
 }
+
+/* Shelf rail: a thin, unobtrusive scrollbar so a long shelf can be dragged
+   sideways on touch and trackpads without a heavy browser bar over the wood. */
+.shelf-rail {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
+}
+.shelf-rail::-webkit-scrollbar {
+  height: 6px;
+}
+.shelf-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.shelf-rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+}
+.shelf-rail::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.7);
+}

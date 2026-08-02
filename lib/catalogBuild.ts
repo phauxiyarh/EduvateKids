@@ -10,6 +10,8 @@
  * Never import this from a client component: it is build/server only.
  */
 
+import { slugify } from './slug'
+
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'eduvatekids-store'
 const REST_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 
@@ -60,20 +62,9 @@ function decodeFields(fields: Record<string, FsValue>): Record<string, unknown> 
   return out
 }
 
-/**
- * URL-safe slug from a product title. Verified collision-free across the
- * current 241 items; `dedupeSlugs` below still guards against future clashes.
- */
-export function slugify(value: string): string {
-  return String(value ?? '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/['’]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80)
-}
+// Imported from lib/slug so the client and the build derive identical slugs.
+// Two copies of this function would silently drift and break links.
+export { slugify }
 
 /** Append -2, -3… to any repeated slug so every product keeps a unique URL. */
 function dedupeSlugs(items: CatalogProduct[]): CatalogProduct[] {
@@ -256,74 +247,4 @@ export function ageLabel(p: CatalogProduct): string {
   return Number.isFinite(min) ? `Ages ${min}+` : ''
 }
 
-/**
- * One plain "who this is for" sentence per product.
- *
- * The audit's point: when a parent asks an assistant "what's a good first Quran
- * book for a 6-year-old?", the model needs a quotable sentence that states the
- * audience outright. Age tags rendered as badges do not give it one.
- *
- * Built only from data we actually hold — age tags, category and publisher —
- * so nothing here is invented about a book.
- */
-export function audienceLine(p: CatalogProduct): string {
-  const tags = p.ageCategory.filter(Boolean)
-  const kids = tags.filter((a) => a.trim().toLowerCase() !== 'adult')
-  const adultOnly = tags.length > 0 && kids.length === 0
 
-  const cats = p.category.map((c) => c.toLowerCase())
-  const isBook = cats.includes('books') || cats.includes('activity books') || !cats.length
-  const noun = cats.includes('activity books')
-    ? 'activity book'
-    : cats.includes('puzzles')
-    ? 'puzzle'
-    : cats.includes('games')
-    ? 'game'
-    : cats.includes('cards')
-    ? 'card set'
-    : cats.includes('crafts')
-    ? 'craft'
-    : cats.includes('gifts')
-    ? 'gift'
-    : isBook
-    ? 'book'
-    : 'item'
-
-  if (adultOnly) {
-    return `Best for adult readers and older teens. A ${noun} for parents, teachers and anyone studying the subject themselves.`
-  }
-
-  if (!kids.length) {
-    // No age data at all (3 items) — stay factual rather than guess a range.
-    return `A ${noun} from the Eduvate Kids collection, curated for Muslim families and schools.`
-  }
-
-  const min = Math.min(...kids.map(ageLowerBound))
-  const spansAdult = tags.length > kids.length
-
-  // Reading-stage wording only makes sense for books. A puzzle or craft gets a
-  // neutral age description instead of "beginning to read on their own".
-  const readingItem = noun === 'book' || noun === 'activity book'
-
-  const stage = readingItem
-    ? min <= 0
-      ? 'babies and toddlers just beginning to share books with a grown-up'
-      : min <= 3
-      ? 'preschoolers and early readers sharing the pages with a grown-up'
-      : min <= 6
-      ? 'children beginning to read on their own'
-      : min <= 10
-      ? 'confident independent readers'
-      : 'older children and teens reading independently'
-    : min <= 3
-    ? 'toddlers and preschoolers, with a grown-up alongside'
-    : min <= 6
-    ? 'younger children, at home or in the classroom'
-    : 'older children, at home or in the classroom'
-
-  const tail = spansAdult
-    ? ' Also read by adults and used in family and classroom settings.'
-    : ''
-
-  return `Best for children ages ${min}+: ${stage}.${tail}`
-}

@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation'
 import {
   SITE_URL,
   ageLabel,
-  audienceLine,
   getCatalogProducts,
   getProductBySlug,
   isInStock,
@@ -38,12 +37,7 @@ export async function generateMetadata({
 
   const url = `${SITE_URL}/book/${product.slug}`
   const image = product.images[0]
-  // Lead the snippet with who it suits — that is the question a searching
-  // parent is actually asking — then the book's own description.
-  const age = ageLabel(product)
-  const description = age
-    ? `${age}. ${metaDescription(product, 120)}`
-    : metaDescription(product)
+  const description = metaDescription(product)
 
   return {
     title: product.title,
@@ -68,7 +62,6 @@ export async function generateMetadata({
 /** Product + Offer + Breadcrumb structured data for one item. */
 function productJsonLd(product: CatalogProduct) {
   const url = `${SITE_URL}/book/${product.slug}`
-  const audience = audienceLine(product)
   // Derived from ageLabel so legacy range keys ("6-9") resolve the same way
   // they do in the visible copy, rather than via a naive parseInt.
   const minAge = Number(ageLabel(product).match(/\d+/)?.[0])
@@ -80,9 +73,7 @@ function productJsonLd(product: CatalogProduct) {
         '@type': 'Product',
         '@id': `${url}#product`,
         name: product.title,
-        // Lead with the audience sentence: it is the part an assistant can
-        // quote directly when asked "what suits a 6-year-old?".
-        description: [audience, product.description].filter(Boolean).join(' ') || undefined,
+        description: product.description || undefined,
         url,
         ...(product.images.length ? { image: product.images } : {}),
         ...(product.showPublisher && product.publisher
@@ -130,7 +121,6 @@ export default async function BookPage({ params }: { params: { slug: string } })
         product={product}
         inStock={isInStock(product)}
         ageText={ageLabel(product)}
-        audienceText={audienceLine(product)}
       />
     </>
   )

@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useCart } from '../../lib/cart'
+import { bookPath } from '../../lib/slug'
 import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
@@ -112,8 +113,6 @@ function CatalogInner() {
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [catalogFilter, setCatalogFilter] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState('')
-  const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
-  const [expandedSlider, setExpandedSlider] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   // Book a shopper is trying to pre-order because it's out of stock.
   const [preorderBook, setPreorderBook] = useState<PreorderBook | null>(null)
@@ -122,35 +121,25 @@ function CatalogInner() {
   const gridReveal = useReveal<HTMLDivElement>()
   const { addItem, items: cartItems, setQuantity } = useCart()
 
-  // Each item has a shareable URL: /catalog?product=<id>. The URL is the source
-  // of truth for which item's detail is open, so opening/closing just changes it.
+  // A product has one canonical URL: /book/<slug>. Clicking a card navigates
+  // there rather than opening a modal, so a book reached from the catalog, a
+  // shelf, or a search result is always the same page with the same link.
   const router = useRouter()
   const searchParams = useSearchParams()
   const productParam = searchParams.get('product')
 
-  // Open the item detail by pushing its id into the URL (browser shows it,
-  // back button closes it). Closing returns to the bare /catalog URL.
   const openItem = (item: CatalogItem) => {
-    setExpandedSlider(0)
-    router.push(`/catalog?product=${encodeURIComponent(item.id)}`, { scroll: false })
-  }
-  const closeItem = () => {
-    router.push('/catalog', { scroll: false })
+    router.push(bookPath(item.title))
   }
 
-  // Sync the open modal to the URL param. Runs whenever the param or the loaded
-  // items change, so a shared/bookmarked link opens the right item once data is in.
+  // Legacy support: /catalog?product=<id> links are already shared and indexed.
+  // Redirect them to the canonical page once the catalog has loaded and the id
+  // resolves to a title. `replace` keeps the old URL out of history.
   useEffect(() => {
-    if (!productParam) {
-      setExpandedItem(null)
-      return
-    }
+    if (!productParam || !catalogItems.length) return
     const match = catalogItems.find((i) => i.id === productParam)
-    if (match) {
-      setExpandedItem(match)
-      setExpandedSlider(0)
-    }
-  }, [productParam, catalogItems])
+    if (match) router.replace(bookPath(match.title))
+  }, [productParam, catalogItems, router])
 
   useEffect(() => {
     getDocs(collection(db, 'catalog')).then((snap) => {
@@ -183,20 +172,6 @@ function CatalogInner() {
       }
     }).catch(() => {})
   }, [])
-
-  // Lock body scroll and enable Escape-to-close while the modal is open.
-  useEffect(() => {
-    if (expandedItem) {
-      const previous = document.body.style.overflow
-      document.body.style.overflow = 'hidden'
-      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeItem() }
-      window.addEventListener('keydown', onKey)
-      return () => {
-        document.body.style.overflow = previous
-        window.removeEventListener('keydown', onKey)
-      }
-    }
-  }, [expandedItem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const allCategories = ['All', ...new Set(catalogItems.flatMap((i) => i.category))]
   const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -543,171 +518,6 @@ function CatalogInner() {
         </div>
       </main>
 
-      {/* Expanded Item Modal */}
-      {expandedItem && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn"
-          onClick={closeItem}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl animate-fadeIn"
-          >
-            <button
-              type="button"
-              aria-label="Close product details"
-              onClick={closeItem}
-              className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-
-            <div className="md:flex">
-              {/* Image gallery */}
-              <div className="relative md:w-1/2 aspect-square bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50">
-                {expandedItem.images.length > 0 ? (
-                  <>
-                    {expandedItem.images.map((img, idx) => (
-                      <img
-                        key={idx}
-                        src={img}
-                        alt={`${expandedItem.title} ${idx + 1}`}
-                        className={`absolute inset-0 h-full w-full object-contain p-4 transition-all duration-500 ${
-                          idx === expandedSlider ? 'opacity-100' : 'opacity-0'
-                        }`}
-                      />
-                    ))}
-                    {expandedItem.images.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          aria-label="Previous image"
-                          onClick={() => setExpandedSlider(expandedSlider === 0 ? expandedItem.images.length - 1 : expandedSlider - 1)}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg hover:scale-110 transition-transform"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Next image"
-                          onClick={() => setExpandedSlider(expandedSlider === expandedItem.images.length - 1 ? 0 : expandedSlider + 1)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg hover:scale-110 transition-transform"
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                          {expandedItem.images.map((_, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              aria-label={`Go to image ${idx + 1}`}
-                              onClick={() => setExpandedSlider(idx)}
-                              className={`h-2 rounded-full transition-all duration-300 ${
-                                idx === expandedSlider ? 'w-6 bg-white' : 'w-2 bg-white/60 hover:bg-white/80'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <BookPlaceholder title={expandedItem.title} className="h-full w-full" />
-                )}
-              </div>
-
-              {/* Details */}
-              <div className="md:w-1/2 p-6 sm:p-8">
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {expandedItem.category.map((cat) => (
-                    <span key={cat} className="rounded-full bg-gradient-to-r from-emerald-50 to-emerald-100 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">
-                      {cat}
-                    </span>
-                  ))}
-                  {(Array.isArray(expandedItem.ageCategory) ? expandedItem.ageCategory : [expandedItem.ageCategory])
-                    .filter((age) => ageTagLabel(age))
-                    .map((age) => (
-                    <span
-                      key={age}
-                      className="rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 px-3 py-1 text-xs font-bold text-blue-700"
-                      title={AGE_CATEGORIES[age]?.range || age}
-                    >
-                      {ageTagLabel(age)}
-                    </span>
-                  ))}
-                </div>
-
-                <h2 className="font-display text-2xl sm:text-3xl font-bold text-primaryDark">{expandedItem.title}</h2>
-
-                <p className="mt-4 text-muted leading-relaxed">{expandedItem.description}</p>
-
-                <div className="mt-6 flex items-center gap-4">
-                  <span className="text-3xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                    ${expandedItem.price.toFixed(2)}
-                  </span>
-                </div>
-
-                {expandedItem.showPublisher && expandedItem.publisher && (
-                  <div className="mt-6 pt-6 border-t border-gray-100">
-                    <p className="text-sm text-muted">
-                      <span className="font-semibold">Publisher:</span> {expandedItem.publisher}
-                    </p>
-                  </div>
-                )}
-
-                {expandedItem.price > 0 && (() => {
-                  // Out-of-stock items open the reserve prompt on click; otherwise
-                  // normal add-to-cart. No visible out-of-stock hint beforehand.
-                  const inCart = cartItems.find((c) => c.id === expandedItem.id)
-                  if (!inCart) {
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isOutOfStock(expandedItem)) {
-                            setPreorderBook({ id: expandedItem.id, title: expandedItem.title, image: expandedItem.images[0] })
-                          } else {
-                            addItem({ id: expandedItem.id, title: expandedItem.title, price: expandedItem.price, image: expandedItem.images[0] })
-                          }
-                        }}
-                        className="btn-shine mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-                        aria-label={`Add ${expandedItem.title} to cart`}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                        Add to Cart
-                      </button>
-                    )
-                  }
-                  return (
-                    <div className="mt-6 flex items-center justify-between gap-4 rounded-full border-2 border-primary/20 bg-primary/5 p-1.5">
-                      <span className="pl-4 text-sm font-semibold text-primaryDark">In your cart</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setQuantity(expandedItem.id, inCart.quantity - 1)}
-                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-primaryDark shadow-sm transition hover:bg-primary/10"
-                          aria-label="Decrease quantity"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>
-                        </button>
-                        <span className="w-9 text-center text-base font-bold text-primaryDark">{inCart.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQuantity(expandedItem.id, inCart.quantity + 1)}
-                          className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary text-white shadow-sm transition hover:-translate-y-0.5"
-                          aria-label="Increase quantity"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Out-of-stock pre-order / reservation modal */}
       {preorderBook && (

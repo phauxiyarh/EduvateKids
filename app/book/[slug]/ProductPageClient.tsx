@@ -18,13 +18,11 @@ import logo from '../../../assets/logo.png'
 export default function ProductPageClient({
   product,
   inStock,
-  ageText,
-  audienceText
+  ageText
 }: {
   product: CatalogProduct
   inStock: boolean
   ageText: string
-  audienceText: string
 }) {
   const { addItem, openCart } = useCart()
   const [activeImage, setActiveImage] = useState(0)
@@ -169,14 +167,6 @@ export default function ProductPageClient({
                 </span>
               ))}
             </div>
-
-            {/* Who this is for — stated in a plain sentence rather than left
-                implicit in the age badge, so it can be read and quoted. */}
-            {audienceText && (
-              <p className="mt-4 rounded-2xl border-l-4 border-primary/40 bg-primary/5 px-4 py-3 text-sm font-medium text-ink/90">
-                {audienceText}
-              </p>
-            )}
 
             <p className="mt-6 text-3xl font-bold text-primaryDark">${product.price.toFixed(2)}</p>
 

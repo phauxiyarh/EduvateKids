@@ -177,7 +177,7 @@ export const isInStock = (p: CatalogProduct) => typeof p.stock !== 'number' || p
 export function metaDescription(p: CatalogProduct, limit = 155): string {
   const base = p.description.replace(/\s+/g, ' ').trim()
   if (!base) {
-    return `${p.title}${p.publisher ? ` by ${p.publisher}` : ''} — available from Eduvate Kids.`
+    return `${p.title}${p.publisher ? ` by ${p.publisher}` : ''} is available from Eduvate Kids.`
   }
   if (base.length <= limit) return base
   const cut = base.slice(0, limit)
@@ -278,5 +278,5 @@ export function audienceLine(p: CatalogProduct): string {
     ? ' Also read by adults and used in family and classroom settings.'
     : ''
 
-  return `Best for children ages ${min}+ — ${stage}.${tail}`
+  return `Best for children ages ${min}+: ${stage}.${tail}`
 }

@@ -591,7 +591,7 @@ export default function HomePage() {
                 {
                   title: 'Curated by reading age',
                   body:
-                    'Every title is tagged by age group — from board books for toddlers through to titles for teens and adults — so you can shop straight to what fits your child.'
+                    'Every title is tagged by age group, from board books for toddlers through to titles for teens and adults, so you can shop straight to what fits your child.'
                 },
                 {
                   title: 'Arabic and English together',

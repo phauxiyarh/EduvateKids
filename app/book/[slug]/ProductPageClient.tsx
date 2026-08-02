@@ -111,7 +111,7 @@ export default function ProductPageClient({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={product.images[activeImage]}
-                  alt={`${product.title}${product.showPublisher && product.publisher ? ` by ${product.publisher}` : ''} — cover`}
+                  alt={`${product.title}${product.showPublisher && product.publisher ? ` by ${product.publisher}` : ''} cover`}
                   className="h-full w-full object-contain p-4"
                   loading="eager"
                 />
@@ -176,7 +176,7 @@ export default function ProductPageClient({
             <p className="mt-6 text-3xl font-bold text-primaryDark">${product.price.toFixed(2)}</p>
 
             <p className={`mt-2 text-sm font-semibold ${inStock ? 'text-green-700' : 'text-red-600'}`}>
-              {inStock ? 'In stock — ready to ship' : 'Currently out of stock'}
+              {inStock ? 'In stock, ready to ship' : 'Currently out of stock'}
             </p>
 
             <div className="mt-6">

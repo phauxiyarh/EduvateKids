@@ -6,7 +6,7 @@ import CatalogPage from './PageClient'
 export const metadata: Metadata = {
   title: 'Shop Islamic Books, Crafts & Gifts for Kids',
   description:
-    'Browse our curated catalog of Islamic children’s books, activity books, Arabic learning kits, puzzles, crafts and gifts. Shipped from Maryland — free shipping over $150.',
+    'Browse our curated catalog of Islamic children’s books, activity books, Arabic learning kits, puzzles, crafts and gifts. Shipped from Maryland. Free shipping over $150.',
   alternates: { canonical: '/catalog' },
   openGraph: {
     title: 'Shop Islamic Books, Crafts & Gifts for Kids | Eduvate Kids',
@@ -53,7 +53,7 @@ export default async function Page() {
             <li key={p.id}>
               <Link href={`/book/${p.slug}`}>
                 {p.title}
-                {p.showPublisher && p.publisher ? ` by ${p.publisher}` : ''} — ${p.price.toFixed(2)}
+                {p.showPublisher && p.publisher ? ` by ${p.publisher}` : ''} (${p.price.toFixed(2)})
               </Link>
             </li>
           ))}

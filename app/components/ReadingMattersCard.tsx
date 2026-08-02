@@ -48,7 +48,7 @@ export function ReadingMattersCard() {
 
   const titles = useCountUp(400, inView)
   const kits = useCountUp(50, inView)
-  const events = useCountUp(10, inView)
+  const events = useCountUp(5, inView)
 
   const benefits = [
     'Builds Islamic identity through stories',

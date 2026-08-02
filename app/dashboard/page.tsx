@@ -20,6 +20,16 @@ import {
 import * as XLSX from 'xlsx'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
+  blogSlug,
+  deriveExcerpt,
+  normalizeBlogPost,
+  readingMinutes,
+  renderMarkdown,
+  sortPosts,
+  type BlogPost
+} from '../../lib/blog'
+import { uploadBlogImage } from '../../lib/uploadImage'
+import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
   AreaChart, Area, CartesianGrid
@@ -857,6 +867,26 @@ export default function DashboardPage() {
   const [editingShelf, setEditingShelf] = useState<Shelf | null>(null)
   const [shelfMessage, setShelfMessage] = useState('')
   const [isSavingShelf, setIsSavingShelf] = useState(false)
+
+  // Blog posts. Body is Markdown, typed directly or pasted from a .md file.
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [blogLoading, setBlogLoading] = useState(false)
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null)
+  const [showPostEditor, setShowPostEditor] = useState(false)
+  const [postTitle, setPostTitle] = useState('')
+  const [postExcerpt, setPostExcerpt] = useState('')
+  const [postBody, setPostBody] = useState('')
+  const [postAuthor, setPostAuthor] = useState('Eduvate Kids')
+  const [postTags, setPostTags] = useState('')
+  const [postPublished, setPostPublished] = useState(true)
+  const [postPublishedAt, setPostPublishedAt] = useState('')
+  const [postLikes, setPostLikes] = useState('0')
+  const [postExistingImages, setPostExistingImages] = useState<string[]>([])
+  const [postNewImages, setPostNewImages] = useState<File[]>([])
+  const [postImagePreviews, setPostImagePreviews] = useState<string[]>([])
+  const [blogMessage, setBlogMessage] = useState('')
+  const [isSavingPost, setIsSavingPost] = useState(false)
+  const [postPreview, setPostPreview] = useState(false)
   const [orders, setOrders] = useState<OnlineOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
@@ -2744,6 +2774,198 @@ export default function DashboardPage() {
   /** How many catalog products sit on a given shelf. */
   const shelfBookCount = (slug: string) =>
     catalogItems.filter((c) => (c.shelves || []).includes(slug)).length
+
+  // ── Blog ───────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeView !== 'website' || demoMode) return
+    let cancelled = false
+    setBlogLoading(true)
+    getDocs(collection(db, 'blog'))
+      .then((snap) => {
+        if (cancelled) return
+        setBlogPosts(
+          snap.docs.map((d) => normalizeBlogPost(d.data() as Record<string, unknown>, d.id)).sort(sortPosts)
+        )
+      })
+      .catch((error) => {
+        console.error('Load blog error:', error)
+        if (!cancelled) setBlogMessage('Could not load posts.')
+      })
+      .finally(() => !cancelled && setBlogLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, demoMode])
+
+  // Object URLs for newly picked images, revoked when they change so the
+  // browser does not hold on to blobs for images the admin swapped out.
+  useEffect(() => {
+    const urls = postNewImages.map((f) => URL.createObjectURL(f))
+    setPostImagePreviews(urls)
+    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+  }, [postNewImages])
+
+  const resetPostForm = () => {
+    setEditingPost(null)
+    setPostTitle('')
+    setPostExcerpt('')
+    setPostBody('')
+    setPostAuthor('Eduvate Kids')
+    setPostTags('')
+    setPostPublished(true)
+    setPostPublishedAt(new Date().toISOString().slice(0, 10))
+    setPostLikes('0')
+    setPostExistingImages([])
+    setPostNewImages([])
+    setPostPreview(false)
+  }
+
+  const openNewPost = () => {
+    resetPostForm()
+    setShowPostEditor(true)
+    setBlogMessage('')
+  }
+
+  const openEditPost = (post: BlogPost) => {
+    setEditingPost(post)
+    setPostTitle(post.title)
+    setPostExcerpt(post.excerpt)
+    setPostBody(post.body)
+    setPostAuthor(post.author)
+    setPostTags(post.tags.join(', '))
+    setPostPublished(post.published)
+    setPostPublishedAt((post.publishedAt || '').slice(0, 10))
+    setPostLikes(String(post.likes))
+    setPostExistingImages([...post.images])
+    setPostNewImages([])
+    setPostPreview(false)
+    setShowPostEditor(true)
+    setBlogMessage('')
+  }
+
+  /**
+   * Accept a dropped or picked .md file by reading it straight into the body.
+   * The text stays fully editable afterwards; nothing is stored as an opaque
+   * attachment.
+   */
+  const handleMarkdownFile = async (file: File | undefined) => {
+    if (!file) return
+    if (!/\.(md|markdown|txt)$/i.test(file.name)) {
+      setBlogMessage('That is not a Markdown file. Pick a .md, .markdown or .txt file.')
+      return
+    }
+    const text = await file.text()
+    setPostBody(text)
+    // A leading "# Heading" is the document's title; lift it into the title
+    // field rather than repeating it at the top of the article body.
+    const heading = text.match(/^\s*#\s+(.+)$/m)
+    if (heading && !postTitle.trim()) setPostTitle(heading[1].trim())
+    setBlogMessage(`Loaded ${file.name}. Edit it below as normal.`)
+  }
+
+  const handleSavePost = async () => {
+    const title = postTitle.trim()
+    if (!title) {
+      setBlogMessage('Give the post a title.')
+      return
+    }
+    if (!postBody.trim()) {
+      setBlogMessage('The post has no content yet.')
+      return
+    }
+    // Slug is fixed at creation: it is the public URL, and changing it on
+    // rename would break every link already shared.
+    const slug = editingPost ? editingPost.slug : blogSlug(title)
+    if (!slug) {
+      setBlogMessage('That title cannot be turned into a web address. Add a letter or number.')
+      return
+    }
+    const clash = blogPosts.find((p) => p.slug === slug && p.id !== editingPost?.id)
+    if (clash) {
+      setBlogMessage(`"${clash.title}" already uses that web address. Pick a different title.`)
+      return
+    }
+
+    setIsSavingPost(true)
+    setBlogMessage('')
+    const id = editingPost ? editingPost.id : `post-${Date.now()}`
+
+    try {
+      const uploaded: string[] = []
+      for (const file of postNewImages) {
+        uploaded.push(await uploadBlogImage(file, id))
+      }
+      const now = new Date().toISOString()
+      const record: BlogPost = {
+        id,
+        title,
+        slug,
+        excerpt: postExcerpt.trim() || deriveExcerpt(postBody),
+        body: postBody,
+        author: postAuthor.trim() || 'Eduvate Kids',
+        publishedAt: postPublishedAt ? new Date(postPublishedAt).toISOString() : now,
+        published: postPublished,
+        images: [...postExistingImages, ...uploaded],
+        tags: postTags.split(',').map((t) => t.trim()).filter(Boolean),
+        likes: Math.max(0, Math.round(parseNumber(postLikes))),
+        createdAt: editingPost?.createdAt || now,
+        updatedAt: now
+      }
+
+      await setDoc(doc(db, 'blog', id), record)
+      setBlogPosts((prev) =>
+        (editingPost ? prev.map((p) => (p.id === id ? record : p)) : [...prev, record]).sort(sortPosts)
+      )
+      setBlogMessage(editingPost ? `Updated "${title}".` : `Created "${title}".`)
+      setShowPostEditor(false)
+      resetPostForm()
+    } catch (error) {
+      console.error('Save post error:', error)
+      setBlogMessage('Could not save the post. Please try again.')
+    } finally {
+      setIsSavingPost(false)
+    }
+  }
+
+  const handleTogglePostPublished = async (post: BlogPost) => {
+    const next = { ...post, published: !post.published }
+    setBlogPosts((prev) => prev.map((p) => (p.id === post.id ? next : p)))
+    try {
+      await updateDoc(doc(db, 'blog', post.id), { published: next.published })
+    } catch (error) {
+      console.error('Toggle post error:', error)
+      setBlogPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)))
+      setBlogMessage('Could not change visibility. Please try again.')
+    }
+  }
+
+  const handleDeletePost = async (post: BlogPost) => {
+    if (!confirm(`Delete "${post.title}"? This cannot be undone.`)) return
+    const previous = blogPosts
+    setBlogPosts((prev) => prev.filter((p) => p.id !== post.id))
+    try {
+      await deleteDoc(doc(db, 'blog', post.id))
+      setBlogMessage(`Deleted "${post.title}".`)
+    } catch (error) {
+      console.error('Delete post error:', error)
+      setBlogPosts(previous)
+      setBlogMessage('Could not delete the post. Please try again.')
+    }
+  }
+
+  /** Set the like count outright. Public hearts increment it via a function. */
+  const handleSetPostLikes = async (post: BlogPost, likes: number) => {
+    const safe = Math.max(0, Math.round(likes))
+    const next = { ...post, likes: safe }
+    setBlogPosts((prev) => prev.map((p) => (p.id === post.id ? next : p)))
+    try {
+      await updateDoc(doc(db, 'blog', post.id), { likes: safe })
+    } catch (error) {
+      console.error('Set likes error:', error)
+      setBlogPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)))
+      setBlogMessage('Could not update likes. Please try again.')
+    }
+  }
 
   const handleLinkCatalogInventory = async () => {
     setIsLinkingCatalog(true)
@@ -8183,6 +8405,332 @@ export default function DashboardPage() {
     </div>
   )
 
+  /** Blog manager: write, edit, publish and delete posts. */
+  const renderBlogTab = () => (
+    <div className="space-y-6">
+      {!showPostEditor ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            {blogLoading ? 'Loading posts...' : `${blogPosts.length} post${blogPosts.length === 1 ? '' : 's'}`}
+          </p>
+          <button
+            type="button"
+            onClick={openNewPost}
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5"
+          >
+            + Write a post
+          </button>
+        </div>
+      ) : (
+        <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-display text-xl gradient-text">
+              {editingPost ? `Edit "${editingPost.title}"` : 'New post'}
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPostPreview((v) => !v)}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-xs font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+              >
+                {postPreview ? 'Back to editing' : 'Preview'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowPostEditor(false); resetPostForm() }}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-xs font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {postPreview ? (
+            <div className="rounded-2xl border-2 border-primary/10 bg-white p-6">
+              <h1 className="font-display text-3xl font-bold text-primaryDark">{postTitle || 'Untitled'}</h1>
+              <p className="mt-2 text-xs text-muted">
+                {postAuthor || 'Eduvate Kids'} &middot; {readingMinutes(postBody)} min read
+              </p>
+              <div
+                className="mt-6 text-ink/90"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(postBody) }}
+              />
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
+                <input
+                  type="text"
+                  value={postTitle}
+                  onChange={(e) => setPostTitle(e.target.value)}
+                  placeholder="How to Start a Ramadan Reading Routine"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+                {editingPost ? (
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    Address stays <span className="font-mono">/blog/{editingPost.slug}</span> so shared links keep working.
+                  </p>
+                ) : (
+                  postTitle.trim() && (
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      Address: <span className="font-mono">/blog/{blogSlug(postTitle) || '(needs a letter or number)'}</span>
+                    </p>
+                  )
+                )}
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+                  Summary <span className="normal-case font-medium">(optional, taken from the first lines if blank)</span>
+                </label>
+                <input
+                  type="text"
+                  value={postExcerpt}
+                  onChange={(e) => setPostExcerpt(e.target.value)}
+                  placeholder="One line shown on the blog card and in search results"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted">Content * (Markdown)</label>
+                  <label className="cursor-pointer rounded-full border-2 border-primary/20 px-3 py-1.5 text-[11px] font-bold text-primaryDark hover:bg-primary/5 transition-colors">
+                    <input
+                      type="file"
+                      accept=".md,.markdown,.txt"
+                      className="hidden"
+                      onChange={(e) => { handleMarkdownFile(e.target.files?.[0]); e.target.value = '' }}
+                    />
+                    Load a .md file
+                  </label>
+                </div>
+                <textarea
+                  value={postBody}
+                  onChange={(e) => setPostBody(e.target.value)}
+                  rows={16}
+                  placeholder={'# A heading\n\nWrite here, or paste a whole Markdown document.\n\n- bullet points\n- **bold** and *italic*\n- [links](https://example.com)'}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 font-mono text-xs leading-relaxed hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+                <p className="mt-1.5 text-[11px] text-muted">
+                  {readingMinutes(postBody)} min read &middot; supports headings, bold, italic, lists, quotes, links, images and code.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+                  Images <span className="normal-case font-medium">(more than one becomes a slider)</span>
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setPostNewImages(Array.from(e.target.files || []))}
+                  className="w-full rounded-xl border-2 border-dashed border-primary/25 px-4 py-3 text-xs"
+                />
+                {(postExistingImages.length > 0 || postImagePreviews.length > 0) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {postExistingImages.map((src) => (
+                      <span key={src} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-black/10" />
+                        <button
+                          type="button"
+                          onClick={() => setPostExistingImages((prev) => prev.filter((s) => s !== src))}
+                          aria-label="Remove image"
+                          className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white shadow"
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                    {postImagePreviews.map((src, i) => (
+                      <span key={src} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt="" className="h-20 w-20 rounded-xl object-cover ring-2 ring-primary/40" />
+                        <span className="absolute bottom-0 inset-x-0 rounded-b-xl bg-primary/80 text-center text-[9px] font-bold text-white">new</span>
+                        <button
+                          type="button"
+                          onClick={() => setPostNewImages((prev) => prev.filter((_, n) => n !== i))}
+                          aria-label="Remove image"
+                          className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white shadow"
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Author</label>
+                <input
+                  type="text"
+                  value={postAuthor}
+                  onChange={(e) => setPostAuthor(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Date</label>
+                <input
+                  type="date"
+                  value={postPublishedAt}
+                  onChange={(e) => setPostPublishedAt(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+                  Tags <span className="normal-case font-medium">(comma separated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={postTags}
+                  onChange={(e) => setPostTags(e.target.value)}
+                  placeholder="ramadan, reading habits"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Likes</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={postLikes}
+                  onChange={(e) => setPostLikes(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+                <p className="mt-1.5 text-[11px] text-muted">Readers add to this by tapping the heart.</p>
+              </div>
+
+              <label className="sm:col-span-2 flex items-center gap-3 rounded-xl border-2 border-primary/20 px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={postPublished}
+                  onChange={(e) => setPostPublished(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary/30 text-primary focus:ring-primary/50"
+                />
+                <span className="text-sm font-semibold text-primaryDark">
+                  Published
+                  <span className="ml-1 font-normal text-muted">
+                    (unpublished posts stay here as drafts and never appear on the site)
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSavePost}
+              disabled={isSavingPost}
+              className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+            >
+              {isSavingPost ? 'Saving...' : editingPost ? 'Save changes' : 'Create post'}
+            </button>
+            {blogMessage && (
+              <span className="rounded-full bg-primary/5 border border-primary/20 px-4 py-2 text-xs font-medium text-primaryDark">
+                {blogMessage}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!showPostEditor && blogMessage && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-medium text-primaryDark">
+          {blogMessage}
+        </div>
+      )}
+
+      {!showPostEditor && (
+        <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+          {blogLoading ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">Loading posts...</p>
+          ) : blogPosts.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">
+              No posts yet. Write your first one above.
+            </p>
+          ) : (
+            <ul className="divide-y divide-black/5">
+              {blogPosts.map((post) => (
+                <li key={post.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-primaryDark">{post.title}</span>
+                      {!post.published && (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                          Draft
+                        </span>
+                      )}
+                      <span className="rounded-full bg-pink-50 px-2.5 py-0.5 text-[11px] font-bold text-pink-700 border border-pink-200">
+                        {post.likes} {post.likes === 1 ? 'like' : 'likes'}
+                      </span>
+                      {post.images.length > 1 && (
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600 border border-gray-200">
+                          {post.images.length} images
+                        </span>
+                      )}
+                    </div>
+                    {post.excerpt && <p className="mt-1 line-clamp-1 text-xs text-muted">{post.excerpt}</p>}
+                    <p className="mt-1 text-[11px] text-muted">
+                      {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'no date'} &middot;{' '}
+                      {post.author} &middot; <span className="font-mono">/blog/{post.slug}</span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSetPostLikes(post, post.likes + 1)}
+                      title="Add a like"
+                      className="rounded-full bg-pink-50 px-2.5 py-1.5 text-[11px] font-bold text-pink-700 border border-pink-200 hover:bg-pink-100 transition-colors"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetPostLikes(post, post.likes - 1)}
+                      disabled={post.likes <= 0}
+                      title="Remove a like"
+                      className="rounded-full bg-pink-50 px-2.5 py-1.5 text-[11px] font-bold text-pink-700 border border-pink-200 hover:bg-pink-100 transition-colors disabled:opacity-40"
+                    >
+                      -1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditPost(post)}
+                      className="rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePostPublished(post)}
+                      className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                    >
+                      {post.published ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePost(post)}
+                      className="rounded-full bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
   /** Website content: tabbed shell over shelves, blog and freebies. */
   const renderWebsite = () => (
     <div className="fade-up space-y-6">
@@ -8256,6 +8804,8 @@ export default function DashboardPage() {
         </div>
       ) : websiteTab === 'shelves' ? (
         renderShelvesTab()
+      ) : websiteTab === 'blog' ? (
+        renderBlogTab()
       ) : (
         <div className="panel-card rounded-3xl bg-white p-10 text-center shadow-xl border border-primary/10">
           <p className="text-sm text-muted">This section is coming next.</p>

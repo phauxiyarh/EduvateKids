@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
-import { getCatalogProducts, SITE_URL } from '../lib/catalogBuild'
+import { getCatalogProducts, getPublicCollection, SITE_URL } from '../lib/catalogBuild'
+import { normalizeBlogPost } from '../lib/blog'
 
 /**
  * Sitemap generated at build time so every product page is listed. Replaces
@@ -7,12 +8,19 @@ import { getCatalogProducts, SITE_URL } from '../lib/catalogBuild'
  * static routes.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const products = await getCatalogProducts()
+  const [products, blogDocs] = await Promise.all([
+    getCatalogProducts(),
+    getPublicCollection('blog')
+  ])
+  const posts = blogDocs
+    .map((d) => normalizeBlogPost(d, d.id))
+    .filter((p) => p.published && p.slug)
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${SITE_URL}/catalog`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/shelves`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/blog`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/summer-reads`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/book-event`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${SITE_URL}/faqs`, changeFrequency: 'monthly', priority: 0.7 },
@@ -27,5 +35,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7
   }))
 
-  return [...staticRoutes, ...productRoutes]
+  const blogRoutes: MetadataRoute.Sitemap = posts.map((p) => ({
+    url: `${SITE_URL}/blog/${p.slug}`,
+    lastModified: p.updatedAt || p.publishedAt || undefined,
+    changeFrequency: 'monthly',
+    priority: 0.6
+  }))
+
+  return [...staticRoutes, ...productRoutes, ...blogRoutes]
 }

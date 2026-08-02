@@ -94,6 +94,34 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Blog: public read, admin write ──────────────────────────────────────
+    // Visitors can read posts but cannot write anything, including `likes`.
+    // Public likes go through the likeBlogPost callable, which increments by
+    // exactly one; admins may set the count directly, which is intended.
+    match /blog/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Freebies: public read, admin write ──────────────────────────────────
+    // The metadata is public so the /freebies page can list them, but
+    // `filePath` points at a Storage object that is NOT publicly readable.
+    // Knowing the path grants nothing without a signed URL from
+    // getFreebieDownload.
+    match /freebies/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Subscribers: never publicly readable ────────────────────────────────
+    // Email addresses collected at the freebie gate. Written only by the
+    // getFreebieDownload function via the Admin SDK, which bypasses these
+    // rules; no client path may read or write them.
+    match /subscribers/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── System state: admin read only, written by Cloud Functions ───────────
     // Holds system/publishState, which tells the dashboard whether the static
     // product pages are behind the catalog. Only the Admin SDK writes here.

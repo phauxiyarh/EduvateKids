@@ -30,6 +30,7 @@ import {
   uspsConfigured,
 } from './config';
 import { noteCatalogChange, publishIfDue, publishNow } from './publish';
+import { subscribeAndSign } from './freebies';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
@@ -633,6 +634,80 @@ export const onCatalogWrite = onDocumentWritten('catalog/{docId}', async () => {
  */
 export const onShelfWrite = onDocumentWritten('shelves/{docId}', async () => {
   await noteCatalogChange(db);
+});
+
+/** Blog posts are baked into /blog and /blog/<slug> at build time too. */
+export const onBlogWrite = onDocumentWritten('blog/{docId}', async (event) => {
+  // A like changes only the counter, which the page reads live rather than at
+  // build time. Rebuilding on every like would be constant churn for nothing.
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (before && after) {
+    const onlyLikesChanged =
+      Object.keys({ ...before, ...after }).every(
+        (k) => k === 'likes' || JSON.stringify(before[k]) === JSON.stringify(after[k])
+      );
+    if (onlyLikesChanged) return;
+  }
+  await noteCatalogChange(db);
+});
+
+/**
+ * Increment a blog post's like count.
+ *
+ * Public and unauthenticated by design, so the storefront can offer a heart
+ * without a sign-in. Firestore rules keep `likes` unwritable by clients, so
+ * this is the only path that can change it, and it moves the counter by
+ * exactly one. Repeat clicks from the same browser are suppressed client-side;
+ * that is a courtesy, not a guarantee, which is the right trade for a vanity
+ * counter that carries no privileges.
+ */
+/**
+ * Subscribe with an email and receive a signed, expiring download link.
+ *
+ * Public and unauthenticated: the whole point is to capture an email from a
+ * visitor who has no account. The file is unreadable without this call, so the
+ * gate is enforced server-side rather than by hiding a public URL.
+ */
+export const getFreebieDownload = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  const data = (request.data ?? {}) as { email?: string; slug?: string };
+  return subscribeAndSign(
+    db,
+    data.email,
+    String(data.slug ?? '').trim(),
+    'freebie'
+  );
+});
+
+/** Rebuild when freebies change, so the /freebies page reflects the edit. */
+export const onFreebieWrite = onDocumentWritten('freebies/{docId}', async (event) => {
+  // Download counters change on every claim and are not part of the page.
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (before && after) {
+    const onlyCounterChanged = Object.keys({ ...before, ...after }).every(
+      (k) => k === 'downloads' || JSON.stringify(before[k]) === JSON.stringify(after[k])
+    );
+    if (onlyCounterChanged) return;
+  }
+  await noteCatalogChange(db);
+});
+
+export const likeBlogPost = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  const slug = String((request.data as { slug?: string } | undefined)?.slug ?? '').trim();
+  if (!slug) {
+    throw new HttpsError('invalid-argument', 'A post slug is required.');
+  }
+
+  const matches = await db.collection('blog').where('slug', '==', slug).limit(1).get();
+  if (matches.empty) {
+    throw new HttpsError('not-found', 'That post does not exist.');
+  }
+
+  const ref = matches.docs[0].ref;
+  await ref.update({ likes: admin.firestore.FieldValue.increment(1) });
+  const fresh = await ref.get();
+  return { likes: Math.max(0, Number(fresh.get('likes')) || 0) };
 });
 
 /**

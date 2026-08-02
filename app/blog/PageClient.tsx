@@ -1,9 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 import type { BlogPost } from '../../lib/blog'
 import { readingMinutes } from '../../lib/blog'
+import { readLikedSlugs } from '../../lib/likes'
 import { ImageSlider } from '../components/ImageSlider'
 import { SiteFooter, SiteHeader } from '../components/SiteChrome'
 
@@ -15,7 +18,15 @@ const formatDate = (iso: string) => {
     : d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function PostCard({ post }: { post: BlogPost }) {
+function PostCard({
+  post,
+  likes,
+  liked
+}: {
+  post: BlogPost
+  likes: number
+  liked: boolean
+}) {
   return (
     <article className="group overflow-hidden rounded-3xl border border-primary/10 bg-white shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
       <Link href={`/blog/${post.slug}`} className="block">
@@ -36,14 +47,25 @@ function PostCard({ post }: { post: BlogPost }) {
             <span>{formatDate(post.publishedAt)}</span>
             <span aria-hidden="true">&middot;</span>
             <span>{readingMinutes(post.body)} min read</span>
-            {post.likes > 0 && (
+            {(likes > 0 || liked) && (
               <>
                 <span aria-hidden="true">&middot;</span>
-                <span className="inline-flex items-center gap-1 text-pink-600">
-                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 21s-7.5-4.35-9.6-8.4A5.4 5.4 0 0112 5.6a5.4 5.4 0 019.6 7C19.5 16.65 12 21 12 21z" />
+                <span
+                  className={`inline-flex items-center gap-1 ${liked ? 'text-pink-600' : 'text-muted'}`}
+                  title={liked ? 'You have already liked this article' : undefined}
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill={liked ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7.5-4.35-9.6-8.4A5.4 5.4 0 0112 5.6a5.4 5.4 0 019.6 7C19.5 16.65 12 21 12 21z" />
                   </svg>
-                  {post.likes}
+                  {likes}
+                  {liked && <span className="sr-only">You have already liked this article</span>}
                 </span>
               </>
             )}
@@ -71,6 +93,31 @@ function PostCard({ post }: { post: BlogPost }) {
 
 export default function BlogListClient({ posts }: { posts: BlogPost[] }) {
   const [tag, setTag] = useState<string>('all')
+  const [likedSlugs, setLikedSlugs] = useState<string[]>([])
+  // Build-time counts as the starting point, replaced by live values below so
+  // the list does not show a stale number until the next deploy.
+  const [liveLikes, setLiveLikes] = useState<Record<string, number>>({})
+
+  useEffect(() => setLikedSlugs(readLikedSlugs()), [])
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, 'blog'),
+      (snap) => {
+        const next: Record<string, number> = {}
+        snap.forEach((d) => {
+          const slug = String(d.get('slug') ?? '')
+          const value = Number(d.get('likes'))
+          if (slug && Number.isFinite(value)) next[slug] = Math.max(0, value)
+        })
+        setLiveLikes(next)
+      },
+      // A rules or network failure leaves the build-time counts showing rather
+      // than emptying the page.
+      () => {}
+    )
+    return () => unsub()
+  }, [])
 
   const tags = useMemo(
     () => [...new Set(posts.flatMap((p) => p.tags))].sort((a, b) => a.localeCompare(b)),
@@ -128,7 +175,12 @@ export default function BlogListClient({ posts }: { posts: BlogPost[] }) {
         {shown.length ? (
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard
+                key={post.id}
+                post={post}
+                likes={liveLikes[post.slug] ?? post.likes}
+                liked={likedSlugs.includes(post.slug)}
+              />
             ))}
           </div>
         ) : (

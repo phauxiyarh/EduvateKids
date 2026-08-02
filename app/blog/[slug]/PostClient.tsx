@@ -7,6 +7,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { db, functions } from '../../../lib/firebase'
 import type { BlogPost } from '../../../lib/blog'
 import { readingMinutes } from '../../../lib/blog'
+import { forgetLiked, hasLiked, rememberLiked } from '../../../lib/likes'
 import { ImageSlider } from '../../components/ImageSlider'
 import { SiteFooter, SiteHeader } from '../../components/SiteChrome'
 
@@ -18,17 +19,6 @@ const formatDate = (iso: string) => {
     : d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-/** Remembers which posts this browser has liked, so the heart stays filled. */
-const LIKED_KEY = 'eduvate-liked-posts'
-const readLiked = (): string[] => {
-  if (typeof window === 'undefined') return []
-  try {
-    return JSON.parse(localStorage.getItem(LIKED_KEY) || '[]')
-  } catch {
-    return []
-  }
-}
-
 function LikeButton({ post }: { post: BlogPost }) {
   // Seeded from the build, then replaced by the live count so a reader sees
   // other people's likes without waiting for a redeploy.
@@ -36,7 +26,9 @@ function LikeButton({ post }: { post: BlogPost }) {
   const [liked, setLiked] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => setLiked(readLiked().includes(post.slug)), [post.slug])
+  // Read after mount, never during render: the server has no localStorage, so
+  // seeding from it directly would mismatch the hydrated markup.
+  useEffect(() => setLiked(hasLiked(post.slug)), [post.slug])
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -59,13 +51,16 @@ function LikeButton({ post }: { post: BlogPost }) {
     // corrects the number a moment later.
     setLikes((n) => n + 1)
     setLiked(true)
+    rememberLiked(post.slug)
     try {
-      localStorage.setItem(LIKED_KEY, JSON.stringify([...new Set([...readLiked(), post.slug])]))
       const callable = httpsCallable<{ slug: string }, { likes: number }>(functions, 'likeBlogPost')
       const { data } = await callable({ slug: post.slug })
       if (Number.isFinite(data?.likes)) setLikes(Math.max(0, data.likes))
     } catch (error) {
+      // Roll the whole thing back, including the stored flag, so a failed like
+      // can be retried rather than leaving the heart permanently filled.
       console.error('Like failed:', error)
+      forgetLiked(post.slug)
       setLikes((n) => Math.max(0, n - 1))
       setLiked(false)
     } finally {
@@ -79,7 +74,8 @@ function LikeButton({ post }: { post: BlogPost }) {
       onClick={handleLike}
       disabled={liked || busy}
       aria-pressed={liked}
-      aria-label={liked ? 'You liked this article' : 'Like this article'}
+      aria-label={liked ? 'You have already liked this article' : 'Like this article'}
+      title={liked ? 'You have already liked this article' : 'Like this article'}
       className={`inline-flex items-center gap-2 rounded-full border-2 px-5 py-2.5 text-sm font-bold transition-all ${
         liked
           ? 'border-pink-300 bg-pink-50 text-pink-700'

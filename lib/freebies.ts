@@ -1,27 +1,32 @@
 /**
- * Freebies: downloadable resources gated behind an email subscription.
+ * Freebies: free resources revealed after an email subscription.
  *
- * The file itself lives in a Storage folder that is not publicly readable
- * (see storage.rules). `filePath` below is a storage path, never a URL. A
- * visitor who subscribes gets a short-lived signed URL minted server-side by
- * the getFreebieDownload function, so a shared link expires rather than
- * becoming a permanent way around the gate.
+ * The file itself lives on Google Drive, not in our Storage, so the admin
+ * uploads nothing here beyond a cover image. That keeps storage costs at zero
+ * and lets the admin manage the documents where they already live.
+ *
+ * A consequence worth being clear about: the gate is a reveal, not an
+ * enforcement. Once a visitor has the Drive URL they can share it, and anyone
+ * with that link skips the email step. Signed, expiring URLs would prevent
+ * that, but only for files we host ourselves. For free printables this is the
+ * accepted trade.
  */
 
 export type Freebie = {
   id: string
   title: string
   slug: string
+  /** Short pitch shown on the card. */
   description: string
-  /** Storage path, not a URL. Resolved to a signed URL only after subscribing. */
-  filePath: string
-  /** Shown on the download button, e.g. "PDF, 2.4 MB". */
+  /** Google Drive (or any) share URL, revealed after subscribing. */
+  fileUrl: string
+  /** e.g. "PDF, 4 pages". Free text, since we never see the file. */
   fileLabel: string
   /** Public cover image for the card. */
   coverImage: string
   order: number
   active: boolean
-  /** Incremented each time a signed URL is issued. */
+  /** Incremented each time the link is revealed. */
   downloads: number
   createdAt: string
 }
@@ -44,7 +49,7 @@ export function normalizeFreebie(data: Record<string, unknown>, id: string): Fre
     title,
     slug: String(data.slug ?? '').trim() || freebieSlug(title),
     description: String(data.description ?? '').trim(),
-    filePath: String(data.filePath ?? '').trim(),
+    fileUrl: String(data.fileUrl ?? '').trim(),
     fileLabel: String(data.fileLabel ?? '').trim(),
     coverImage: String(data.coverImage ?? '').trim(),
     order: Number.isFinite(Number(data.order)) ? Number(data.order) : 0,
@@ -57,13 +62,6 @@ export function normalizeFreebie(data: Record<string, unknown>, id: string): Fre
 export const sortFreebies = (a: Freebie, b: Freebie) =>
   a.order - b.order || a.title.localeCompare(b.title)
 
-/** Human-readable size for the button label. */
-export function formatFileSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return ''
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
 /**
  * Client-side email check. Deliberately permissive: the server validates too,
  * and rejecting unusual but legitimate addresses loses a subscriber for no
@@ -71,3 +69,20 @@ export function formatFileSize(bytes: number): string {
  */
 export const isPlausibleEmail = (value: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(value ?? '').trim())
+
+/**
+ * Turn a Drive "view" link into one that downloads directly, so the button
+ * behaves like a download rather than bouncing through Drive's preview.
+ * Anything that is not a recognised Drive URL is returned unchanged.
+ */
+export function directDownloadUrl(url: string): string {
+  const raw = String(url ?? '').trim()
+  const fileMatch = raw.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/)
+  if (fileMatch) return `https://drive.google.com/uc?export=download&id=${fileMatch[1]}`
+  const openMatch = raw.match(/drive\.google\.com\/open\?id=([A-Za-z0-9_-]+)/)
+  if (openMatch) return `https://drive.google.com/uc?export=download&id=${openMatch[1]}`
+  return raw
+}
+
+/** Basic sanity check so the admin cannot save an obviously broken link. */
+export const isUsableUrl = (value: string) => /^https?:\/\/.+/i.test(String(value ?? '').trim())

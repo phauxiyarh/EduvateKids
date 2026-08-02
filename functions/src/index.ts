@@ -30,7 +30,7 @@ import {
   uspsConfigured,
 } from './config';
 import { noteCatalogChange, publishIfDue, publishNow } from './publish';
-import { subscribeAndSign } from './freebies';
+import { subscribeAndReveal } from './freebies';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
@@ -663,15 +663,15 @@ export const onBlogWrite = onDocumentWritten('blog/{docId}', async (event) => {
  * counter that carries no privileges.
  */
 /**
- * Subscribe with an email and receive a signed, expiring download link.
+ * Subscribe with an email and receive the download link.
  *
- * Public and unauthenticated: the whole point is to capture an email from a
- * visitor who has no account. The file is unreadable without this call, so the
- * gate is enforced server-side rather than by hiding a public URL.
+ * Public and unauthenticated: the point is to capture an email from a visitor
+ * who has no account. Returning the URL from here rather than embedding it in
+ * the page keeps it out of the static HTML and out of search results.
  */
 export const getFreebieDownload = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const data = (request.data ?? {}) as { email?: string; slug?: string };
-  return subscribeAndSign(
+  return subscribeAndReveal(
     db,
     data.email,
     String(data.slug ?? '').trim(),

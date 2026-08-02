@@ -20,24 +20,13 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
-    // Freebie cover art advertises the download, so it is public like any
-    // other marketing image.
+    // Freebie cover art. The resources themselves live on Google Drive and are
+    // never uploaded here, so a cover is just another public marketing image.
     match /freebie-covers/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null
                    && request.resource.size < 8 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
-    }
-
-    // The freebie files themselves are NOT publicly readable. Access is granted
-    // only through a short-lived signed URL minted by the getFreebieDownload
-    // function after the visitor has subscribed. Public read here would let
-    // anyone share a permanent link and bypass the email gate entirely.
-    // No content-type restriction: these are PDFs, zips and worksheets.
-    match /freebies/{allPaths=**} {
-      allow read: if false;
-      allow write: if request.auth != null
-                   && request.resource.size < 50 * 1024 * 1024;
     }
 
     // Everything else denied by default.

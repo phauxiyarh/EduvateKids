@@ -35,21 +35,9 @@ export async function uploadBlogImage(file: File, postId: string): Promise<strin
 }
 
 /**
- * Upload a freebie's downloadable file under freebies/{freebieId}/.
- *
- * Returns the storage PATH, not a URL: freebie files are not publicly readable,
- * and the download link is minted as a short-lived signed URL by a Cloud
- * Function once the visitor has subscribed. A public URL here would let anyone
- * skip the email gate by sharing the link.
+ * Cover image for a freebie card. This is the only thing we host for a
+ * freebie: the resource itself is a Google Drive link the admin supplies.
  */
-export async function uploadFreebieFile(file: File, freebieId: string): Promise<string> {
-  const path = `freebies/${safeSegment(freebieId, 'item')}/${safeFileName(file)}`
-  const storageRef = ref(storage, path)
-  await uploadBytes(storageRef, file, { contentType: file.type })
-  return path
-}
-
-/** Cover image for a freebie card. Public, unlike the file it advertises. */
 export async function uploadFreebieCover(file: File, freebieId: string): Promise<string> {
   const path = `freebie-covers/${safeSegment(freebieId, 'item')}/${safeFileName(file)}`
   const storageRef = ref(storage, path)

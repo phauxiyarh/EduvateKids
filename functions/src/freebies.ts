@@ -1,29 +1,27 @@
 /**
- * Freebie downloads, gated behind an email subscription.
+ * Freebie downloads, revealed after an email subscription.
  *
- * The files live in a Storage folder with `allow read: if false`, so the only
- * way to reach one is a signed URL minted here. Links expire, which means a
- * shared URL stops working rather than becoming a permanent bypass of the gate.
+ * The files live on Google Drive rather than in our Storage, so there is
+ * nothing to sign. Returning the URL from a function instead of embedding it
+ * in the page keeps it out of the static HTML, which means it is not indexed
+ * and not visible in "view source" without subscribing first.
+ *
+ * That is a reveal, not an enforcement: a visitor who has the link can pass it
+ * on. Accepted deliberately for free printables, in exchange for zero storage
+ * cost and the admin keeping the documents where they already are.
  */
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { HttpsError } from 'firebase-functions/v2/https';
 
-/** How long a download link stays valid. Long enough to click, short enough
- *  that a forwarded link is useless by the time it travels. */
-const LINK_TTL_MS = 15 * 60 * 1000;
-
-/** Server-side email validation. Mirrors the client check, but authoritative. */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export const normalizeEmail = (value: unknown) =>
   String(value ?? '').trim().toLowerCase();
 
 /**
- * A subscriber doc id derived from the email, so the same address cannot
- * create duplicate records and "already subscribed" is a simple existence
- * check. Firestore ids cannot contain '/', and '@' and '.' are legal but
- * awkward, so both are replaced.
+ * Subscriber doc id derived from the email, so the same address cannot create
+ * duplicate records and "already subscribed" is a simple existence check.
  */
 export const subscriberId = (email: string) =>
   normalizeEmail(email).replace(/[^a-z0-9]/g, '_').slice(0, 400);
@@ -31,19 +29,18 @@ export const subscriberId = (email: string) =>
 export type SubscribeResult = {
   status: 'subscribed' | 'already-subscribed';
   downloadUrl: string;
-  fileName: string;
-  expiresInMinutes: number;
+  title: string;
 };
 
 /**
- * Record the subscription (if new) and return a signed download link.
+ * Record the subscription (if new) and return the download link.
  *
- * Returns the same link either way: someone who already subscribed should not
- * be locked out of a resource they have already earned. The status field lets
- * the UI say "thanks, you're already subscribed" rather than implying a new
+ * Returns the link either way. Someone who subscribed last month should not be
+ * refused a resource they already qualify for; the status field just lets the
+ * UI say "you're already subscribed, thank you" rather than implying a new
  * signup.
  */
-export async function subscribeAndSign(
+export async function subscribeAndReveal(
   db: FirebaseFirestore.Firestore,
   rawEmail: unknown,
   slug: string,
@@ -66,14 +63,14 @@ export async function subscribeAndSign(
     throw new HttpsError('not-found', 'That freebie is not available.');
   }
 
-  const filePath = String(freebie.get('filePath') ?? '').trim();
-  if (!filePath) {
-    logger.error('Freebie has no filePath', { slug });
+  const fileUrl = String(freebie.get('fileUrl') ?? '').trim();
+  if (!/^https?:\/\//i.test(fileUrl)) {
+    logger.error('Freebie has no usable fileUrl', { slug });
     throw new HttpsError('failed-precondition', 'That download is not ready yet.');
   }
 
-  // Record the subscriber before handing over the file, so a failure to store
-  // the email cannot silently give away the download for free.
+  // Record the subscriber before handing over the link, so a failure to store
+  // the email cannot silently give the download away for nothing.
   const ref = db.collection('subscribers').doc(subscriberId(email));
   const existing = await ref.get();
   const alreadySubscribed = existing.exists;
@@ -93,18 +90,6 @@ export async function subscribeAndSign(
     });
   }
 
-  const file = admin.storage().bucket().file(filePath);
-  const [exists] = await file.exists();
-  if (!exists) {
-    logger.error('Freebie file missing from storage', { slug, filePath });
-    throw new HttpsError('not-found', 'That file is missing. Please contact us.');
-  }
-
-  const [downloadUrl] = await file.getSignedUrl({
-    action: 'read',
-    expires: Date.now() + LINK_TTL_MS,
-  });
-
   // Best effort: a failed counter must not cost the visitor their download.
   try {
     await freebie.ref.update({ downloads: admin.firestore.FieldValue.increment(1) });
@@ -114,8 +99,7 @@ export async function subscribeAndSign(
 
   return {
     status: alreadySubscribed ? 'already-subscribed' : 'subscribed',
-    downloadUrl,
-    fileName: filePath.split('/').pop() || 'download',
-    expiresInMinutes: Math.round(LINK_TTL_MS / 60000),
+    downloadUrl: fileUrl,
+    title: String(freebie.get('title') ?? 'your download'),
   };
 }

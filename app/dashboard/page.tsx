@@ -28,7 +28,14 @@ import {
   sortPosts,
   type BlogPost
 } from '../../lib/blog'
-import { uploadBlogImage } from '../../lib/uploadImage'
+import { uploadBlogImage, uploadFreebieCover } from '../../lib/uploadImage'
+import {
+  freebieSlug,
+  isUsableUrl,
+  normalizeFreebie,
+  sortFreebies,
+  type Freebie
+} from '../../lib/freebies'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -887,6 +894,22 @@ export default function DashboardPage() {
   const [blogMessage, setBlogMessage] = useState('')
   const [isSavingPost, setIsSavingPost] = useState(false)
   const [postPreview, setPostPreview] = useState(false)
+
+  // Freebies. The resource is a Google Drive link the admin pastes in; only
+  // the cover image is hosted here.
+  const [freebies, setFreebies] = useState<Freebie[]>([])
+  const [freebiesLoading, setFreebiesLoading] = useState(false)
+  const [editingFreebie, setEditingFreebie] = useState<Freebie | null>(null)
+  const [freebieTitle, setFreebieTitle] = useState('')
+  const [freebieDescription, setFreebieDescription] = useState('')
+  const [freebieUrl, setFreebieUrl] = useState('')
+  const [freebieFileLabel, setFreebieFileLabel] = useState('')
+  const [freebieOrder, setFreebieOrder] = useState('')
+  const [freebieCover, setFreebieCover] = useState('')
+  const [freebieCoverFile, setFreebieCoverFile] = useState<File | null>(null)
+  const [freebieMessage, setFreebieMessage] = useState('')
+  const [isSavingFreebie, setIsSavingFreebie] = useState(false)
+  const [subscriberCount, setSubscriberCount] = useState<number | null>(null)
   const [orders, setOrders] = useState<OnlineOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
@@ -2950,6 +2973,179 @@ export default function DashboardPage() {
       console.error('Delete post error:', error)
       setBlogPosts(previous)
       setBlogMessage('Could not delete the post. Please try again.')
+    }
+  }
+
+  // ── Freebies ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeView !== 'website' || demoMode) return
+    let cancelled = false
+    setFreebiesLoading(true)
+    Promise.all([getDocs(collection(db, 'freebies')), getDocs(collection(db, 'subscribers'))])
+      .then(([freebieSnap, subSnap]) => {
+        if (cancelled) return
+        setFreebies(
+          freebieSnap.docs
+            .map((d) => normalizeFreebie(d.data() as Record<string, unknown>, d.id))
+            .sort(sortFreebies)
+        )
+        setSubscriberCount(subSnap.size)
+      })
+      .catch((error) => {
+        console.error('Load freebies error:', error)
+        if (!cancelled) setFreebieMessage('Could not load freebies.')
+      })
+      .finally(() => !cancelled && setFreebiesLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, demoMode])
+
+  const resetFreebieForm = () => {
+    setEditingFreebie(null)
+    setFreebieTitle('')
+    setFreebieDescription('')
+    setFreebieUrl('')
+    setFreebieFileLabel('')
+    setFreebieOrder('')
+    setFreebieCover('')
+    setFreebieCoverFile(null)
+  }
+
+  const handleSaveFreebie = async () => {
+    const title = freebieTitle.trim()
+    if (!title) {
+      setFreebieMessage('Give the freebie a title.')
+      return
+    }
+    if (!isUsableUrl(freebieUrl)) {
+      setFreebieMessage('Paste the full share link, starting with https://')
+      return
+    }
+    // Slug is fixed at creation: it identifies the freebie to the download
+    // function and appears in subscriber records.
+    const slug = editingFreebie ? editingFreebie.slug : freebieSlug(title)
+    if (!slug) {
+      setFreebieMessage('That title cannot be turned into an identifier. Add a letter or number.')
+      return
+    }
+    const clash = freebies.find((f) => f.slug === slug && f.id !== editingFreebie?.id)
+    if (clash) {
+      setFreebieMessage(`"${clash.title}" already uses that identifier. Pick a different title.`)
+      return
+    }
+
+    setIsSavingFreebie(true)
+    setFreebieMessage('')
+    const id = editingFreebie ? editingFreebie.id : `freebie-${Date.now()}`
+
+    try {
+      let coverImage = freebieCover
+      if (freebieCoverFile) coverImage = await uploadFreebieCover(freebieCoverFile, id)
+
+      const record: Freebie = {
+        id,
+        title,
+        slug,
+        description: freebieDescription.trim(),
+        fileUrl: freebieUrl.trim(),
+        fileLabel: freebieFileLabel.trim(),
+        coverImage,
+        order: freebieOrder.trim() === '' ? freebies.length : Math.round(parseNumber(freebieOrder)),
+        active: editingFreebie ? editingFreebie.active : true,
+        downloads: editingFreebie?.downloads ?? 0,
+        createdAt: editingFreebie?.createdAt || new Date().toISOString()
+      }
+
+      await setDoc(doc(db, 'freebies', id), record)
+      setFreebies((prev) =>
+        (editingFreebie ? prev.map((f) => (f.id === id ? record : f)) : [...prev, record]).sort(sortFreebies)
+      )
+      setFreebieMessage(editingFreebie ? `Updated "${title}".` : `Created "${title}".`)
+      resetFreebieForm()
+    } catch (error) {
+      console.error('Save freebie error:', error)
+      setFreebieMessage('Could not save. Please try again.')
+    } finally {
+      setIsSavingFreebie(false)
+    }
+  }
+
+  const handleToggleFreebieActive = async (freebie: Freebie) => {
+    const next = { ...freebie, active: !freebie.active }
+    setFreebies((prev) => prev.map((f) => (f.id === freebie.id ? next : f)))
+    try {
+      await updateDoc(doc(db, 'freebies', freebie.id), { active: next.active })
+    } catch (error) {
+      console.error('Toggle freebie error:', error)
+      setFreebies((prev) => prev.map((f) => (f.id === freebie.id ? freebie : f)))
+      setFreebieMessage('Could not change visibility. Please try again.')
+    }
+  }
+
+  const handleDeleteFreebie = async (freebie: Freebie) => {
+    if (!confirm(`Delete "${freebie.title}"? This cannot be undone.`)) return
+    const previous = freebies
+    setFreebies((prev) => prev.filter((f) => f.id !== freebie.id))
+    try {
+      await deleteDoc(doc(db, 'freebies', freebie.id))
+      setFreebieMessage(`Deleted "${freebie.title}".`)
+    } catch (error) {
+      console.error('Delete freebie error:', error)
+      setFreebies(previous)
+      setFreebieMessage('Could not delete. Please try again.')
+    }
+  }
+
+  /** Export collected emails as CSV so they can go into a mailing list. */
+  const handleExportSubscribers = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'subscribers'))
+      if (snap.empty) {
+        setFreebieMessage('No subscribers yet.')
+        return
+      }
+      const rows = [
+        ['Email', 'Subscribed', 'Last download', 'Freebies'],
+        ...snap.docs.map((d) => {
+          const x = d.data() as {
+            email?: string
+            subscribedAt?: { toDate?: () => Date }
+            lastDownloadAt?: { toDate?: () => Date }
+            freebies?: string[]
+          }
+          const when = (t?: { toDate?: () => Date }) => {
+            try {
+              return t?.toDate?.()?.toISOString().slice(0, 10) ?? ''
+            } catch {
+              return ''
+            }
+          }
+          return [
+            x.email ?? '',
+            when(x.subscribedAt),
+            when(x.lastDownloadAt),
+            (x.freebies ?? []).join(' | ')
+          ]
+        })
+      ]
+      const worksheet = XLSX.utils.aoa_to_sheet(rows)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Subscribers')
+      const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+      const blob = new Blob([output], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `eduvate-subscribers-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+      setFreebieMessage(`Exported ${snap.size} subscriber${snap.size === 1 ? '' : 's'}.`)
+    } catch (error) {
+      console.error('Export subscribers error:', error)
+      setFreebieMessage('Could not export subscribers.')
     }
   }
 
@@ -8731,6 +8927,247 @@ export default function DashboardPage() {
     </div>
   )
 
+  /** Freebies manager: Drive links revealed after a visitor subscribes. */
+  const renderFreebiesTab = () => (
+    <div className="space-y-6">
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
+        <h3 className="font-display text-xl gradient-text">
+          {editingFreebie ? `Edit "${editingFreebie.title}"` : 'Add a freebie'}
+        </h3>
+        <p className="mt-1 text-xs text-muted">
+          Host the file on Google Drive and paste its share link here. Visitors enter their email
+          to reveal it, and the address is saved to your subscriber list.
+        </p>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Title *</label>
+            <input
+              type="text"
+              value={freebieTitle}
+              onChange={(e) => setFreebieTitle(e.target.value)}
+              placeholder="Ramadan Reading Chart"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Description</label>
+            <input
+              type="text"
+              value={freebieDescription}
+              onChange={(e) => setFreebieDescription(e.target.value)}
+              placeholder="A printable chart for tracking daily reading through Ramadan"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+              Google Drive link *
+            </label>
+            <input
+              type="url"
+              value={freebieUrl}
+              onChange={(e) => setFreebieUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+            <p className="mt-1.5 text-[11px] text-muted">
+              In Drive, set sharing to <span className="font-semibold">Anyone with the link</span>,
+              otherwise subscribers will hit a permission wall.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+              File details <span className="normal-case font-medium">(shown on the button)</span>
+            </label>
+            <input
+              type="text"
+              value={freebieFileLabel}
+              onChange={(e) => setFreebieFileLabel(e.target.value)}
+              placeholder="PDF, 4 pages"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
+            <input
+              type="number"
+              value={freebieOrder}
+              onChange={(e) => setFreebieOrder(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Cover image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFreebieCoverFile(e.target.files?.[0] ?? null)}
+              className="w-full rounded-xl border-2 border-dashed border-primary/25 px-4 py-3 text-xs"
+            />
+            {(freebieCover || freebieCoverFile) && (
+              <div className="mt-3 flex items-center gap-3">
+                {freebieCover && !freebieCoverFile && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={freebieCover} alt="" className="h-20 w-20 rounded-xl object-cover ring-1 ring-black/10" />
+                )}
+                {freebieCoverFile && (
+                  <span className="text-xs font-semibold text-primaryDark">
+                    {freebieCoverFile.name} will be uploaded on save
+                  </span>
+                )}
+                {freebieCover && !freebieCoverFile && (
+                  <button
+                    type="button"
+                    onClick={() => setFreebieCover('')}
+                    className="text-xs font-bold text-red-600 underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveFreebie}
+            disabled={isSavingFreebie}
+            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            {isSavingFreebie ? 'Saving...' : editingFreebie ? 'Save changes' : 'Add freebie'}
+          </button>
+          {editingFreebie && (
+            <button
+              type="button"
+              onClick={resetFreebieForm}
+              className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+          {freebieMessage && (
+            <span className="rounded-full bg-primary/5 border border-primary/20 px-4 py-2 text-xs font-medium text-primaryDark">
+              {freebieMessage}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
+          <h3 className="font-display text-xl gradient-text">
+            Freebies ({freebies.length})
+          </h3>
+          <div className="flex items-center gap-3">
+            {subscriberCount !== null && (
+              <span className="rounded-full bg-white px-4 py-2 text-xs font-bold text-primaryDark shadow-sm border border-primary/10">
+                {subscriberCount} subscriber{subscriberCount === 1 ? '' : 's'}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleExportSubscribers}
+              className="rounded-full border-2 border-green-300 bg-white px-4 py-2 text-xs font-bold text-green-700 hover:bg-green-50 transition-colors"
+            >
+              Export emails
+            </button>
+          </div>
+        </div>
+
+        {freebiesLoading ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">Loading...</p>
+        ) : freebies.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-muted">
+            No freebies yet. Add your first one above.
+          </p>
+        ) : (
+          <ul className="divide-y divide-black/5">
+            {freebies.map((f) => (
+              <li key={f.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  {f.coverImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={f.coverImage} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
+                  ) : (
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primaryDark">
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-primaryDark">{f.title}</span>
+                      {!f.active && (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
+                          Hidden
+                        </span>
+                      )}
+                      <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600 border border-gray-200">
+                        {f.downloads} download{f.downloads === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    {f.description && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{f.description}</p>}
+                    <a
+                      href={f.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 block truncate text-[11px] text-primary underline"
+                    >
+                      {f.fileUrl}
+                    </a>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFreebie(f)
+                      setFreebieTitle(f.title)
+                      setFreebieDescription(f.description)
+                      setFreebieUrl(f.fileUrl)
+                      setFreebieFileLabel(f.fileLabel)
+                      setFreebieOrder(String(f.order))
+                      setFreebieCover(f.coverImage)
+                      setFreebieCoverFile(null)
+                      setFreebieMessage('')
+                    }}
+                    className="rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFreebieActive(f)}
+                    className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                  >
+                    {f.active ? 'Hide' : 'Show'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteFreebie(f)}
+                    className="rounded-full bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+
   /** Website content: tabbed shell over shelves, blog and freebies. */
   const renderWebsite = () => (
     <div className="fade-up space-y-6">
@@ -8807,9 +9244,7 @@ export default function DashboardPage() {
       ) : websiteTab === 'blog' ? (
         renderBlogTab()
       ) : (
-        <div className="panel-card rounded-3xl bg-white p-10 text-center shadow-xl border border-primary/10">
-          <p className="text-sm text-muted">This section is coming next.</p>
-        </div>
+        renderFreebiesTab()
       )}
     </div>
   )

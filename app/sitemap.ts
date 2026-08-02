@@ -21,6 +21,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/catalog`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/shelves`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/blog`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${SITE_URL}/freebies`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${SITE_URL}/summer-reads`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${SITE_URL}/book-event`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${SITE_URL}/faqs`, changeFrequency: 'monthly', priority: 0.7 },

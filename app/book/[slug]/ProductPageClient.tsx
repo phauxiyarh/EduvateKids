@@ -2,12 +2,13 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useCart } from '../../../lib/cart'
 import type { CatalogProduct } from '../../../lib/catalogBuild'
 import { EventNavDropdown } from '../../components/EventNavDropdown'
 import { HeaderCart } from '../../components/HeaderCart'
 import { BookPlaceholder } from '../../components/BookPlaceholder'
+import { trackViewItem } from '../../../lib/analytics'
 import logo from '../../../assets/logo.png'
 
 /**
@@ -27,6 +28,12 @@ export default function ProductPageClient({
   const { addItem, openCart } = useCart()
   const [activeImage, setActiveImage] = useState(0)
   const [added, setAdded] = useState(false)
+
+  // Feeds GA4's standard ecommerce funnel: view_item -> add_to_cart ->
+  // begin_checkout -> purchase. add_to_cart is reported from the cart itself.
+  useEffect(() => {
+    trackViewItem({ id: product.id, title: product.title, price: product.price })
+  }, [product.id, product.title, product.price])
 
   const handleAdd = () => {
     addItem({ id: product.id, title: product.title, price: product.price, image: product.images[0] })

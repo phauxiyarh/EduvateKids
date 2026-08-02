@@ -45,4 +45,17 @@ if (typeof window !== 'undefined' && analyticsAllowed()) {
   enableAnalytics();
 }
 
+/**
+ * Current analytics instance, or undefined when consent has not been granted
+ * (or the browser does not support it).
+ *
+ * Callers must use this rather than importing `analytics` directly: that
+ * binding is captured at import time, so a module loaded before the visitor
+ * accepted cookies would hold `undefined` forever and silently drop every
+ * event. Reading through a function always sees the current value.
+ */
+export function getAnalyticsInstance(): Analytics | undefined {
+  return analyticsAllowed() ? analytics : undefined;
+}
+
 export { app, db, auth, functions, storage, analytics };

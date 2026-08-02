@@ -7,6 +7,7 @@
  *   recomputed server-side at checkout (see functions/src/orders.ts).
  */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { trackAddToCart } from './analytics'
 
 export interface CartItem {
   id: string
@@ -73,6 +74,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [...current, { ...item, quantity: qty }]
     })
     setIsOpen(true)
+    // Tracked here rather than at each button, so every route into the cart
+    // (catalog, product page, shelf) is counted the same way and none can be
+    // missed. No-op without cookie consent.
+    trackAddToCart({ id: item.id, title: item.title, price: item.price, quantity: qty })
   }
 
   const removeItem: CartContextValue['removeItem'] = (id) =>

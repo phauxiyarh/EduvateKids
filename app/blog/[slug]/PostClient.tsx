@@ -8,6 +8,7 @@ import { db, functions } from '../../../lib/firebase'
 import type { BlogPost } from '../../../lib/blog'
 import { readingMinutes } from '../../../lib/blog'
 import { forgetLiked, hasLiked, rememberLiked } from '../../../lib/likes'
+import { trackBlogLike } from '../../../lib/analytics'
 import { ImageSlider } from '../../components/ImageSlider'
 import { SiteFooter, SiteHeader } from '../../components/SiteChrome'
 
@@ -52,6 +53,7 @@ function LikeButton({ post }: { post: BlogPost }) {
     setLikes((n) => n + 1)
     setLiked(true)
     rememberLiked(post.slug)
+    trackBlogLike(post.slug, post.title)
     try {
       const callable = httpsCallable<{ slug: string }, { likes: number }>(functions, 'likeBlogPost')
       const { data } = await callable({ slug: post.slug })

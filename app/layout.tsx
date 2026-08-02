@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ClientShell } from './components/ClientShell'
+import { AnalyticsTracker } from './components/AnalyticsTracker'
 
 const SITE_URL = 'https://eduvatekids.com'
 
@@ -104,6 +105,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <AnalyticsTracker />
         <ClientShell>{children}</ClientShell>
       </body>
     </html>

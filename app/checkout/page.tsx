@@ -8,6 +8,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../lib/firebase'
 import { useCart } from '../../lib/cart'
+import { trackBeginCheckout, trackPurchase } from '../../lib/analytics'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import logo from '../../assets/logo.png'
 import type { CustomerInfo, ShippingAddress } from '../../lib/orders'
@@ -79,6 +80,9 @@ export default function CheckoutPage() {
         shippingAddress,
       })
       const data = res.data as { clientSecret: string; subtotal: number; shippingFee: number; shipWeightGrams?: number; shipZone?: number; tax: number; total: number; currency: string }
+      // Uses the server-priced total, not the display figures, so the funnel
+      // value matches what is actually charged.
+      trackBeginCheckout(data.total, items.reduce((n, i) => n + i.quantity, 0))
       setClientSecret(data.clientSecret)
       setServerTotal(data.total)
       setBreakdown({ shippingFee: data.shippingFee, tax: data.tax, shipWeightGrams: data.shipWeightGrams, shipZone: data.shipZone })
@@ -247,7 +251,9 @@ export default function CheckoutPage() {
 function PaymentForm({ total }: { total: number | null }) {
   const stripe = useStripe()
   const elements = useElements()
-  const { clear } = useCart()
+  // `count` is read here so the purchase event can report item count before
+  // clear() empties the cart.
+  const { clear, count } = useCart()
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
 
@@ -276,6 +282,8 @@ function PaymentForm({ total }: { total: number | null }) {
       } catch {
         /* webhook will still record it; don't block the user on this */
       }
+      // Reported before clear(), which empties the cart we are measuring.
+      trackPurchase(paymentIntent.id, (paymentIntent.amount ?? 0) / 100, count)
       clear()
       window.location.href = '/order-confirmation?redirect_status=succeeded'
       return

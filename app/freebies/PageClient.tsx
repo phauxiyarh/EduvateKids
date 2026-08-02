@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../lib/firebase'
 import { directDownloadUrl, isPlausibleEmail, type Freebie } from '../../lib/freebies'
+import { trackFreebieUnlock, trackSubscribe } from '../../lib/analytics'
 import { SiteFooter, SiteHeader } from '../components/SiteChrome'
 
 /** The card shape the page receives: everything except the download link. */
@@ -72,6 +73,8 @@ function SubscribeModal({
       } catch {
         /* private mode */
       }
+      trackFreebieUnlock(freebie.slug, freebie.title, data.status === 'subscribed')
+      if (data.status === 'subscribed') trackSubscribe('freebie')
       setReveal(data)
     } catch (err) {
       console.error('Freebie download error:', err)

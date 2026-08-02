@@ -273,7 +273,9 @@ export default function HomePage() {
             {[
               { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
               { label: 'Our Catalog', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
-              { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16M8 6v6m4-6v6m4-6v6" /> }
+              // Books of differing heights standing on a plank: reads as a
+              // shelf at 16px, where the earlier grid of lines did not.
+              { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M6 5v10M10 7v8M14 4v11M18 8v7" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5" /></> }
             ].map((item) => {
               const cls = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
                 item.active

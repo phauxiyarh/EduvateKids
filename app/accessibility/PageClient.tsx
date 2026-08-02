@@ -62,6 +62,7 @@ export default function AccessibilityPage() {
           <nav aria-label="Primary" className="hidden flex-1 items-center justify-center gap-1 md:flex">
             <Link href="/" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Home</Link>
             <Link href="/catalog" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Our Catalog</Link>
+            <Link href="/shelves" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Shelves</Link>
             <EventNavDropdown />
             <Link href="/contact-us" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Contact</Link>
           </nav>

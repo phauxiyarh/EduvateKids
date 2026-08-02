@@ -136,11 +136,14 @@ function Shelf({ shelf }: { shelf: ShelfWithBooks }) {
           </>
         )}
 
-        {/* Back panel */}
-        <div className="rounded-t-xl bg-gradient-to-b from-[#c8a27a] to-[#b4885c] px-3 pt-5 shadow-inner sm:px-6">
+        {/* Back panel. Real wood grain, darkened so book covers stay the focus,
+            with an inner shadow suggesting the recess behind the books. */}
+        <div className="shelf-backboard relative rounded-t-xl px-3 pt-5 sm:px-6">
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-t-xl bg-gradient-to-b from-black/45 via-black/15 to-black/35" />
+          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/40 to-transparent" />
           <div
             ref={railRef}
-            className="shelf-rail flex items-end gap-3 overflow-x-auto pb-1 sm:gap-4"
+            className="shelf-rail relative z-10 flex items-end gap-3 overflow-x-auto pb-1 sm:gap-4"
           >
             {/* Covers are each book's own images only. Borrowing neighbours'
                 covers to pad the slider made the same artwork appear on several
@@ -151,9 +154,13 @@ function Shelf({ shelf }: { shelf: ShelfWithBooks }) {
           </div>
         </div>
 
-        {/* The plank, plus a thinner under-lip for depth. */}
-        <div className="h-4 rounded-b-lg bg-gradient-to-b from-[#8b5e34] via-[#7a5230] to-[#5f3f24] shadow-[0_10px_18px_-6px_rgba(0,0,0,0.55)]" />
-        <div className="mx-3 h-2 rounded-b-lg bg-gradient-to-b from-[#4a3218] to-[#3a2712] opacity-80" />
+        {/* The plank: same grain rotated so it reads as a cut edge, with a
+            highlight along the front lip and a shadow cast underneath. */}
+        <div className="shelf-plank relative h-5 rounded-b-md shadow-[0_12px_22px_-8px_rgba(0,0,0,0.6)]">
+          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-white/25" />
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-b-md bg-gradient-to-b from-transparent via-black/10 to-black/45" />
+        </div>
+        <div className="mx-4 h-2 rounded-b-lg bg-gradient-to-b from-black/45 to-transparent blur-[1px]" />
       </div>
     </section>
   )
@@ -182,22 +189,25 @@ export default function ShelvesPageClient({ shelves }: { shelves: ShelfWithBooks
           </Link>
           <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
             {[
-              { label: 'Home', href: '/' },
-              { label: 'Our Catalog', href: '/catalog' },
-              { label: 'Shelves', href: '/shelves', active: true },
-              { label: 'FAQs', href: '/faqs' }
+              { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
+              { label: 'Our Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+              { label: 'Shelves', href: '/shelves', active: true, icon: 'M6 5v10M10 7v8M14 4v11M18 8v7M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5' },
+              { label: 'FAQs', href: '/faqs', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
             ].map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
                 aria-current={item.active ? 'page' : undefined}
-                className={`rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
+                className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
                   item.active
                     ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                     : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
                 }`}
               >
-                {item.label}
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span>{item.label}</span>
               </Link>
             ))}
             <EventNavDropdown />

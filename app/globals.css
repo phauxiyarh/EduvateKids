@@ -494,3 +494,34 @@ textarea:focus-visible,
 .shelf-rail::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.7);
 }
+
+/* Shelf wood. One texture serves both surfaces: the backboard tiles it, the
+   plank rotates it 90deg so the grain runs across the cut edge like real
+   timber. WebP first with a JPG fallback for older Safari. */
+.shelf-backboard {
+  background-color: #5b3d24;
+  background-image: image-set(
+    url('/textures/wood.webp') type('image/webp'),
+    url('/textures/wood.jpg') type('image/jpeg')
+  );
+  background-size: 420px auto;
+  background-repeat: repeat;
+}
+.shelf-plank {
+  background-color: #6b4526;
+  background-image: image-set(
+    url('/textures/wood.webp') type('image/webp'),
+    url('/textures/wood.jpg') type('image/jpeg')
+  );
+  /* Zoomed in so a 20px-tall strip shows grain rather than a whole board. */
+  background-size: auto 220px;
+  background-position: center;
+  background-repeat: repeat-x;
+}
+/* Chrome and Safari still want the prefixed form. */
+@supports not (background-image: image-set(url('/textures/wood.webp') type('image/webp'))) {
+  .shelf-backboard,
+  .shelf-plank {
+    background-image: url('/textures/wood.jpg');
+  }
+}

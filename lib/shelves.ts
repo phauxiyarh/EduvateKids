@@ -31,7 +31,8 @@ export type ShelfWithBooks = Shelf & {
     id: string
     slug: string
     title: string
-    image: string
+    /** This book's own covers, used for the hover slideshow. May be empty. */
+    images: string[]
     price: number
   }>
 }

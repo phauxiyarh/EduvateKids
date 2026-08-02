@@ -43,7 +43,7 @@ export default async function Page() {
         id: p.id,
         slug: p.slug,
         title: p.title,
-        image: p.images[0] ?? '',
+        images: p.images,
         price: p.price
       }))
   }))

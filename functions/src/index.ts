@@ -627,6 +627,15 @@ export const onCatalogWrite = onDocumentWritten('catalog/{docId}', async () => {
 });
 
 /**
+ * Shelves are baked into the static /shelves page at build time, so editing
+ * one in the admin has no visible effect until the site rebuilds. Without this
+ * the admin saves successfully and nothing changes on the site.
+ */
+export const onShelfWrite = onDocumentWritten('shelves/{docId}', async () => {
+  await noteCatalogChange(db);
+});
+
+/**
  * Debounce sweep. Runs every 5 minutes and builds only once the catalog has
  * been quiet for DEBOUNCE_MS and no build has happened since the last change.
  */

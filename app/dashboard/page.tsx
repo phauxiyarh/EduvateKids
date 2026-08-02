@@ -2561,6 +2561,8 @@ export default function DashboardPage() {
   // product pages are behind the catalog.
   useEffect(() => {
     if (userRole !== 'admin' || demoMode) return
+    // Watched for both the Catalog banner and the Website tab, since either can
+    // leave the static pages behind.
     const unsub = onSnapshot(
       doc(db, 'system', 'publishState'),
       (snap) => {
@@ -8207,6 +8209,46 @@ export default function DashboardPage() {
       <p className="text-sm text-muted">
         {WEBSITE_TABS.find((t) => t.id === websiteTab)?.blurb}
       </p>
+
+      {/* The public pages are generated at build time, so content edits are not
+          live until the site rebuilds. Say so plainly and offer the shortcut. */}
+      {!demoMode && (
+        <div
+          className={`panel-card flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 p-4 ${
+            publishPending ? 'border-amber-300 bg-amber-50' : 'border-primary/15 bg-primary/5'
+          }`}
+        >
+          <p className={`text-xs font-medium ${publishPending ? 'text-amber-900' : 'text-muted'}`}>
+            {publishPending ? (
+              <>
+                <span className="font-bold">Changes are not on the public site yet.</span>{' '}
+                They publish automatically about 10 minutes after your last edit, or publish now.
+              </>
+            ) : (
+              <>
+                Public pages are up to date
+                {publishState.lastDispatchAt
+                  ? ` (last published ${new Date(publishState.lastDispatchAt).toLocaleString()})`
+                  : ''}
+                .
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={handlePublishNow}
+            disabled={isPublishing}
+            className="shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-xs font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            {isPublishing ? 'Starting...' : 'Publish now'}
+          </button>
+        </div>
+      )}
+      {publishMessage && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-medium text-primaryDark">
+          {publishMessage}
+        </div>
+      )}
 
       {demoMode ? (
         <div className="panel-card rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">

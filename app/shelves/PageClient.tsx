@@ -11,14 +11,15 @@ import logo from '../../assets/logo.png'
 
 /**
  * One book standing on the shelf. Lifts and enlarges slightly on hover, and
- * cycles its cover images while hovered. Clicking opens the product page, the
- * same destination as a catalog card.
+ * cycles through that book's own cover images while hovered. Clicking opens
+ * the product page, the same destination as a catalog card.
  */
 function ShelfBook({
   book,
   covers
 }: {
   book: ShelfWithBooks['books'][number]
+  /** This book's images only. Never another book's. */
   covers: string[]
 }) {
   const [frame, setFrame] = useState(0)
@@ -141,18 +142,11 @@ function Shelf({ shelf }: { shelf: ShelfWithBooks }) {
             ref={railRef}
             className="shelf-rail flex items-end gap-3 overflow-x-auto pb-1 sm:gap-4"
           >
+            {/* Covers are each book's own images only. Borrowing neighbours'
+                covers to pad the slider made the same artwork appear on several
+                spines, which read as duplicate books on the shelf. */}
             {shelf.books.map((b) => (
-              <ShelfBook
-                key={b.id}
-                book={b}
-                // Cover slides come from the books on the shelf: this book's
-                // own cover first, then its neighbours, so a single-image
-                // product still animates with related titles.
-                covers={[
-                  b.image,
-                  ...shelf.books.filter((o) => o.id !== b.id && o.image).slice(0, 3).map((o) => o.image)
-                ].filter(Boolean)}
-              />
+              <ShelfBook key={b.id} book={b} covers={b.images} />
             ))}
           </div>
         </div>

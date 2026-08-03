@@ -7,6 +7,7 @@ import { HeaderCart } from '../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
 import logo from '../../assets/logo.png'
 import { SiteFooterFull } from '../components/SiteFooterFull'
+import { SiteHeader } from '../components/SiteChrome'
 
 const openCookiePrefs = () => {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS))
@@ -49,27 +50,7 @@ export default function AccessibilityPage() {
         Skip to main content
       </a>
 
-      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
-        <div className="pointer-events-none absolute inset-0 -z-10 backdrop-blur-xl" aria-hidden="true" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 py-3">
-          <Link className="group flex items-center gap-2 sm:gap-3 min-w-0" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0" />
-            <span className="flex flex-col min-w-0 leading-tight">
-              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
-            </span>
-          </Link>
-          <nav aria-label="Primary" className="hidden flex-1 items-center justify-center gap-1 md:flex">
-            <Link href="/" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Home</Link>
-            <Link href="/catalog" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Our Catalog</Link>
-            <Link href="/shelves" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Shelves</Link>
-            <EventNavDropdown />
-            <Link href="/contact-us" className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">Contact</Link>
-          </nav>
-          <HeaderCart />
-        </div>
-      </header>
+      <SiteHeader />
 
       <main id="main" className="mx-auto w-11/12 max-w-3xl py-12 sm:py-16">
         <div className="text-center">

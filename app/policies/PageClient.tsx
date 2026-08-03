@@ -11,6 +11,7 @@ import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
 import bg2 from '../../assets/bg2.png'
 import { SiteFooterFull } from '../components/SiteFooterFull'
+import { SiteHeader } from '../components/SiteChrome'
 
 function useReveal<T extends HTMLElement = HTMLDivElement>() {
   const ref = useRef<T | null>(null)
@@ -207,123 +208,7 @@ export default function PoliciesPage() {
 
   return (
     <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
-        <div className="pointer-events-none absolute inset-0 -z-10 backdrop-blur-xl" aria-hidden="true" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-3">
-          <Link className="group flex items-center gap-2 sm:gap-3 min-w-0" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 transition-transform duration-500 group-hover:rotate-6" />
-            <span className="flex flex-col min-w-0 leading-tight">
-              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
-            </span>
-          </Link>
-          <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
-            {navItemsBefore.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                aria-current={item.active ? 'page' : undefined}
-                className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
-                  item.active
-                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                    : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
-                }`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-            <EventNavDropdown />
-            {navItemsAfter.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                aria-current={item.active ? 'page' : undefined}
-                className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
-                  item.active
-                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                    : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
-                }`}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
-            <HeaderCart />
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex md:hidden h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-white/70 text-primaryDark backdrop-blur transition hover:bg-primary/5 active:scale-95"
-              aria-label="Toggle menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-              )}
-            </button>
-          </div>
-        </div>
-        {mobileMenuOpen && (
-          <div className="animate-slideDown md:hidden border-t border-primary/10 bg-white/95 backdrop-blur-xl shadow-lg">
-            <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
-              {navItemsBefore.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  aria-current={item.active ? 'page' : undefined}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] ${
-                    item.active
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white'
-                      : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
-                  }`}
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-              <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
-              <Link href="/summer-reads" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] bg-primary/5 text-primaryDark hover:bg-primary/10">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                <span>Summer Reads</span>
-              </Link>
-              <Link href="/book-event" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] bg-primary/5 text-primaryDark hover:bg-primary/10">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                <span>Book Event</span>
-              </Link>
-              {navItemsAfter.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  aria-current={item.active ? 'page' : undefined}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-bold transition active:scale-[0.98] ${
-                    item.active
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white'
-                      : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
-                  }`}
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </nav>
-          </div>
-        )}
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="relative overflow-hidden pb-10 sm:pb-16 pt-24 sm:pt-32">

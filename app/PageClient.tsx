@@ -276,7 +276,9 @@ export default function HomePage() {
               { label: 'Our Catalog', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
               // Books of differing heights standing on a plank: reads as a
               // shelf at 16px, where the earlier grid of lines did not.
-              { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M6 5v10M10 7v8M14 4v11M18 8v7" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5" /></> }
+              { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M6 5v10M10 7v8M14 4v11M18 8v7" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5" /></> },
+              { label: 'Blog', href: '/blog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2zM14 4v6h6M8 13h8M8 17h5" /> },
+              { label: 'Freebies', href: '/freebies', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" /> }
             ].map((item) => {
               const cls = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
                 item.active

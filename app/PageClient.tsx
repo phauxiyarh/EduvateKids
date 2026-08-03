@@ -273,7 +273,7 @@ export default function HomePage() {
           <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
             {[
               { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
-              { label: 'Our Catalog', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
+              { label: 'Catalog', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
               // Books of differing heights standing on a plank: reads as a
               // shelf at 16px, where the earlier grid of lines did not.
               { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M6 5v10M10 7v8M14 4v11M18 8v7" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5" /></> },
@@ -337,7 +337,7 @@ export default function HomePage() {
               </a>
               <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/catalog" onClick={() => setMobileMenuOpen(false)}>
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                Our Catalog
+                Catalog
               </Link>
               <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
               <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/summer-reads" onClick={() => setMobileMenuOpen(false)}>
@@ -643,7 +643,7 @@ export default function HomePage() {
             <div className="mx-auto w-11/12 max-w-6xl">
               <div ref={catalogReveal} className="reveal text-center mb-12">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
-                  Our Catalog
+                  Catalog
                 </p>
                 <h2 className="mt-4 font-display text-2xl sm:text-4xl">View Our Collection</h2>
                 <p className="mt-3 text-lg text-muted max-w-2xl mx-auto">

@@ -312,7 +312,7 @@ export default function POSPage() {
           <nav className="hidden items-center gap-2 md:flex">
             {[
               { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
-              { label: 'Our Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+              { label: 'Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
               { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' }
             ].map((item) => (
               <Link
@@ -345,7 +345,7 @@ export default function POSPage() {
           <div className="md:hidden border-t border-primary/10 bg-white px-6 py-4 space-y-2 animate-slideDown">
             {[
               { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
-              { label: 'Our Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+              { label: 'Catalog', href: '/catalog', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
               { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' }
             ].map((item) => (
               <Link
@@ -843,7 +843,7 @@ export default function POSPage() {
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
               <Link href="/" className="transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="transition-colors hover:text-white">Our Catalog</Link>
+              <Link href="/catalog" className="transition-colors hover:text-white">Catalog</Link>
               <Link href="/contact-us" className="transition-colors hover:text-white">Contact</Link>
               <Link href="/faqs" className="transition-colors hover:text-white">FAQs</Link>
               <Link href="/policies" className="transition-colors hover:text-white">Policies</Link>

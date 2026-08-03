@@ -17,7 +17,7 @@ import logo from '../../assets/logo.png'
  */
 export function SiteFooterFull({ anchors = false }: { anchors?: boolean }) {
   const explore = [
-    { label: 'Our Catalog', href: '/catalog' },
+    { label: 'Catalog', href: '/catalog' },
     { label: 'Shelves', href: '/shelves' },
     { label: 'Blog', href: '/blog' },
     { label: 'Freebies', href: '/freebies' },

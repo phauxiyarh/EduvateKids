@@ -8,7 +8,8 @@ import type { BlogPost } from '../../lib/blog'
 import { readingMinutes } from '../../lib/blog'
 import { readLikedSlugs } from '../../lib/likes'
 import { ImageSlider } from '../components/ImageSlider'
-import { SiteFooter, SiteHeader } from '../components/SiteChrome'
+import { SiteHeader } from '../components/SiteChrome'
+import { SiteFooterFull } from '../components/SiteFooterFull'
 
 const formatDate = (iso: string) => {
   if (!iso) return ''
@@ -192,7 +193,7 @@ export default function BlogListClient({ posts }: { posts: BlogPost[] }) {
         )}
       </main>
 
-      <SiteFooter />
+      <SiteFooterFull />
     </div>
   )
 }

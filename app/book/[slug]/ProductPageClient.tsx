@@ -204,12 +204,6 @@ export default function ProductPageClient({
               </div>
             )}
 
-            <p className="mt-8 rounded-2xl bg-primary/5 p-4 text-sm text-muted">
-              Free shipping on orders over $150. Shipped from Maryland, USA.{' '}
-              <Link href="/policies" className="font-semibold text-primaryDark underline">
-                Shipping &amp; returns
-              </Link>
-            </p>
           </div>
         </div>
 

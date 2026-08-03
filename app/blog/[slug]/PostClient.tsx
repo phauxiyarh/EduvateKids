@@ -10,7 +10,8 @@ import { readingMinutes } from '../../../lib/blog'
 import { forgetLiked, hasLiked, rememberLiked } from '../../../lib/likes'
 import { trackBlogLike } from '../../../lib/analytics'
 import { ImageSlider } from '../../components/ImageSlider'
-import { SiteFooter, SiteHeader } from '../../components/SiteChrome'
+import { SiteHeader } from '../../components/SiteChrome'
+import { SiteFooterFull } from '../../components/SiteFooterFull'
 
 const formatDate = (iso: string) => {
   if (!iso) return ''
@@ -193,7 +194,7 @@ export default function BlogPostClient({
         )}
       </main>
 
-      <SiteFooter />
+      <SiteFooterFull />
     </div>
   )
 }

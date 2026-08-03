@@ -27,8 +27,17 @@ export type CatalogProduct = {
   price: number
   publisher: string
   showPublisher: boolean
-  /** Only http(s) images. Base64 data URIs are unusable in metadata/JSON-LD. */
+  /**
+   * Every image, including inlined base64 data URIs. Used for display, where
+   * a data URI renders perfectly well.
+   */
   images: string[]
+  /**
+   * Hosted http(s) images only. Use these for og:image and JSON-LD, which need
+   * a URL a crawler can fetch; a data URI there is useless and would bloat the
+   * page by hundreds of KB.
+   */
+  hostedImages: string[]
   stock?: number
   /** Slugs of the shelves this product appears on. Empty is normal. */
   shelves: string[]
@@ -132,10 +141,11 @@ export async function getCatalogProducts(): Promise<CatalogProduct[]> {
           price: Number(d.price) || 0,
           publisher: String(d.publisher ?? '').trim(),
           showPublisher: d.showPublisher !== false,
-          // Data-URI images are inlined base64 (avg 8KB, some far larger).
-          // They cannot be referenced from JSON-LD or og:image, so only real
-          // hosted URLs are kept here.
-          images: toArray(d.images).filter((u) => /^https?:\/\//i.test(u)),
+          // Keep every image for display. 25 products store their covers as
+          // inlined base64 rather than Storage URLs, and filtering those out
+          // here made them render a placeholder despite having artwork.
+          images: toArray(d.images),
+          hostedImages: toArray(d.images).filter((u) => /^https?:\/\//i.test(u)),
           stock: typeof d.stock === 'number' ? (d.stock as number) : undefined,
           shelves: toArray(d.shelves)
         })

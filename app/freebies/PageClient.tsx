@@ -6,7 +6,8 @@ import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../lib/firebase'
 import { directDownloadUrl, isPlausibleEmail, type Freebie } from '../../lib/freebies'
 import { trackFreebieUnlock, trackSubscribe } from '../../lib/analytics'
-import { SiteFooter, SiteHeader } from '../components/SiteChrome'
+import { SiteHeader } from '../components/SiteChrome'
+import { SiteFooterFull } from '../components/SiteFooterFull'
 
 /** The card shape the page receives: everything except the download link. */
 type PublicFreebie = Omit<Freebie, 'fileUrl'>
@@ -270,7 +271,7 @@ export default function FreebiesPageClient({ freebies }: { freebies: PublicFreeb
         )}
       </main>
 
-      <SiteFooter />
+      <SiteFooterFull />
 
       {active && <SubscribeModal freebie={active} onClose={() => setActive(null)} />}
     </div>

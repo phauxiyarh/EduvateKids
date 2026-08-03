@@ -100,27 +100,3 @@ export function SiteHeader({ current }: { current?: string }) {
     </header>
   )
 }
-
-export function SiteFooter() {
-  return (
-    <footer className="mt-10 bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
-      <div className="mx-auto w-11/12 max-w-6xl text-sm">
-        <p className="font-display text-lg font-bold">Eduvate Kids</p>
-        <p className="mt-2 max-w-xl text-white/70">
-          Curated Islamic books, Arabic learning kits, crafts and gifts for Muslim families and
-          schools. Based in Maryland, USA.
-        </p>
-        <nav className="mt-4 flex flex-wrap gap-4 text-white/80">
-          <Link href="/catalog" className="hover:text-white">Catalog</Link>
-          <Link href="/shelves" className="hover:text-white">Shelves</Link>
-          <Link href="/blog" className="hover:text-white">Blog</Link>
-          <Link href="/freebies" className="hover:text-white">Freebies</Link>
-          <Link href="/faqs" className="hover:text-white">FAQs</Link>
-          <Link href="/book-event" className="hover:text-white">Book an event</Link>
-          <Link href="/contact-us" className="hover:text-white">Contact</Link>
-          <Link href="/policies" className="hover:text-white">Policies</Link>
-        </nav>
-      </div>
-    </footer>
-  )
-}

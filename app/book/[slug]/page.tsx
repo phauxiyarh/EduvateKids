@@ -36,7 +36,8 @@ export async function generateMetadata({
   if (!product) return { title: 'Book not found' }
 
   const url = `${SITE_URL}/book/${product.slug}`
-  const image = product.images[0]
+  // Metadata needs a fetchable URL, so only hosted images qualify here.
+  const image = product.hostedImages[0]
   const description = metaDescription(product)
 
   return {
@@ -75,7 +76,7 @@ function productJsonLd(product: CatalogProduct) {
         name: product.title,
         description: product.description || undefined,
         url,
-        ...(product.images.length ? { image: product.images } : {}),
+        ...(product.hostedImages.length ? { image: product.hostedImages } : {}),
         ...(product.showPublisher && product.publisher
           ? { brand: { '@type': 'Brand', name: product.publisher } }
           : {}),

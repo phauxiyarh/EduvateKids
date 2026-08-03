@@ -10,6 +10,7 @@ import logo from '../../assets/logo.png'
 import design1 from '../../assets/design1.png'
 import design2 from '../../assets/design2.png'
 import bg1 from '../../assets/bg1.png'
+import { SiteFooterFull } from '../components/SiteFooterFull'
 
 type IconProps = { className?: string }
 
@@ -481,43 +482,7 @@ export default function FAQsPage() {
         </section>
       </main>
 
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-        <div className="relative mx-auto w-11/12 max-w-6xl">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <Link className="flex items-center gap-3" href="/">
-              <Image src={logo} alt="Eduvate Kids logo" width={40} height={40} className="w-10 h-10" />
-              <span className="flex flex-col leading-tight">
-                <span className="font-display text-xl font-bold">Eduvate Kids</span>
-                <span className="font-display text-xs font-semibold italic text-emerald-300">Rooted in Faith. Growing in Knowledge.</span>
-              </span>
-            </Link>
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
-              <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalog</Link>
-              <Link href="/book-event" className="text-white/70 transition-colors hover:text-white">Book Event</Link>
-              <Link href="/contact-us" className="text-white/70 transition-colors hover:text-white">Contact</Link>
-              <Link href="/faqs" className="text-white/70 transition-colors hover:text-white">FAQs</Link>
-              <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
-              <Link href="/accessibility" className="text-white/70 transition-colors hover:text-white">Accessibility</Link>
-              <button type="button" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS)) }} className="text-white/70 transition-colors hover:text-white">Cookie Preferences</button>
-            </div>
-          </div>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">
-            <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
-            <Link
-              href="/auth/login"
-              aria-label="Admin Login"
-              className="group inline-flex items-center justify-center rounded-full p-1.5 text-white/30 transition-all duration-300 hover:bg-white/5 hover:text-white/80"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.418-3.03 7.79-7 9-3.97-1.21-7-4.582-7-9V7l7-4z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.75 1.75L15 10" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooterFull />
     </div>
   )
 }

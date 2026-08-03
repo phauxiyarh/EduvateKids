@@ -6,6 +6,7 @@ import { EventNavDropdown } from '../components/EventNavDropdown'
 import { HeaderCart } from '../components/HeaderCart'
 import { OPEN_COOKIE_PREFS } from '../components/CookieConsent'
 import logo from '../../assets/logo.png'
+import { SiteFooterFull } from '../components/SiteFooterFull'
 
 const openCookiePrefs = () => {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS))
@@ -123,30 +124,7 @@ export default function AccessibilityPage() {
         </div>
       </main>
 
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#16121f] via-[#1f1b2e] to-[#241d38] py-10 text-white">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-        <div className="mx-auto w-11/12 max-w-6xl">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <Link href="/" className="flex items-center gap-3">
-              <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} />
-              <span className="flex flex-col leading-tight">
-                <span className="font-display text-lg font-bold">Eduvate Kids</span>
-                <span className="font-display text-xs font-semibold italic text-emerald-300">Rooted in Faith. Growing in Knowledge.</span>
-              </span>
-            </Link>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-              <Link href="/" className="text-white/70 transition-colors hover:text-white">Home</Link>
-              <Link href="/catalog" className="text-white/70 transition-colors hover:text-white">Our Catalog</Link>
-              <Link href="/policies" className="text-white/70 transition-colors hover:text-white">Policies</Link>
-              <Link href="/accessibility" className="text-white/70 transition-colors hover:text-white" aria-current="page">Accessibility</Link>
-              <button type="button" onClick={openCookiePrefs} className="text-white/70 transition-colors hover:text-white">Cookie Preferences</button>
-            </div>
-          </div>
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 border-t border-white/10 pt-6 text-center text-sm text-white/50 sm:flex-row">
-            <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooterFull />
     </div>
   )
 }

@@ -385,13 +385,29 @@ const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[
   { id: 'website', label: 'Website', title: 'Website Content', subtitle: 'Manage the shelves, blog posts and freebies that appear on the public site.' },
 ]
 
-type WebsiteTab = 'shelves' | 'blog' | 'freebies'
+type WebsiteTab = 'shelves' | 'blog' | 'freebies' | 'submissions'
 
 /** Sub-tabs inside the Website section. */
 const WEBSITE_TABS: { id: WebsiteTab; label: string; blurb: string }[] = [
   { id: 'shelves', label: 'Shelves', blurb: 'Curated collections of books shown on the /shelves page.' },
   { id: 'blog', label: 'Blog', blurb: 'Articles and reading guides shown on the /blog page.' },
   { id: 'freebies', label: 'Freebies', blurb: 'Free downloads unlocked when a visitor subscribes.' },
+  { id: 'submissions', label: 'Submissions', blurb: 'Everything visitors send in: subscribers, messages, book requests and event enquiries.' },
+]
+
+/** The visitor-submitted collections, shown under Website > Submissions. */
+type SubmissionKind = 'subscribers' | 'contactMessages' | 'bookRequests' | 'eventBookings'
+
+const SUBMISSION_SOURCES: {
+  id: SubmissionKind
+  label: string
+  collection: string
+  empty: string
+}[] = [
+  { id: 'subscribers', label: 'Subscribers', collection: 'subscribers', empty: 'No one has subscribed for a freebie yet.' },
+  { id: 'contactMessages', label: 'Messages', collection: 'contactMessages', empty: 'No contact messages yet.' },
+  { id: 'bookRequests', label: 'Book requests', collection: 'bookRequests', empty: 'No out-of-stock requests yet.' },
+  { id: 'eventBookings', label: 'Event enquiries', collection: 'eventBookings', empty: 'No event enquiries yet.' },
 ]
 
 /** The icon path(s) for a nav item id. */
@@ -916,6 +932,13 @@ export default function DashboardPage() {
   const [freebieMessage, setFreebieMessage] = useState('')
   const [isSavingFreebie, setIsSavingFreebie] = useState(false)
   const [subscriberCount, setSubscriberCount] = useState<number | null>(null)
+
+  // Submissions: the four visitor-facing collections, loaded on demand.
+  const [submissionKind, setSubmissionKind] = useState<SubmissionKind>('subscribers')
+  const [submissionRows, setSubmissionRows] = useState<Record<string, unknown>[]>([])
+  const [submissionsLoading, setSubmissionsLoading] = useState(false)
+  const [submissionMessage, setSubmissionMessage] = useState('')
+  const [openSubmission, setOpenSubmission] = useState<Record<string, unknown> | null>(null)
   const [orders, setOrders] = useState<OnlineOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'paid' | 'shipped' | 'delivered' | 'cancelled'>('all')
@@ -3217,6 +3240,91 @@ export default function DashboardPage() {
       setFreebies(previous)
       setFreebieMessage('Could not delete. Please try again.')
     }
+  }
+
+  // ── Submissions ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeView !== 'website' || websiteTab !== 'submissions' || demoMode) return
+    const source = SUBMISSION_SOURCES.find((s) => s.id === submissionKind)
+    if (!source) return
+    let cancelled = false
+    setSubmissionsLoading(true)
+    setSubmissionMessage('')
+    getDocs(collection(db, source.collection))
+      .then((snap) => {
+        if (cancelled) return
+        const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
+        // Newest first, tolerating both Firestore timestamps and ISO strings.
+        rows.sort((a, b) => submissionDate(b) - submissionDate(a))
+        setSubmissionRows(rows)
+      })
+      .catch((error) => {
+        console.error('Load submissions error:', error)
+        if (!cancelled) setSubmissionMessage('Could not load these submissions.')
+      })
+      .finally(() => !cancelled && setSubmissionsLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, websiteTab, submissionKind, demoMode])
+
+  /** Milliseconds for sorting, from whichever date field a collection uses. */
+  function submissionDate(row: Record<string, unknown>): number {
+    const candidates = [row.createdAt, row.subscribedAt, row.requestedAt, row.submittedAt]
+    for (const value of candidates) {
+      if (!value) continue
+      const ts = value as { toMillis?: () => number }
+      if (typeof ts.toMillis === 'function') return ts.toMillis()
+      const parsed = new Date(String(value)).getTime()
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return 0
+  }
+
+  /** Human-readable date for display. */
+  const submissionDateLabel = (row: Record<string, unknown>) => {
+    const ms = submissionDate(row)
+    return ms ? new Date(ms).toLocaleString() : ''
+  }
+
+  /** Download the currently shown submissions as a spreadsheet. */
+  const handleExportSubmissions = () => {
+    const source = SUBMISSION_SOURCES.find((s) => s.id === submissionKind)
+    if (!source || !submissionRows.length) {
+      setSubmissionMessage('Nothing to export.')
+      return
+    }
+    // Union of keys across rows, so a field only some records carry is kept.
+    const keys = [...new Set(submissionRows.flatMap((r) => Object.keys(r)))].filter((k) => k !== 'id')
+    const cell = (value: unknown): string => {
+      if (value === null || value === undefined) return ''
+      const ts = value as { toDate?: () => Date }
+      if (typeof ts.toDate === 'function') {
+        try {
+          return ts.toDate().toISOString().slice(0, 19).replace('T', ' ')
+        } catch {
+          return ''
+        }
+      }
+      if (Array.isArray(value)) return value.map(String).join(' | ')
+      if (typeof value === 'object') return JSON.stringify(value)
+      return String(value)
+    }
+    const rows = [keys, ...submissionRows.map((r) => keys.map((k) => cell(r[k])))]
+    const worksheet = XLSX.utils.aoa_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, source.label.slice(0, 31))
+    const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([output], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `eduvate-${source.id}-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
+    setSubmissionMessage(`Exported ${submissionRows.length} row${submissionRows.length === 1 ? '' : 's'}.`)
   }
 
   /** Export collected emails as CSV so they can go into a mailing list. */
@@ -9455,6 +9563,186 @@ export default function DashboardPage() {
     </div>
   )
 
+  /** Submissions: everything visitors send in, in one place. */
+  const renderSubmissionsTab = () => {
+    const source = SUBMISSION_SOURCES.find((s) => s.id === submissionKind)
+
+    /** The two or three fields worth showing in the list for each collection. */
+    const summarise = (row: Record<string, unknown>) => {
+      const str = (k: string) => String(row[k] ?? '').trim()
+      switch (submissionKind) {
+        case 'subscribers':
+          return {
+            primary: str('email') || '(no email)',
+            secondary: Array.isArray(row.freebies) ? `Took: ${(row.freebies as string[]).join(', ')}` : ''
+          }
+        case 'contactMessages':
+          return {
+            primary: `${str('name') || 'Someone'} — ${str('subject') || 'No subject'}`,
+            secondary: str('message')
+          }
+        case 'bookRequests':
+          return {
+            primary: str('title') || str('bookTitle') || '(untitled request)',
+            secondary: [str('name'), str('email')].filter(Boolean).join(' · ')
+          }
+        default:
+          return {
+            primary: str('name') || str('organisation') || str('organization') || '(enquiry)',
+            secondary: [str('email'), str('eventType'), str('location')].filter(Boolean).join(' · ')
+          }
+      }
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {SUBMISSION_SOURCES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSubmissionKind(s.id)}
+                className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                  submissionKind === s.id
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-md'
+                    : 'border-2 border-primary/20 bg-white text-primaryDark hover:bg-primary/5'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleExportSubmissions}
+            disabled={!submissionRows.length}
+            className="rounded-full border-2 border-green-300 bg-white px-4 py-2 text-xs font-bold text-green-700 transition hover:bg-green-50 disabled:opacity-40"
+          >
+            Export to Excel
+          </button>
+        </div>
+
+        {submissionMessage && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-medium text-primaryDark">
+            {submissionMessage}
+          </div>
+        )}
+
+        <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-4 border-b border-primary/10">
+            <h3 className="font-display text-lg gradient-text">
+              {source?.label} {!submissionsLoading && `(${submissionRows.length})`}
+            </h3>
+            <p className="text-[11px] text-muted">Newest first. Click a row for the full details.</p>
+          </div>
+
+          {submissionsLoading ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">Loading...</p>
+          ) : submissionRows.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">{source?.empty}</p>
+          ) : (
+            <ul className="divide-y divide-black/5">
+              {submissionRows.map((row) => {
+                const { primary, secondary } = summarise(row)
+                const status = String(row.status ?? '').trim()
+                return (
+                  <li key={String(row.id)}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenSubmission(row)}
+                      className="flex w-full flex-wrap items-center justify-between gap-3 px-6 py-4 text-left transition hover:bg-primary/5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-primaryDark">{primary}</span>
+                          {status && (
+                            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 border border-blue-200">
+                              {status}
+                            </span>
+                          )}
+                        </div>
+                        {secondary && <p className="mt-1 line-clamp-1 text-xs text-muted">{secondary}</p>}
+                      </div>
+                      <span className="shrink-0 text-[11px] text-muted">{submissionDateLabel(row)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Detail view: every stored field, since these vary per collection. */}
+        {openSubmission && (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setOpenSubmission(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Submission details"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="font-display text-lg gradient-text">Details</h3>
+                <button
+                  type="button"
+                  onClick={() => setOpenSubmission(null)}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-black/5"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <dl className="space-y-3 text-sm">
+                {Object.entries(openSubmission)
+                  .filter(([k]) => k !== 'id')
+                  .map(([key, value]) => {
+                    const ts = value as { toDate?: () => Date }
+                    let display: string
+                    if (typeof ts?.toDate === 'function') {
+                      try {
+                        display = ts.toDate().toLocaleString()
+                      } catch {
+                        display = ''
+                      }
+                    } else if (Array.isArray(value)) {
+                      display = value.map(String).join(', ')
+                    } else if (value && typeof value === 'object') {
+                      display = JSON.stringify(value, null, 2)
+                    } else {
+                      display = String(value ?? '')
+                    }
+                    return (
+                      <div key={key} className="border-b border-black/5 pb-3 last:border-0">
+                        <dt className="text-[11px] font-bold uppercase tracking-wider text-muted">{key}</dt>
+                        <dd className="mt-1 whitespace-pre-wrap break-words text-primaryDark">
+                          {display || <span className="text-muted">(empty)</span>}
+                        </dd>
+                      </div>
+                    )
+                  })}
+              </dl>
+              {typeof openSubmission.email === 'string' && openSubmission.email && (
+                <a
+                  href={`mailto:${openSubmission.email}`}
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  Reply by email
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   /** Website content: tabbed shell over shelves, blog and freebies. */
   const renderWebsite = () => (
     <div className="fade-up space-y-6">
@@ -9530,8 +9818,10 @@ export default function DashboardPage() {
         renderShelvesTab()
       ) : websiteTab === 'blog' ? (
         renderBlogTab()
-      ) : (
+      ) : websiteTab === 'freebies' ? (
         renderFreebiesTab()
+      ) : (
+        renderSubmissionsTab()
       )}
 
       {renderShelfEditor()}

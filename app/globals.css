@@ -525,3 +525,53 @@ textarea:focus-visible,
     background-image: url('/textures/wood.jpg');
   }
 }
+
+/* Article typography.
+   Applied to the server-rendered Markdown on /blog/<slug>. Set here rather
+   than as utility classes on each emitted tag, because renderMarkdown()
+   produces the HTML and threading classes through it makes the renderer
+   harder to read than the styles are worth. */
+.article-body {
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  color: rgba(31, 41, 55, 0.9);
+}
+.article-body > p:first-of-type {
+  /* Lead paragraph, slightly larger to ease the reader in. */
+  font-size: 1.15rem;
+  line-height: 1.75;
+  color: rgba(31, 41, 55, 0.95);
+}
+.article-body h2,
+.article-body h3,
+.article-body h4,
+.article-body h5 {
+  scroll-margin-top: 6rem;
+}
+.article-body p + h2,
+.article-body ul + h2,
+.article-body ol + h2 {
+  margin-top: 2.75rem;
+}
+.article-body a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+.article-body img {
+  box-shadow: 0 18px 40px -22px rgba(124, 58, 237, 0.5);
+}
+.article-body blockquote {
+  border-radius: 0 1rem 1rem 0;
+}
+.article-body li {
+  padding-left: 0.15rem;
+}
+.article-body hr {
+  width: 5rem;
+  margin-inline: auto;
+  border-color: rgba(124, 58, 237, 0.25);
+}
+@media (min-width: 640px) {
+  .article-body { font-size: 1.125rem; }
+  .article-body > p:first-of-type { font-size: 1.25rem; }
+}

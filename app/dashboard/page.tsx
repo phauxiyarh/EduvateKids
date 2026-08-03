@@ -874,6 +874,12 @@ export default function DashboardPage() {
   const [editingShelf, setEditingShelf] = useState<Shelf | null>(null)
   const [shelfMessage, setShelfMessage] = useState('')
   const [isSavingShelf, setIsSavingShelf] = useState(false)
+  // Full-screen shelf editor: details plus the books on the shelf, so curating
+  // does not mean hopping between the Website tab and the Catalog tab.
+  const [shelfEditorOpen, setShelfEditorOpen] = useState(false)
+  const [shelfBookSearch, setShelfBookSearch] = useState('')
+  const [shelfPendingBooks, setShelfPendingBooks] = useState<string[]>([])
+  const [isSavingShelfBooks, setIsSavingShelfBooks] = useState(false)
 
   // Blog posts. Body is Markdown, typed directly or pasted from a .md file.
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
@@ -2797,6 +2803,122 @@ export default function DashboardPage() {
   /** How many catalog products sit on a given shelf. */
   const shelfBookCount = (slug: string) =>
     catalogItems.filter((c) => (c.shelves || []).includes(slug)).length
+
+  /**
+   * Open the full editor for a shelf. Book membership is staged locally so the
+   * admin can add and remove several before committing, rather than each click
+   * writing to Firestore.
+   */
+  const openShelfEditor = (shelf: Shelf | null) => {
+    if (shelf) {
+      setEditingShelf(shelf)
+      setShelfName(shelf.name)
+      setShelfDescription(shelf.description)
+      setShelfOrder(String(shelf.order))
+      setShelfPendingBooks(
+        catalogItems.filter((c) => (c.shelves || []).includes(shelf.slug)).map((c) => c.id)
+      )
+    } else {
+      resetShelfForm()
+      setShelfPendingBooks([])
+    }
+    setShelfBookSearch('')
+    setShelfMessage('')
+    setShelfEditorOpen(true)
+  }
+
+  const closeShelfEditor = () => {
+    setShelfEditorOpen(false)
+    resetShelfForm()
+    setShelfPendingBooks([])
+    setShelfBookSearch('')
+  }
+
+  /**
+   * Save the shelf and its book list together.
+   *
+   * Membership lives on each product, so changing a shelf's contents means
+   * editing the products that joined or left. Only those are written; a shelf
+   * of 200 books does not rewrite 200 documents to add one.
+   */
+  const handleSaveShelfWithBooks = async () => {
+    const name = shelfName.trim()
+    if (!name) {
+      setShelfMessage('Give the shelf a name.')
+      return
+    }
+    const slug = editingShelf ? editingShelf.slug : shelfSlug(name)
+    if (!slug) {
+      setShelfMessage('That name cannot be turned into a web address. Add a letter or number.')
+      return
+    }
+    const clash = shelves.find((s) => s.slug === slug && s.id !== editingShelf?.id)
+    if (clash) {
+      setShelfMessage(`"${clash.name}" already uses that web address. Pick a different name.`)
+      return
+    }
+
+    setIsSavingShelfBooks(true)
+    setShelfMessage('')
+    const id = editingShelf ? editingShelf.id : `shelf-${Date.now()}`
+    const record: Shelf = {
+      id,
+      name,
+      slug,
+      description: shelfDescription.trim(),
+      order: shelfOrder.trim() === '' ? shelves.length : Math.round(parseNumber(shelfOrder)),
+      active: editingShelf ? editingShelf.active : true,
+      createdAt: editingShelf?.createdAt || new Date().toISOString()
+    }
+
+    const wasOn = new Set(
+      catalogItems.filter((c) => (c.shelves || []).includes(slug)).map((c) => c.id)
+    )
+    const nowOn = new Set(shelfPendingBooks)
+    const added = [...nowOn].filter((cid) => !wasOn.has(cid))
+    const removed = [...wasOn].filter((cid) => !nowOn.has(cid))
+
+    try {
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'shelves', id), record)
+      added.forEach((cid) => {
+        const item = catalogItems.find((c) => c.id === cid)
+        if (!item) return
+        batch.update(doc(db, 'catalog', cid), {
+          shelves: [...new Set([...(item.shelves || []), slug])]
+        })
+      })
+      removed.forEach((cid) => {
+        const item = catalogItems.find((c) => c.id === cid)
+        if (!item) return
+        batch.update(doc(db, 'catalog', cid), {
+          shelves: (item.shelves || []).filter((s) => s !== slug)
+        })
+      })
+      await batch.commit()
+
+      setShelves((prev) =>
+        (editingShelf ? prev.map((s) => (s.id === id ? record : s)) : [...prev, record]).sort(sortShelves)
+      )
+      setCatalogItems((prev) =>
+        prev.map((c) => {
+          if (added.includes(c.id)) return { ...c, shelves: [...new Set([...(c.shelves || []), slug])] }
+          if (removed.includes(c.id)) return { ...c, shelves: (c.shelves || []).filter((s) => s !== slug) }
+          return c
+        })
+      )
+      const parts = [editingShelf ? `Updated "${name}"` : `Created "${name}"`]
+      if (added.length) parts.push(`${added.length} added`)
+      if (removed.length) parts.push(`${removed.length} removed`)
+      setShelfMessage(`${parts.join(', ')}.`)
+      closeShelfEditor()
+    } catch (error) {
+      console.error('Save shelf error:', error)
+      setShelfMessage('Could not save the shelf. Please try again.')
+    } finally {
+      setIsSavingShelfBooks(false)
+    }
+  }
 
   // ── Blog ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -8436,94 +8558,31 @@ export default function DashboardPage() {
   )
 
   /** Shelves manager: create, reorder, hide and delete curated collections. */
+  /** Shelves manager: a list, with a full editor opened per shelf. */
   const renderShelvesTab = () => (
     <div className="space-y-6">
-      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
-        <h3 className="font-display text-xl gradient-text">
-          {editingShelf ? `Edit "${editingShelf.name}"` : 'Create a shelf'}
-        </h3>
-        <p className="mt-1 text-xs text-muted">
-          Shelves group books on the public <span className="font-semibold">/shelves</span> page.
-          Assign books to a shelf from the Catalog tab when adding or editing an item.
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">
+          {shelvesLoading
+            ? 'Loading shelves...'
+            : `${shelves.length} shelf${shelves.length === 1 ? '' : 'ves'} on the public /shelves page`}
         </p>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Shelf name *</label>
-            <input
-              type="text"
-              value={shelfName}
-              onChange={(e) => setShelfName(e.target.value)}
-              placeholder="e.g. Ramadan Picks"
-              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
-            />
-            {editingShelf ? (
-              <p className="mt-1.5 text-[11px] text-muted">
-                Web address stays <span className="font-mono">/shelves#{editingShelf.slug}</span> so books already on this shelf keep their link.
-              </p>
-            ) : (
-              shelfName.trim() && (
-                <p className="mt-1.5 text-[11px] text-muted">
-                  Web address: <span className="font-mono">{shelfSlug(shelfName) || '(needs a letter or number)'}</span>
-                </p>
-              )
-            )}
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Short description</label>
-            <input
-              type="text"
-              value={shelfDescription}
-              onChange={(e) => setShelfDescription(e.target.value)}
-              placeholder="One line shown under the shelf name"
-              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
-            <input
-              type="number"
-              value={shelfOrder}
-              onChange={(e) => setShelfOrder(e.target.value)}
-              placeholder="0"
-              className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
-            />
-            <p className="mt-1.5 text-[11px] text-muted">Lower numbers appear first.</p>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSaveShelf}
-            disabled={isSavingShelf}
-            className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-          >
-            {isSavingShelf ? 'Saving...' : editingShelf ? 'Save changes' : 'Create shelf'}
-          </button>
-          {editingShelf && (
-            <button
-              type="button"
-              onClick={resetShelfForm}
-              className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-            >
-              Cancel
-            </button>
-          )}
-          {shelfMessage && (
-            <span className="rounded-full bg-primary/5 border border-primary/20 px-4 py-2 text-xs font-medium text-primaryDark">
-              {shelfMessage}
-            </span>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => openShelfEditor(null)}
+          className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5"
+        >
+          + New shelf
+        </button>
       </div>
 
-      <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
-        <div className="bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-5 border-b border-primary/10">
-          <h3 className="font-display text-xl gradient-text">
-            Shelves ({shelves.length})
-          </h3>
+      {shelfMessage && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-medium text-primaryDark">
+          {shelfMessage}
         </div>
+      )}
+
+      <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
         {shelvesLoading ? (
           <p className="px-6 py-10 text-center text-sm text-muted">Loading shelves...</p>
         ) : shelves.length === 0 ? (
@@ -8533,21 +8592,25 @@ export default function DashboardPage() {
         ) : (
           <ul className="divide-y divide-black/5">
             {shelves.map((shelf) => {
-              const count = shelfBookCount(shelf.slug)
+              const books = catalogItems.filter((c) => (c.shelves || []).includes(shelf.slug))
+              const covers = books
+                .map((b) => (b.images || [])[0])
+                .filter(Boolean)
+                .slice(0, 5)
               return (
-                <li key={shelf.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-                  <div className="min-w-0">
+                <li key={shelf.id} className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-primaryDark">{shelf.name}</span>
                       <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600 border border-gray-200">
-                        {count} {count === 1 ? 'book' : 'books'}
+                        {books.length} {books.length === 1 ? 'book' : 'books'}
                       </span>
                       {!shelf.active && (
                         <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
                           Hidden
                         </span>
                       )}
-                      {shelf.active && count === 0 && (
+                      {shelf.active && books.length === 0 && (
                         <span
                           title="A shelf with no books is skipped on the public page."
                           className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700 border border-blue-200"
@@ -8556,26 +8619,33 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </div>
-                    {shelf.description && (
-                      <p className="mt-1 text-xs text-muted">{shelf.description}</p>
+                    {shelf.description && <p className="mt-1 text-xs text-muted">{shelf.description}</p>}
+                    {covers.length > 0 && (
+                      <div className="mt-2 flex -space-x-2">
+                        {covers.map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={`${shelf.id}-${i}`}
+                            src={src}
+                            alt=""
+                            className="h-9 w-7 rounded object-cover ring-2 ring-white shadow-sm"
+                          />
+                        ))}
+                        {books.length > covers.length && (
+                          <span className="flex h-9 w-7 items-center justify-center rounded bg-primary/10 text-[9px] font-bold text-primaryDark ring-2 ring-white">
+                            +{books.length - covers.length}
+                          </span>
+                        )}
+                      </div>
                     )}
-                    <p className="mt-1 text-[11px] text-muted">
-                      order {shelf.order} &middot; <span className="font-mono">{shelf.slug}</span>
-                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingShelf(shelf)
-                        setShelfName(shelf.name)
-                        setShelfDescription(shelf.description)
-                        setShelfOrder(String(shelf.order))
-                        setShelfMessage('')
-                      }}
-                      className="rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                      onClick={() => openShelfEditor(shelf)}
+                      className="rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2 text-[11px] font-bold text-white shadow-sm transition hover:shadow-md hover:-translate-y-0.5"
                     >
-                      Edit
+                      Edit shelf &amp; books
                     </button>
                     <button
                       type="button"
@@ -8600,6 +8670,223 @@ export default function DashboardPage() {
       </div>
     </div>
   )
+
+  /** Full-screen shelf editor: details on the left, book picker on the right. */
+  const renderShelfEditor = () => {
+    if (!shelfEditorOpen) return null
+
+    const query = shelfBookSearch.trim().toLowerCase()
+    const onShelf = catalogItems.filter((c) => shelfPendingBooks.includes(c.id))
+    const available = catalogItems
+      .filter((c) => !shelfPendingBooks.includes(c.id))
+      .filter(
+        (c) =>
+          !query ||
+          c.title.toLowerCase().includes(query) ||
+          (c.publisher || '').toLowerCase().includes(query)
+      )
+      .slice(0, 60)
+
+    const cover = (item: CatalogItem) => (item.images || [])[0]
+
+    return (
+      <div
+        className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+        onClick={closeShelfEditor}
+        role="dialog"
+        aria-modal="true"
+        aria-label={editingShelf ? `Edit ${editingShelf.name}` : 'New shelf'}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-black/5 bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-4">
+            <div>
+              <h3 className="font-display text-xl gradient-text">
+                {editingShelf ? `Edit "${editingShelf.name}"` : 'New shelf'}
+              </h3>
+              <p className="text-xs text-muted">
+                {shelfPendingBooks.length} {shelfPendingBooks.length === 1 ? 'book' : 'books'} on this shelf
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeShelfEditor}
+              aria-label="Close"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-black/5"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="grid flex-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[320px_1fr]">
+            {/* Shelf details */}
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Shelf name *</label>
+                <input
+                  type="text"
+                  value={shelfName}
+                  onChange={(e) => setShelfName(e.target.value)}
+                  placeholder="e.g. Ramadan Picks"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+                {editingShelf ? (
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    Address stays <span className="font-mono">{editingShelf.slug}</span> so assigned books keep their link.
+                  </p>
+                ) : (
+                  shelfName.trim() && (
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      Address: <span className="font-mono">{shelfSlug(shelfName) || '(needs a letter or number)'}</span>
+                    </p>
+                  )
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Short description</label>
+                <textarea
+                  value={shelfDescription}
+                  onChange={(e) => setShelfDescription(e.target.value)}
+                  rows={3}
+                  placeholder="One line shown under the shelf name"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
+                <input
+                  type="number"
+                  value={shelfOrder}
+                  onChange={(e) => setShelfOrder(e.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+                />
+                <p className="mt-1.5 text-[11px] text-muted">Lower numbers appear first.</p>
+              </div>
+
+              {/* Books currently on the shelf */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">
+                  On this shelf ({onShelf.length})
+                </p>
+                {onShelf.length === 0 ? (
+                  <p className="rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 px-3 py-4 text-[11px] text-muted">
+                    No books yet. Pick some from the list on the right.
+                  </p>
+                ) : (
+                  <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                    {onShelf.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center gap-2 rounded-xl border border-primary/15 bg-primary/5 p-2"
+                      >
+                        {cover(item) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={cover(item)} alt="" className="h-10 w-8 shrink-0 rounded object-cover" />
+                        ) : (
+                          <span className="h-10 w-8 shrink-0 rounded bg-primary/10" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-primaryDark">
+                          {item.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShelfPendingBooks((prev) => prev.filter((id) => id !== item.id))}
+                          aria-label={`Remove ${item.title} from this shelf`}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 transition hover:bg-red-200"
+                        >
+                          &times;
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Book picker */}
+            <div className="min-w-0">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">
+                Add books from the catalog
+              </label>
+              <input
+                type="text"
+                value={shelfBookSearch}
+                onChange={(e) => setShelfBookSearch(e.target.value)}
+                placeholder="Search by title or publisher..."
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
+              />
+              <p className="mt-1.5 text-[11px] text-muted">
+                {catalogItems.length - shelfPendingBooks.length} books not on this shelf
+                {available.length === 60 && ', showing the first 60. Search to narrow it down.'}
+              </p>
+
+              <div className="mt-3 grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+                {available.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setShelfPendingBooks((prev) => [...prev, item.id])}
+                    className="group flex flex-col items-start gap-2 rounded-xl border-2 border-black/5 bg-white p-2 text-left transition hover:border-primary/40 hover:shadow-md"
+                  >
+                    <span className="relative w-full overflow-hidden rounded-lg bg-primary/5">
+                      {cover(item) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cover(item)} alt="" className="h-24 w-full object-cover" />
+                      ) : (
+                        <span className="flex h-24 w-full items-center justify-center text-[10px] text-muted">
+                          No cover
+                        </span>
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center bg-primary/70 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">
+                        + Add
+                      </span>
+                    </span>
+                    <span className="line-clamp-2 text-[11px] font-semibold leading-snug text-primaryDark">
+                      {item.title}
+                    </span>
+                  </button>
+                ))}
+                {available.length === 0 && (
+                  <p className="col-span-full rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 p-6 text-center text-xs text-muted">
+                    {query ? 'No books match that search.' : 'Every book is already on this shelf.'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/5 bg-gray-50 px-6 py-4">
+            <span className="text-xs text-muted">
+              {shelfMessage || 'Changes are saved when you press Save.'}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeShelfEditor}
+                className="rounded-full border-2 border-primary/20 px-5 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveShelfWithBooks}
+                disabled={isSavingShelfBooks}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-2.5 text-sm font-bold text-white shadow-lg transition hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                {isSavingShelfBooks ? 'Saving...' : editingShelf ? 'Save changes' : 'Create shelf'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
 
   /** Blog manager: write, edit, publish and delete posts. */
   const renderBlogTab = () => (
@@ -9246,6 +9533,8 @@ export default function DashboardPage() {
       ) : (
         renderFreebiesTab()
       )}
+
+      {renderShelfEditor()}
     </div>
   )
 

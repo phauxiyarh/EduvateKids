@@ -180,6 +180,12 @@ export default function BlogPostClient({
             <span aria-hidden="true">&middot;</span>
             <span>{readingMinutes(post.body)} min read</span>
           </div>
+          {/* Up here as well as at the foot: a reader who already knows the
+              piece should not have to scroll to the end to say so. Both render
+              the same component, so the count and filled state stay in step. */}
+          <div className="mt-5 flex justify-center">
+            <LikeButton post={post} />
+          </div>
           <div className="mx-auto mt-7 h-px w-20 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         </header>
 

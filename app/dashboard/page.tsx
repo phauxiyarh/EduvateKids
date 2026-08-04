@@ -18,6 +18,7 @@ import {
   increment
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
+import { ImageSlider } from '../components/ImageSlider'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   blogSlug,
@@ -3084,7 +3085,15 @@ export default function DashboardPage() {
       setBlogPosts((prev) =>
         (editingPost ? prev.map((p) => (p.id === id ? record : p)) : [...prev, record]).sort(sortPosts)
       )
-      setBlogMessage(editingPost ? `Updated "${title}".` : `Created "${title}".`)
+      // Saving writes to Firestore, but /blog is generated at build time, so
+      // the post is not on the site until a rebuild runs. Say so, rather than
+      // letting the admin refresh the site and conclude nothing happened.
+      setBlogMessage(
+        `${editingPost ? 'Updated' : 'Created'} "${title}". ` +
+          (record.published
+            ? 'It goes live on the site within about 10 minutes, or press Publish now above.'
+            : 'It stays a draft until you publish it.')
+      )
       setShowPostEditor(false)
       resetPostForm()
     } catch (error) {
@@ -9037,15 +9046,83 @@ export default function DashboardPage() {
           </div>
 
           {postPreview ? (
-            <div className="rounded-2xl border-2 border-primary/10 bg-white p-6">
-              <h1 className="font-display text-3xl font-bold text-primaryDark">{postTitle || 'Untitled'}</h1>
-              <p className="mt-2 text-xs text-muted">
-                {postAuthor || 'Eduvate Kids'} &middot; {readingMinutes(postBody)} min read
+            /* Mirrors the real article layout, including the image slider and
+               the like button, so what the admin approves is what ships. */
+            <div className="rounded-2xl border-2 border-primary/10 bg-gradient-to-b from-cream via-white to-white p-6 sm:p-10">
+              <p className="mb-6 rounded-xl bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primaryDark">
+                Preview of how this reads at{' '}
+                <span className="font-mono">
+                  /blog/{editingPost ? editingPost.slug : blogSlug(postTitle) || 'your-post'}
+                </span>
               </p>
-              <div
-                className="mt-6 text-ink/90"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(postBody) }}
-              />
+
+              <div className="mx-auto max-w-2xl">
+                <header className="text-center">
+                  {postTags.trim() && (
+                    <div className="mb-4 flex flex-wrap justify-center gap-1.5">
+                      {postTags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
+                        <span key={tag} className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-primaryDark">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <h1 className="font-display text-3xl font-bold leading-tight text-primaryDark sm:text-4xl">
+                    {postTitle || 'Untitled'}
+                  </h1>
+                  {(postExcerpt.trim() || postBody.trim()) && (
+                    <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted">
+                      {postExcerpt.trim() || deriveExcerpt(postBody)}
+                    </p>
+                  )}
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-sm text-muted">
+                    <span className="font-semibold text-primaryDark">{postAuthor || 'Eduvate Kids'}</span>
+                    <span aria-hidden="true">&middot;</span>
+                    <span>
+                      {postPublishedAt
+                        ? new Date(postPublishedAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                        : 'today'}
+                    </span>
+                    <span aria-hidden="true">&middot;</span>
+                    <span>{readingMinutes(postBody)} min read</span>
+                  </div>
+                  <div className="mx-auto mt-7 h-px w-20 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                </header>
+
+                {/* Saved images plus any picked in this session, so a new post
+                    previews its slider before the first save. */}
+                {[...postExistingImages, ...postImagePreviews].length > 0 && (
+                  <ImageSlider
+                    images={[...postExistingImages, ...postImagePreviews]}
+                    alt={postTitle || 'Post image'}
+                    className="mt-8 aspect-[16/9] w-full rounded-[1.75rem] shadow-lg"
+                  />
+                )}
+
+                <div
+                  className="article-body mt-10"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(postBody) }}
+                />
+
+                <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-black/5 pt-6">
+                  {/* Inert on purpose: this is a preview, not the live post. */}
+                  <span
+                    title="Readers tap this on the published article"
+                    className="inline-flex items-center gap-2 rounded-full border-2 border-primary/20 bg-white px-5 py-2.5 text-sm font-bold text-primaryDark opacity-70"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7.5-4.35-9.6-8.4A5.4 5.4 0 0112 5.6a5.4 5.4 0 019.6 7C19.5 16.65 12 21 12 21z" />
+                    </svg>
+                    <span>{Math.max(0, Math.round(parseNumber(postLikes)))}</span>
+                    <span>Like</span>
+                  </span>
+                  <span className="text-[11px] text-muted">Readers can like this once each.</span>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -9268,9 +9345,23 @@ export default function DashboardPage() {
                       )}
                     </div>
                     {post.excerpt && <p className="mt-1 line-clamp-1 text-xs text-muted">{post.excerpt}</p>}
-                    <p className="mt-1 text-[11px] text-muted">
-                      {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'no date'} &middot;{' '}
-                      {post.author} &middot; <span className="font-mono">/blog/{post.slug}</span>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
+                      <span>{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'no date'}</span>
+                      <span aria-hidden="true">&middot;</span>
+                      <span>{post.author}</span>
+                      <span aria-hidden="true">&middot;</span>
+                      {post.published ? (
+                        <a
+                          href={`https://eduvatekids.com/blog/${post.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-primary underline hover:no-underline"
+                        >
+                          /blog/{post.slug}
+                        </a>
+                      ) : (
+                        <span className="font-mono">/blog/{post.slug}</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">

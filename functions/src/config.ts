@@ -42,11 +42,11 @@ export const TAX_RATE_PERCENT = defineString('EK_TAX_RATE', { default: '6' });
  * approved model in implementation_docs/Weight_Based_Shipping_Model.md).
  * All overridable via environment so pricing tunes without a code change.
  */
-export const SHIP_BASE_FEE = defineString('EK_SHIP_BASE_FEE', { default: '5.20' });
-export const SHIP_ZONE_RATES = defineString('EK_SHIP_ZONE_RATES', { default: '0.35,0.70,1.10,1.55,2.10,2.75,3.15,3.30' });
+export const SHIP_BASE_FEE = defineString('EK_SHIP_BASE_FEE', { default: '7.35' });
+export const SHIP_ZONE_RATES = defineString('EK_SHIP_ZONE_RATES', { default: '0.38,0.76,1.19,1.67,2.27,2.97,3.40,3.56' });
 export const SHIP_PADDING_G = defineString('EK_SHIP_PADDING_G', { default: '150' });
 export const SHIP_STEP_KG = defineString('EK_SHIP_STEP_KG', { default: '0.25' });
-export const SHIP_MAX_FEE = defineString('EK_SHIP_MAX_FEE', { default: '30' });
+export const SHIP_MAX_FEE = defineString('EK_SHIP_MAX_FEE', { default: '32' });
 export const FREE_SHIPPING_THRESHOLD = defineString('EK_FREE_SHIPPING_OVER', { default: '150' });
 export const SHIP_DEFAULT_ITEM_G = defineString('EK_SHIP_DEFAULT_ITEM_G', { default: '300' });
 
@@ -57,11 +57,11 @@ export function shippingParams() {
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && n >= 0);
   return {
-    baseFee: Number(SHIP_BASE_FEE.value() || '5.20'),
-    zoneRates: rates.length === 8 ? rates : [0.35, 0.70, 1.10, 1.55, 2.10, 2.75, 3.15, 3.30],
+    baseFee: Number(SHIP_BASE_FEE.value() || '7.35'),
+    zoneRates: rates.length === 8 ? rates : [0.38, 0.76, 1.19, 1.67, 2.27, 2.97, 3.40, 3.56],
     packagePaddingKg: Number(SHIP_PADDING_G.value() || '150') / 1000,
     stepKg: Number(SHIP_STEP_KG.value() || '0.25'),
-    maxFee: Number(SHIP_MAX_FEE.value() || '30'),
+    maxFee: Number(SHIP_MAX_FEE.value() || '32'),
     freeOverSubtotal: Number(FREE_SHIPPING_THRESHOLD.value() || '150'),
     defaultItemWeightKg: Number(SHIP_DEFAULT_ITEM_G.value() || '300') / 1000,
   };

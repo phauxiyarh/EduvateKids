@@ -6,15 +6,23 @@
  *   fee = baseFee + zoneRate[zone] * billableKg
  * where billableKg = ceil((contentKg + packagePadding) / step) * step.
  *
- * Calibrated against real historical shipments (mean abs error ~ $0.27):
- *   Ocean City MD 3.6kg -> $6.60 (model $6.51)
- *   New Jersey    0.4kg -> $6.19 (model $5.72)
- *   Pennsylvania  3.6kg -> $7.88 (model $7.83)
- *   California    3.6kg -> $18.04 (model $17.57)
+ * Originally calibrated against four 2026 shipments, but it undercharged every
+ * one of them (mean -$0.27) and carrier prices have risen since: actual
+ * postage was running about $2.40 above what checkout collected.
  *
- * All parameters are overridable via environment (see config.ts) so pricing can
- * be tuned without a code change. Keep this file in sync with the client mirror
- * at app/lib/shipping.ts.
+ * Retuned 2026-08 by lifting the base fee and nudging the zone rates 8%. The
+ * base does most of the work because the shortfall is roughly flat per parcel;
+ * a large per-kg increase instead would have overcharged the rare heavy,
+ * distant order by $5 or more. Against the four shipments uplifted by $2.40 the
+ * mean absolute error is $0.31, and every realistic basket rises $2.16 to $3.77.
+ *
+ * The numbers below are defaults only. Production reads them from
+ * functions/.env.eduvatekids-store, so rates can be retuned with a functions
+ * deploy and no code change. Keep the two in step: config.ts holds the same
+ * values so a missing env file does not silently revert pricing.
+ *
+ * There is no client-side copy on purpose. Shipping is priced server-side in
+ * priceCart so the browser cannot influence what is charged.
  */
 
 /** USPS-style distance zones from MD 21075, by USPS state abbreviation. */
@@ -30,7 +38,7 @@ export const STATE_ZONE: Record<string, number> = {
 };
 
 /** Default per-zone rate ($/kg). Overridable via EK_ZONE_RATES (comma list z1..z8). */
-export const DEFAULT_ZONE_RATES = [0.35, 0.70, 1.10, 1.55, 2.10, 2.75, 3.15, 3.30];
+export const DEFAULT_ZONE_RATES = [0.38, 0.76, 1.19, 1.67, 2.27, 2.97, 3.40, 3.56];
 
 export interface ShippingParams {
   baseFee: number;          // fixed carrier minimum + label + drop-off

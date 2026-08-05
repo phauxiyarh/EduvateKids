@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "export": "next build",
-    "deploy": "next build && firebase deploy --only hosting",
-    "deploy:all": "next build && firebase deploy --only \"hosting,functions\""
+    "deploy": "node scripts/check-build-env.mjs && next build && firebase deploy --only hosting",
+    "deploy:all": "node scripts/check-build-env.mjs && next build && firebase deploy --only \"hosting,functions\"",
+    "check-env": "node scripts/check-build-env.mjs --report"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^2.9.0",

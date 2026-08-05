@@ -28,28 +28,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # A test Stripe key in a production build takes real customers to a
-      # checkout that cannot charge them, and the only visible symptom is a
-      # small amber banner that is easy to miss. This shipped once because the
-      # live key was set in a local .env.local, which CI never reads, while the
-      # GitHub secret still held the test key from months earlier. Fail here
-      # rather than deploy a storefront that silently cannot take money.
-      - name: Check payment keys are live
-        run: |
-          key="${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}"
-          if [ -z "$key" ]; then
-            echo "::error::NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set. Checkout would be disabled."
-            exit 1
-          fi
-          case "$key" in
-            pk_live_*) echo "Stripe publishable key is a live key." ;;
-            pk_test_*)
-              echo "::error::NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is a TEST key (pk_test_). Update the repository secret with the live key before deploying."
-              exit 1 ;;
-            *)
-              echo "::error::NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY does not look like a Stripe publishable key."
-              exit 1 ;;
-          esac
+      # NEXT_PUBLIC_* values are baked into the browser bundle at build time.
+      # A local .env.local only affects local builds; CI reads these secrets.
+      # When they drift the build still succeeds and the wrong value ships
+      # silently, which is how a test Stripe key reached the live checkout.
+      # scripts/check-build-env.mjs validates the shape of every one of them
+      # and fails the run before anything is built.
+      - name: Check build environment
+        run: node scripts/check-build-env.mjs
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_PAYPAL_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_PAYPAL_CLIENT_ID }}
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
 
       - name: Build Next.js app
         run: npm run build

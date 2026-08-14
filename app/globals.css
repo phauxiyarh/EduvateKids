@@ -559,6 +559,11 @@ textarea:focus-visible,
 }
 .article-body img {
   box-shadow: 0 18px 40px -22px rgba(124, 58, 237, 0.5);
+  /* Never crop a body image and never let it overflow the column: scale it
+     down to the text width and keep its own proportions. */
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 .article-body blockquote {
   border-radius: 0 1rem 1rem 0;

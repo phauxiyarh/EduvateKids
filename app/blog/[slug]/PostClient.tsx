@@ -190,10 +190,14 @@ export default function BlogPostClient({
         </header>
 
         {post.images.length > 0 && (
+          /* `contain` on the article itself: the reader came for this image, so
+             show all of it. The tinted backdrop fills the letterbox margins a
+             portrait or square image leaves inside the 16/9 frame. */
           <ImageSlider
             images={post.images}
             alt={post.title}
-            className="mt-8 aspect-[16/9] w-full rounded-[1.75rem] shadow-[0_20px_50px_-20px_rgba(124,58,237,0.45)]"
+            fit="contain"
+            className="mt-8 aspect-[16/9] w-full rounded-[1.75rem] bg-gradient-to-br from-primary/5 via-cream to-secondary/5 shadow-[0_20px_50px_-20px_rgba(124,58,237,0.45)]"
           />
         )}
 
@@ -222,7 +226,7 @@ export default function BlogPostClient({
           <section className="mt-16">
             <h2 className="text-center font-display text-xl font-bold text-primaryDark">Keep reading</h2>
             <div className="mx-auto mt-2 h-px w-16 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="mt-6 grid items-stretch gap-4 sm:grid-cols-3">
               {related.map((r) => (
                 <Link
                   key={r.id}
@@ -231,12 +235,14 @@ export default function BlogPostClient({
                 >
                   {r.images[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.images[0]} alt="" className="h-24 w-full object-cover" loading="lazy" />
+                    <img src={r.images[0]} alt="" className="h-24 w-full shrink-0 object-cover" loading="lazy" />
                   ) : (
-                    <span className="h-24 w-full bg-gradient-to-br from-primary/10 via-cream to-secondary/10" />
+                    <span className="h-24 w-full shrink-0 bg-gradient-to-br from-primary/10 via-cream to-secondary/10" />
                   )}
                   <span className="flex flex-1 flex-col p-4">
-                    <span className="font-display text-sm font-bold leading-snug text-primaryDark transition-colors group-hover:text-primary">
+                    {/* Clamped so a long headline cannot make one of the three
+                        cards taller than its neighbours. */}
+                    <span className="line-clamp-2 font-display text-sm font-bold leading-snug text-primaryDark transition-colors group-hover:text-primary">
                       {r.title}
                     </span>
                     <span className="mt-1 text-[11px] text-muted">{readingMinutes(r.body)} min read</span>

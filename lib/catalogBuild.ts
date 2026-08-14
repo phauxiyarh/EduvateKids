@@ -218,6 +218,63 @@ export async function getPublicCollection(
   return out
 }
 
+/**
+ * Build-time reader for approved customer reviews.
+ *
+ * Cannot use getPublicCollection: rules only expose a review whose `approved`
+ * is true, and a plain collection list is evaluated per document, so an
+ * unfiltered read is rejected outright once a single pending review exists. A
+ * structured query carrying the same `approved == true` filter is what the rule
+ * expects, and it is exactly what the client sends too.
+ */
+export async function getApprovedReviews(): Promise<
+  Array<Record<string, unknown> & { id: string }>
+> {
+  const cacheKey = '__approvedReviews'
+  const hit = collectionCache.get(cacheKey)
+  if (hit) return hit
+
+  const out: Array<Record<string, unknown> & { id: string }> = []
+  try {
+    const res = await fetch(`${REST_BASE}:runQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'reviews' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'approved' },
+              op: 'EQUAL',
+              value: { booleanValue: true }
+            }
+          },
+          limit: 300
+        }
+      }),
+      next: { revalidate: false }
+    })
+    if (!res.ok) throw new Error(`Firestore REST ${res.status}: ${await res.text()}`)
+    const rows = (await res.json()) as Array<{
+      document?: { name: string; fields?: Record<string, FsValue> }
+    }>
+    for (const row of rows) {
+      const doc = row.document
+      // runQuery pads its response with result-less entries; skip them.
+      if (!doc?.name) continue
+      out.push({ id: doc.name.split('/').pop() as string, ...decodeFields(doc.fields ?? {}) })
+    }
+  } catch (error) {
+    // Reviews are additive: a site with an empty testimonials section is valid,
+    // and failing the build over one would be worse than shipping without it.
+    console.warn(`[build] could not read reviews: ${(error as Error).message}`)
+    return []
+  }
+
+  collectionCache.set(cacheKey, out)
+  return out
+}
+
 /** A tracked stock of 0 or less means out of stock; untracked means available. */
 export const isInStock = (p: CatalogProduct) => typeof p.stock !== 'number' || p.stock > 0
 

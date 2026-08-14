@@ -8,8 +8,10 @@ import { HeaderCart } from './components/HeaderCart'
 import { BookPlaceholder } from './components/BookPlaceholder'
 import { ReadingMattersCard } from './components/ReadingMattersCard'
 import { OPEN_COOKIE_PREFS } from './components/CookieConsent'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { normalizeReview, publicReviews, averageRating, type Review } from '../lib/reviews'
+import { Stars } from './components/StarRating'
 import logo from '../assets/logo.png'
 import catalogQR from '../assets/catalog.png'
 import learningRootsLogo from '../assets/partners/learning-roots.webp'
@@ -51,7 +53,14 @@ const partners = [
   }
 ]
 
-const testimonials = [
+/**
+ * Seed testimonials, shown only until real customer reviews exist.
+ *
+ * The carousel below prefers approved reviews from the `reviews` collection.
+ * These stay as a fallback so a brand-new deployment (or a Firestore read that
+ * fails) still shows a populated section rather than an empty panel.
+ */
+const seedTestimonials = [
   {
     quote:
       'My 5-year-old keeps asking for story time now. We found books that speak to her faith in a gentle, joyful way.',
@@ -162,8 +171,11 @@ function useReveal<T extends HTMLElement = HTMLDivElement>(deps: unknown[] = [])
   return ref
 }
 
-export default function HomePage() {
+export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
   const [activeTestimonial, setActiveTestimonial] = useState(0)
+  // Build-time reviews as the starting point, replaced by the live set so a
+  // newly approved review reaches the front page without a redeploy.
+  const [liveReviews, setLiveReviews] = useState<Review[] | null>(null)
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
@@ -179,12 +191,42 @@ export default function HomePage() {
   const testimonialReveal = useReveal<HTMLDivElement>()
   const partnersReveal = useReveal<HTMLDivElement>()
 
+  // Approved customer reviews, live. Rules require the query be constrained to
+  // approved reviews, so an unconstrained listen would be rejected.
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'reviews'), where('approved', '==', true)),
+      (snap) => {
+        setLiveReviews(
+          publicReviews(
+            snap.docs.map((d) => normalizeReview(d.data() as Record<string, unknown>, d.id))
+          )
+        )
+      },
+      // Leave the build-time reviews (or the seed copy) showing on failure.
+      () => {}
+    )
+    return () => unsub()
+  }, [])
+
+  // Real reviews win; the seed copy fills the section only while there are none.
+  const realReviews = liveReviews ?? reviews
+  const testimonials = realReviews.length
+    ? realReviews.map((r) => ({ quote: r.quote, name: r.name, role: r.role, rating: r.rating }))
+    : seedTestimonials.map((t) => ({ ...t, rating: 5 }))
+  const reviewAverage = averageRating(realReviews)
+
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
     }, 4500)
     return () => clearInterval(interval)
-  }, [])
+  }, [testimonials.length])
+
+  // A shrinking list must not leave the carousel pointing past the end.
+  useEffect(() => {
+    setActiveTestimonial((i) => (i < testimonials.length ? i : 0))
+  }, [testimonials.length])
 
   // Condense the sticky header once the user scrolls past the hero top
   useEffect(() => {
@@ -961,8 +1003,13 @@ export default function HomePage() {
                               : 'translate-x-6 opacity-0'
                           }`}
                         >
-                          <div className="text-4xl mb-4 text-primary/20">"</div>
-                          <p className="text-muted leading-relaxed italic">{testimonial.quote}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="text-4xl text-primary/20">"</div>
+                            <Stars value={testimonial.rating} />
+                          </div>
+                          <p className="mt-2 whitespace-pre-line text-muted leading-relaxed italic line-clamp-6">
+                            {testimonial.quote}
+                          </p>
                           <div className="mt-6 flex items-center gap-3">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 font-semibold text-primaryDark">
                               {testimonial.name.charAt(0)}
@@ -1014,15 +1061,32 @@ export default function HomePage() {
                     </div>
                   </div>
 
+                  {/* Real aggregate, and the two doors into the review flow. */}
                   <div className="mt-6 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 p-4 text-center">
-                    <p className="text-sm font-semibold text-primaryDark">
-                      <svg className="inline h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z"/></svg>
-                      <svg className="inline h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z"/></svg>
-                      <svg className="inline h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z"/></svg>
-                      <svg className="inline h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z"/></svg>
-                      <svg className="inline h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z"/></svg>
-                      {' '}Rated 5 stars by our community
-                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Stars value={reviewAverage || 5} />
+                      <p className="text-sm font-semibold text-primaryDark">
+                        {realReviews.length
+                          ? `Rated ${reviewAverage.toFixed(1)} out of 5 by ${realReviews.length} ${
+                              realReviews.length === 1 ? 'customer' : 'customers'
+                            }`
+                          : 'Rated 5 stars by our community'}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
+                      <Link
+                        href="/reviews/new"
+                        className="rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2 text-white shadow-soft transition hover:-translate-y-0.5"
+                      >
+                        Write a review
+                      </Link>
+                      <Link
+                        href="/reviews"
+                        className="rounded-full border border-primary/30 px-4 py-2 text-primaryDark transition hover:bg-primary/10"
+                      >
+                        Read all reviews
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>

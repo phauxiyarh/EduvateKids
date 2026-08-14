@@ -24,11 +24,16 @@ export function SiteFooterFull({ anchors = false }: { anchors?: boolean }) {
     { label: 'Summer Reads', href: '/summer-reads' }
   ]
 
+  // Reviews live here rather than in the header nav: reading and leaving a
+  // review is something a customer seeks out after a purchase, not a primary
+  // shopping destination competing with Catalog and Shelves.
   const about = [
     { label: 'About Us', href: anchors ? '#about' : '/#about', anchor: true },
     { label: 'Publishers', href: anchors ? '#partners' : '/#partners', anchor: true },
     { label: 'Book an Event', href: '/book-event', anchor: false },
     { label: 'Contact Us', href: '/contact-us', anchor: false },
+    { label: 'Customer Reviews', href: '/reviews', anchor: false },
+    { label: 'Write a Review', href: '/reviews/new', anchor: false },
     { label: 'FAQs', href: '/faqs', anchor: false }
   ]
 

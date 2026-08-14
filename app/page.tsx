@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { getApprovedReviews } from '../lib/catalogBuild'
+import { normalizeReview, publicReviews } from '../lib/reviews'
 import HomePage from './PageClient'
 
 /**
@@ -23,6 +25,12 @@ export const metadata: Metadata = {
   }
 }
 
-export default function Page() {
-  return <HomePage />
+export default async function Page() {
+  // Read at build time so the testimonials are in the static HTML for crawlers.
+  // The carousel then refreshes them live, so approving a review shows up
+  // without waiting for the next deploy.
+  const docs = await getApprovedReviews()
+  const reviews = publicReviews(docs.map((d) => normalizeReview(d, d.id)))
+
+  return <HomePage reviews={reviews} />
 }

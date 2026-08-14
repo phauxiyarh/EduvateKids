@@ -116,17 +116,29 @@ function PostCard({ post, likes, liked }: { post: BlogPost; likes: number; liked
         </div>
 
         <div className="flex flex-1 flex-col p-5">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted">
-            <span>{formatDate(post.publishedAt)}</span>
-            <span aria-hidden="true">&middot;</span>
-            <span>{readingMinutes(post.body)} min read</span>
+          {/* One line only: a wrapping meta row would push the title down and
+              make this card taller than its neighbours. */}
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[11px] font-semibold text-muted">
+            <span className="shrink-0">{formatDate(post.publishedAt)}</span>
+            <span aria-hidden="true" className="shrink-0">&middot;</span>
+            <span className="shrink-0">{readingMinutes(post.body)} min read</span>
             <LikeBadge likes={likes} liked={liked} />
           </div>
 
-          <h2 className="mt-2.5 font-display text-lg font-bold leading-snug text-primaryDark transition-colors duration-300 group-hover:text-primary">
+          {/* Fixed heights rather than clamps alone: line-clamp caps the
+              maximum but a short title still collapses, so cards in the same
+              row would end at different places. Reserving two title lines and
+              three excerpt lines makes every card identical whatever the text
+              length, and the image ratio above is already locked. */}
+          <h2 className="mt-2.5 line-clamp-2 h-[3.5rem] font-display text-lg font-bold leading-snug text-primaryDark transition-colors duration-300 group-hover:text-primary">
             {post.title}
           </h2>
-          {post.excerpt && <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-muted">{post.excerpt}</p>}
+          <p className="mt-2 line-clamp-3 h-[3.9rem] text-sm leading-relaxed text-muted">
+            {post.excerpt}
+          </p>
+
+          {/* Pushes "Read more" to the foot of every card. */}
+          <span className="flex-1" aria-hidden="true" />
 
           <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-primaryDark transition-all duration-300 group-hover:gap-2.5 group-hover:text-primary">
             Read more

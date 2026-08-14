@@ -103,6 +103,47 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Customer reviews ────────────────────────────────────────────────────
+    // Created ONLY by the createReview Cloud Function (Admin SDK bypasses these
+    // rules), which forces `approved: false` — so a visitor can never publish
+    // straight to the site or self-approve.
+    //
+    // The review doc itself holds only publishable fields (name, role, rating,
+    // quote, approved, featured). Reads are public so the storefront can list
+    // approved reviews live and the build-time generator can read them without
+    // credentials.
+    //
+    // Rules cannot hide a field, only a document, so the reviewer's email and
+    // the submitter IP are deliberately NOT stored here. They go in
+    // reviews/{id}/private/contact, which is admin-only (see below). Without
+    // that split, making a review publicly readable would publish the email.
+    match /reviews/{reviewId} {
+      // `read` covers both get and list. For a list, Firestore evaluates this
+      // per candidate document and rejects the whole query if any document
+      // fails, so any public read must be constrained to approved reviews:
+      // the client sends `where('approved','==',true)` and the build-time
+      // generator sends the same filter via runQuery (see
+      // lib/catalogBuild.ts getApprovedReviews). An unfiltered list is refused,
+      // and pending reviews are visible only to an admin.
+      allow read: if resource.data.approved == true || isAdmin();
+      allow create: if false;
+      allow update, delete: if isAdmin();
+
+      // Reviewer contact details. Written by the createReview function via the
+      // Admin SDK; readable only by an admin following up on a review.
+      match /private/{document=**} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    // ── Review rate-limit log ───────────────────────────────────────────────
+    // One doc per submission holding the IP and a timestamp, used only by
+    // createReview to throttle floods. Never client-readable.
+    match /reviewSubmissions/{document=**} {
+      allow read, write: if false;
+    }
+
     // ── Freebies: public read, admin write ──────────────────────────────────
     // The metadata is public so the /freebies page can list them, but
     // `filePath` points at a Storage object that is NOT publicly readable.

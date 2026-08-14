@@ -29,6 +29,17 @@ import {
   sortPosts,
   type BlogPost
 } from '../../lib/blog'
+import {
+  averageRating,
+  clampRating,
+  normalizeReview,
+  ratingBreakdown,
+  sortReviews,
+  MAX_NAME,
+  MAX_QUOTE,
+  MAX_ROLE,
+  type Review
+} from '../../lib/reviews'
 import { uploadBlogImage, uploadFreebieCover } from '../../lib/uploadImage'
 import {
   freebieSlug,
@@ -386,12 +397,13 @@ const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[
   { id: 'website', label: 'Website', title: 'Website Content', subtitle: 'Manage the shelves, blog posts and freebies that appear on the public site.' },
 ]
 
-type WebsiteTab = 'shelves' | 'blog' | 'freebies' | 'submissions'
+type WebsiteTab = 'shelves' | 'blog' | 'reviews' | 'freebies' | 'submissions'
 
 /** Sub-tabs inside the Website section. */
 const WEBSITE_TABS: { id: WebsiteTab; label: string; blurb: string }[] = [
   { id: 'shelves', label: 'Shelves', blurb: 'Curated collections of books shown on the /shelves page.' },
   { id: 'blog', label: 'Blog', blurb: 'Articles and reading guides shown on the /blog page.' },
+  { id: 'reviews', label: 'Reviews', blurb: 'Customer reviews. Approve what visitors send in, or write one yourself. Approved reviews appear on /reviews and in the home page testimonials.' },
   { id: 'freebies', label: 'Freebies', blurb: 'Free downloads unlocked when a visitor subscribes.' },
   { id: 'submissions', label: 'Submissions', blurb: 'Everything visitors send in: subscribers, messages, book requests and event enquiries.' },
 ]
@@ -917,6 +929,22 @@ export default function DashboardPage() {
   const [blogMessage, setBlogMessage] = useState('')
   const [isSavingPost, setIsSavingPost] = useState(false)
   const [postPreview, setPostPreview] = useState(false)
+
+  // Customer reviews. Visitors submit through the createReview function and land
+  // here unapproved; nothing reaches the site until an admin approves it.
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewMessage, setReviewMessage] = useState('')
+  const [reviewFilter, setReviewFilter] = useState<'pending' | 'approved' | 'all'>('pending')
+  const [showReviewEditor, setShowReviewEditor] = useState(false)
+  const [editingReview, setEditingReview] = useState<Review | null>(null)
+  const [reviewName, setReviewName] = useState('')
+  const [reviewRole, setReviewRole] = useState('')
+  const [reviewQuote, setReviewQuote] = useState('')
+  const [reviewStars, setReviewStars] = useState(5)
+  const [reviewApproved, setReviewApproved] = useState(true)
+  const [reviewFeatured, setReviewFeatured] = useState(false)
+  const [isSavingReview, setIsSavingReview] = useState(false)
 
   // Freebies. The resource is a Google Drive link the admin pastes in; only
   // the cover image is hosted here.
@@ -3127,6 +3155,163 @@ export default function DashboardPage() {
       console.error('Delete post error:', error)
       setBlogPosts(previous)
       setBlogMessage('Could not delete the post. Please try again.')
+    }
+  }
+
+  // ── Customer reviews ───────────────────────────────────────────────────────
+  // Live rather than a one-shot read: a review submitted while the admin has
+  // this tab open should appear without a refresh.
+  useEffect(() => {
+    if (activeView !== 'website' || demoMode) return
+    setReviewsLoading(true)
+    const unsub = onSnapshot(
+      collection(db, 'reviews'),
+      (snap) => {
+        setReviews(
+          snap.docs
+            .map((d) => normalizeReview(d.data() as Record<string, unknown>, d.id))
+            .sort(sortReviews)
+        )
+        setReviewsLoading(false)
+      },
+      (error) => {
+        console.error('Load reviews error:', error)
+        setReviewMessage('Could not load reviews.')
+        setReviewsLoading(false)
+      }
+    )
+    return () => unsub()
+  }, [activeView, demoMode])
+
+  const resetReviewForm = () => {
+    setEditingReview(null)
+    setReviewName('')
+    setReviewRole('')
+    setReviewQuote('')
+    setReviewStars(5)
+    setReviewApproved(true)
+    setReviewFeatured(false)
+  }
+
+  const openNewReview = () => {
+    resetReviewForm()
+    setReviewMessage('')
+    setShowReviewEditor(true)
+  }
+
+  const openEditReview = (review: Review) => {
+    setEditingReview(review)
+    setReviewName(review.name)
+    setReviewRole(review.role)
+    setReviewQuote(review.quote)
+    setReviewStars(review.rating)
+    setReviewApproved(review.approved)
+    setReviewFeatured(review.featured)
+    setReviewMessage('')
+    setShowReviewEditor(true)
+  }
+
+  /**
+   * Save a review the admin typed or edited. An admin-written review is marked
+   * `source: 'admin'` so the list can tell it apart from a customer submission;
+   * an edited customer review keeps its original source.
+   */
+  const handleSaveReview = async () => {
+    const name = reviewName.trim()
+    const quote = reviewQuote.trim()
+    if (name.length < 2) {
+      setReviewMessage('Give the reviewer a name.')
+      return
+    }
+    if (quote.length < 10) {
+      setReviewMessage('The review needs a little more text.')
+      return
+    }
+
+    setIsSavingReview(true)
+    setReviewMessage('')
+    const now = new Date().toISOString()
+    try {
+      if (editingReview) {
+        const patch = {
+          name,
+          role: reviewRole.trim().slice(0, MAX_ROLE),
+          quote: quote.slice(0, MAX_QUOTE),
+          rating: clampRating(reviewStars),
+          approved: reviewApproved,
+          featured: reviewFeatured,
+          updatedAt: now
+        }
+        await updateDoc(doc(db, 'reviews', editingReview.id), patch)
+        setReviewMessage(`Updated the review from ${name}.`)
+      } else {
+        const id = `review-${Date.now()}`
+        await setDoc(doc(db, 'reviews', id), {
+          name: name.slice(0, MAX_NAME),
+          role: reviewRole.trim().slice(0, MAX_ROLE),
+          quote: quote.slice(0, MAX_QUOTE),
+          rating: clampRating(reviewStars),
+          approved: reviewApproved,
+          featured: reviewFeatured,
+          source: 'admin',
+          createdAt: now,
+          updatedAt: now
+        })
+        setReviewMessage(
+          reviewApproved
+            ? `Added the review from ${name}. It goes live within about 10 minutes, or press Publish now above.`
+            : `Saved the review from ${name} as pending.`
+        )
+      }
+      setShowReviewEditor(false)
+      resetReviewForm()
+    } catch (error) {
+      console.error('Save review error:', error)
+      setReviewMessage('Could not save the review. Please try again.')
+    } finally {
+      setIsSavingReview(false)
+    }
+  }
+
+  /** Approve or unapprove. This is the switch that puts a review on the site. */
+  const handleToggleReviewApproved = async (review: Review) => {
+    try {
+      await updateDoc(doc(db, 'reviews', review.id), {
+        approved: !review.approved,
+        updatedAt: new Date().toISOString()
+      })
+      setReviewMessage(
+        review.approved
+          ? `Hid the review from ${review.name}.`
+          : `Approved the review from ${review.name}. It goes live within about 10 minutes, or press Publish now above.`
+      )
+    } catch (error) {
+      console.error('Toggle review error:', error)
+      setReviewMessage('Could not change that review. Please try again.')
+    }
+  }
+
+  /** Pin a review to the front of the carousel and the reviews page. */
+  const handleToggleReviewFeatured = async (review: Review) => {
+    try {
+      await updateDoc(doc(db, 'reviews', review.id), {
+        featured: !review.featured,
+        updatedAt: new Date().toISOString()
+      })
+    } catch (error) {
+      console.error('Feature review error:', error)
+      setReviewMessage('Could not change that review. Please try again.')
+    }
+  }
+
+  const handleDeleteReview = async (review: Review) => {
+    if (!confirm(`Delete the review from ${review.name}? This cannot be undone.`)) return
+    try {
+      await deleteDoc(doc(db, 'reviews', review.id))
+      setReviewMessage(`Deleted the review from ${review.name}.`)
+    } catch (error) {
+      console.error('Delete review error:', error)
+      setReviewMessage('Could not delete that review. Please try again.')
     }
   }
 
@@ -9099,7 +9284,10 @@ export default function DashboardPage() {
                   <ImageSlider
                     images={[...postExistingImages, ...postImagePreviews]}
                     alt={postTitle || 'Post image'}
-                    className="mt-8 aspect-[16/9] w-full rounded-[1.75rem] shadow-lg"
+                    // Matches the live article, so the preview is honest about
+                    // how much of the image a reader will actually see.
+                    fit="contain"
+                    className="mt-8 aspect-[16/9] w-full rounded-[1.75rem] bg-gradient-to-br from-primary/5 via-cream to-secondary/5 shadow-lg"
                   />
                 )}
 
@@ -9412,6 +9600,321 @@ export default function DashboardPage() {
       )}
     </div>
   )
+
+  /**
+   * Reviews manager.
+   *
+   * Defaults to the Pending filter: the job that actually needs doing here is
+   * clearing new submissions, and an approved-heavy list would bury them.
+   */
+  const renderReviewsTab = () => {
+    const pending = reviews.filter((r) => !r.approved)
+    const approved = reviews.filter((r) => r.approved)
+    const shown =
+      reviewFilter === 'pending' ? pending : reviewFilter === 'approved' ? approved : reviews
+    const average = averageRating(approved)
+    const breakdown = ratingBreakdown(approved)
+
+    const FILTERS: { id: typeof reviewFilter; label: string; count: number }[] = [
+      { id: 'pending', label: 'Pending', count: pending.length },
+      { id: 'approved', label: 'Approved', count: approved.length },
+      { id: 'all', label: 'All', count: reviews.length }
+    ]
+
+    return (
+      <div className="space-y-6">
+        {/* Summary: what is live, and how the ratings sit. */}
+        <div className="panel-card grid gap-6 rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50 sm:grid-cols-[auto,1fr,auto]">
+          <div className="text-center sm:text-left">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Live average</p>
+            <p className="mt-1 font-display text-4xl gradient-text">
+              {average ? average.toFixed(1) : '-'}
+            </p>
+            <p className="text-xs text-muted">
+              from {approved.length} approved {approved.length === 1 ? 'review' : 'reviews'}
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            {[5, 4, 3, 2, 1].map((star) => {
+              const count = breakdown[star - 1]
+              const pct = approved.length ? (count / approved.length) * 100 : 0
+              return (
+                <div key={star} className="flex items-center gap-2">
+                  <span className="w-10 shrink-0 text-[11px] font-bold text-primaryDark">{star}★</span>
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-black/5">
+                    <span
+                      className="block h-full rounded-full bg-gradient-to-r from-amber-300 to-amber-400"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </span>
+                  <span className="w-6 shrink-0 text-right text-[11px] text-muted">{count}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex flex-col justify-center gap-2">
+            <button
+              type="button"
+              onClick={openNewReview}
+              className="rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-xs font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5"
+            >
+              + Write a review
+            </button>
+            <a
+              href="https://eduvatekids.com/reviews/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border-2 border-primary/20 px-5 py-2.5 text-center text-xs font-bold text-primaryDark transition-colors hover:bg-primary/5"
+            >
+              Open the public form
+            </a>
+            <p className="text-center text-[10px] leading-tight text-muted">
+              Share <span className="font-mono">/reviews/new</span> with customers
+            </p>
+          </div>
+        </div>
+
+        {pending.length > 0 && reviewFilter !== 'pending' && (
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-900">
+            {pending.length} {pending.length === 1 ? 'review is' : 'reviews are'} waiting for approval.
+          </div>
+        )}
+
+        {showReviewEditor && (
+          <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-purple-50/50 p-6 shadow-xl border border-purple-200/50">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-display text-xl gradient-text">
+                {editingReview ? `Edit the review from ${editingReview.name}` : 'New review'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReviewEditor(false)
+                  resetReviewForm()
+                }}
+                className="rounded-full border-2 border-primary/20 px-4 py-2 text-xs font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-primaryDark">Name</span>
+                <input
+                  type="text"
+                  value={reviewName}
+                  onChange={(e) => setReviewName(e.target.value)}
+                  maxLength={MAX_NAME}
+                  placeholder="Amina M."
+                  className="w-full rounded-xl border-2 border-primary/15 px-4 py-2.5 text-sm outline-none focus:border-primary/40"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-primaryDark">
+                  Role <span className="font-medium text-muted">(optional)</span>
+                </span>
+                <input
+                  type="text"
+                  value={reviewRole}
+                  onChange={(e) => setReviewRole(e.target.value)}
+                  maxLength={MAX_ROLE}
+                  placeholder="Parent of a 6-year-old"
+                  className="w-full rounded-xl border-2 border-primary/15 px-4 py-2.5 text-sm outline-none focus:border-primary/40"
+                />
+              </label>
+
+              <label className="block sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-primaryDark">Review</span>
+                <textarea
+                  value={reviewQuote}
+                  onChange={(e) => setReviewQuote(e.target.value)}
+                  maxLength={MAX_QUOTE}
+                  rows={5}
+                  placeholder="What did they say?"
+                  className="w-full resize-y rounded-xl border-2 border-primary/15 px-4 py-2.5 text-sm outline-none focus:border-primary/40"
+                />
+                <span className="mt-1 block text-right text-[11px] text-muted">
+                  {reviewQuote.length}/{MAX_QUOTE}
+                </span>
+              </label>
+
+              <div className="sm:col-span-2">
+                <span className="mb-1.5 block text-xs font-bold text-primaryDark">Rating</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setReviewStars(n)}
+                      aria-label={`${n} ${n === 1 ? 'star' : 'stars'}`}
+                      aria-pressed={reviewStars === n}
+                      className={`text-3xl leading-none transition-transform hover:scale-110 ${
+                        n <= reviewStars ? 'text-amber-400' : 'text-black/15'
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  <span className="ml-2 text-xs font-semibold text-muted">{reviewStars} of 5</span>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-semibold text-primaryDark">
+                <input
+                  type="checkbox"
+                  checked={reviewApproved}
+                  onChange={(e) => setReviewApproved(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary/30"
+                />
+                Approved (shown on the site)
+              </label>
+
+              <label className="flex items-center gap-2 text-sm font-semibold text-primaryDark">
+                <input
+                  type="checkbox"
+                  checked={reviewFeatured}
+                  onChange={(e) => setReviewFeatured(e.target.checked)}
+                  className="h-4 w-4 rounded border-primary/30"
+                />
+                Featured (shown first)
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveReview}
+              disabled={isSavingReview}
+              className="mt-5 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              {isSavingReview ? 'Saving...' : editingReview ? 'Save changes' : 'Add review'}
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setReviewFilter(f.id)}
+              className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
+                reviewFilter === f.id
+                  ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-md'
+                  : 'border-2 border-primary/15 bg-white text-primaryDark hover:border-primary/35 hover:bg-primary/5'
+              }`}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+
+        {reviewMessage && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs font-medium text-primaryDark">
+            {reviewMessage}
+          </div>
+        )}
+
+        <div className="panel-card overflow-hidden rounded-3xl bg-white shadow-xl border border-primary/10">
+          {reviewsLoading ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">Loading reviews...</p>
+          ) : shown.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-muted">
+              {reviewFilter === 'pending'
+                ? 'Nothing waiting for approval.'
+                : reviewFilter === 'approved'
+                  ? 'No approved reviews yet.'
+                  : 'No reviews yet. Write one above, or share the public form with a customer.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-black/5">
+              {shown.map((review) => (
+                <li key={review.id} className="flex flex-wrap items-start justify-between gap-3 px-6 py-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-amber-400" aria-label={`${review.rating} of 5 stars`}>
+                        {'★'.repeat(review.rating)}
+                        <span className="text-black/15">{'★'.repeat(5 - review.rating)}</span>
+                      </span>
+                      <span className="font-bold text-primaryDark">{review.name}</span>
+                      {!review.approved && (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700">
+                          Pending
+                        </span>
+                      )}
+                      {review.featured && (
+                        <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-[11px] font-bold text-purple-700">
+                          Featured
+                        </span>
+                      )}
+                      {review.source === 'admin' && (
+                        <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold text-gray-600">
+                          Written by us
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1.5 whitespace-pre-line text-xs leading-relaxed text-muted">
+                      {review.quote}
+                    </p>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
+                      {review.role && (
+                        <>
+                          <span>{review.role}</span>
+                          <span aria-hidden="true">&middot;</span>
+                        </>
+                      )}
+                      <span>
+                        {review.createdAt ? new Date(review.createdAt).toLocaleString() : 'no date'}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleReviewApproved(review)}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-bold border transition-colors ${
+                        review.approved
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                          : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                      }`}
+                    >
+                      {review.approved ? 'Unapprove' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleReviewFeatured(review)}
+                      title={review.featured ? 'Stop featuring' : 'Show this one first'}
+                      className="rounded-full border border-purple-200 bg-purple-50 px-3 py-1.5 text-[11px] font-bold text-purple-700 transition-colors hover:bg-purple-100"
+                    >
+                      {review.featured ? 'Unfeature' : 'Feature'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditReview(review)}
+                      className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReview(review)}
+                      className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-700 transition-colors hover:bg-red-100"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   /** Freebies manager: Drive links revealed after a visitor subscribes. */
   const renderFreebiesTab = () => (
@@ -9901,6 +10404,25 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Publishing dispatches a GitHub Actions build; if that build fails, or
+          builds a branch without this content, the dashboard would otherwise
+          report success while the site never changes. Link the run log so the
+          admin can see what actually happened. */}
+      {!demoMode && (
+        <p className="text-[11px] text-muted">
+          Publishing rebuilds the public site.{' '}
+          <a
+            href="https://github.com/phauxiyarh/EduvateKids/actions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primaryDark underline hover:no-underline"
+          >
+            Check the build log
+          </a>{' '}
+          if a change has not appeared after about 15 minutes.
+        </p>
+      )}
+
       {demoMode ? (
         <div className="panel-card rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
           Website content is only editable in <strong>Live</strong> mode. Switch modes using the toggle in the header.
@@ -9909,6 +10431,8 @@ export default function DashboardPage() {
         renderShelvesTab()
       ) : websiteTab === 'blog' ? (
         renderBlogTab()
+      ) : websiteTab === 'reviews' ? (
+        renderReviewsTab()
       ) : websiteTab === 'freebies' ? (
         renderFreebiesTab()
       ) : (

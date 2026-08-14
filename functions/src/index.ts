@@ -31,6 +31,7 @@ import {
 } from './config';
 import { noteCatalogChange, publishIfDue, publishNow } from './publish';
 import { subscribeAndReveal } from './freebies';
+import { submitReview } from './reviews';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
@@ -677,6 +678,31 @@ export const getFreebieDownload = onCall({ cors: ALLOWED_ORIGINS }, async (reque
     String(data.slug ?? '').trim(),
     'freebie'
   );
+});
+
+/**
+ * Leave a customer review. Public and unauthenticated: a customer should not
+ * need an account to review us. Stored unapproved, so nothing reaches the site
+ * until an admin approves it in Website > Reviews.
+ */
+export const createReview = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  const ip = String(request.rawRequest?.ip ?? '').slice(0, 64);
+  return submitReview(db, (request.data ?? {}) as Record<string, unknown>, ip);
+});
+
+/**
+ * Reviews are baked into /reviews and the home page testimonials at build time,
+ * so approving one in the admin has no visible effect until the site rebuilds.
+ */
+export const onReviewWrite = onDocumentWritten('reviews/{docId}', async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  // A brand-new submission is unapproved and therefore not on any public page.
+  // Rebuilding for it would burn a build to change nothing.
+  if (!before && after && after.approved !== true) return;
+  // An edit that leaves the review unapproved in both states is equally invisible.
+  if (before && after && before.approved !== true && after.approved !== true) return;
+  await noteCatalogChange(db);
 });
 
 /** Rebuild when freebies change, so the /freebies page reflects the edit. */

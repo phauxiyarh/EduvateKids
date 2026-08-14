@@ -161,8 +161,8 @@ export default function ReviewsClient({ reviews }: { reviews: Review[] }) {
             Customer reviews
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-muted sm:text-base">
-            Honest words from the parents, teachers and young readers we serve. If we have been part
-            of your family&rsquo;s reading journey, we would love to hear about it.
+            Honest words from the parents, teachers and young readers we serve. We love feedback
+            because it helps us know what works and what can be improved.
           </p>
           <Link
             href="/reviews/new"

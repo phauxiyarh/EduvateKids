@@ -123,8 +123,8 @@ export default function NewReviewClient() {
                 Write a review
               </h1>
               <p className="mx-auto mt-4 max-w-lg text-sm leading-relaxed text-muted">
-                A few honest words help another family choose the right book. We only need your name,
-                a rating, and what you thought.
+                We love feedback because it helps us know what works and what can be improved. We
+                only need your name, a rating, and what you thought.
               </p>
             </div>
 

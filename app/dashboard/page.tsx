@@ -3304,6 +3304,38 @@ export default function DashboardPage() {
     }
   }
 
+  /**
+   * One-time import of the six testimonials that used to be hardcoded on the
+   * home page. They rendered publicly but existed nowhere in Firestore, so they
+   * could not be edited or deleted here. Idempotent: a second run skips rows
+   * that already exist, and never resurrects one that has been deleted.
+   */
+  const handleSeedReviews = async () => {
+    if (
+      !confirm(
+        'Import the six original home page testimonials as reviews you can edit and delete?'
+      )
+    ) {
+      return
+    }
+    setReviewMessage('Importing...')
+    try {
+      const callable = httpsCallable<undefined, { created: number; skipped: number }>(
+        functions,
+        'seedInitialReviews'
+      )
+      const { data } = await callable()
+      setReviewMessage(
+        `Imported ${data.created} testimonial${data.created === 1 ? '' : 's'}` +
+          (data.skipped ? `, skipped ${data.skipped} already present` : '') +
+          '. They go live within about 10 minutes, or press Publish now above.'
+      )
+    } catch (error) {
+      console.error('Seed reviews error:', error)
+      setReviewMessage('Could not import the testimonials. Please try again.')
+    }
+  }
+
   const handleDeleteReview = async (review: Review) => {
     if (!confirm(`Delete the review from ${review.name}? This cannot be undone.`)) return
     try {
@@ -9675,6 +9707,25 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Only while the collection is empty. Once the originals are in (or
+            the admin has deliberately cleared them) this has nothing to do. */}
+        {!reviewsLoading && reviews.length === 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-primary/20 bg-primary/5 p-4">
+            <p className="text-xs font-medium text-primaryDark">
+              <span className="font-bold">Import the original testimonials.</span> The six quotes on
+              the home page were written into the page itself, so they cannot be edited or deleted
+              here. Import them once and they become ordinary reviews you control.
+            </p>
+            <button
+              type="button"
+              onClick={handleSeedReviews}
+              className="shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2 text-xs font-bold text-white shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              Import them
+            </button>
+          </div>
+        )}
 
         {pending.length > 0 && reviewFilter !== 'pending' && (
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-900">

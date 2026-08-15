@@ -32,6 +32,7 @@ import {
 import { noteCatalogChange, publishIfDue, publishNow } from './publish';
 import { subscribeAndReveal } from './freebies';
 import { submitReview } from './reviews';
+import { seedReviews } from './seedReviews';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
 import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
@@ -688,6 +689,15 @@ export const getFreebieDownload = onCall({ cors: ALLOWED_ORIGINS }, async (reque
 export const createReview = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   const ip = String(request.rawRequest?.ip ?? '').slice(0, 64);
   return submitReview(db, (request.data ?? {}) as Record<string, unknown>, ip);
+});
+
+/**
+ * One-time import of the six testimonials that used to be hardcoded in the home
+ * page. Admin-only and idempotent. Safe to delete once it has been run.
+ */
+export const seedInitialReviews = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  return seedReviews(db);
 });
 
 /**

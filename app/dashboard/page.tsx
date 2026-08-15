@@ -937,7 +937,11 @@ export default function DashboardPage() {
   // Whether the one-time testimonial import has been run. Read from the
   // function's own ledger rather than inferred from the list, so deleting an
   // imported testimonial does not offer to import it all over again.
-  const [reviewsSeeded, setReviewsSeeded] = useState(true)
+  //
+  // Starts false so the button is reachable even if that read never resolves.
+  // The cost of showing it once too often is a no-op click; the cost of hiding
+  // it is an admin who cannot run the import at all.
+  const [reviewsSeeded, setReviewsSeeded] = useState(false)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewFilter, setReviewFilter] = useState<'pending' | 'approved' | 'all'>('pending')
   const [showReviewEditor, setShowReviewEditor] = useState(false)
@@ -3187,8 +3191,14 @@ export default function DashboardPage() {
     return () => unsub()
   }, [activeView, demoMode])
 
-  // Has the one-time testimonial import already run? Defaults to "yes" so the
-  // panel never flashes before this resolves.
+  // Has the one-time testimonial import already run?
+  //
+  // Read from the function's ledger, but a FAILED read must not hide the
+  // button: system/* is admin-gated, and an earlier version defaulted this to
+  // "already seeded" on any error, which silently hid the import from the one
+  // person allowed to press it. The import is idempotent and keeps its own
+  // ledger server-side, so showing the button when we are unsure is safe;
+  // hiding it is not.
   useEffect(() => {
     if (activeView !== 'website' || demoMode) return
     let cancelled = false
@@ -3198,9 +3208,10 @@ export default function DashboardPage() {
         const ids = (snap.get('ids') as string[] | undefined) ?? []
         setReviewsSeeded(ids.length > 0)
       })
-      // On a read failure, keep the panel hidden: offering an import that may
-      // duplicate is worse than not offering one at all.
-      .catch(() => !cancelled && setReviewsSeeded(true))
+      .catch((error) => {
+        console.warn('Could not read the seed ledger; offering the import anyway.', error)
+        if (!cancelled) setReviewsSeeded(false)
+      })
     return () => {
       cancelled = true
     }

@@ -12,21 +12,79 @@ import { SiteFooterFull } from '../../components/SiteFooterFull'
 const FIELD =
   'w-full rounded-xl border-2 border-primary/15 bg-white px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary/40'
 
-/** Shown once the review is in. Deliberately clear that it is not live yet. */
-function ThankYou() {
+/**
+ * Shown once the review is in.
+ *
+ * Animated deliberately: the stars land one after another and the tick draws
+ * itself, so the moment feels like thanks rather than a form state change. All
+ * of it is CSS keyframes defined inline, and every piece is wrapped in
+ * motion-safe: a reader who has asked for reduced motion gets the same message
+ * with no movement at all.
+ */
+function ThankYou({ rating, name }: { rating: number; name: string }) {
   return (
-    <div className="rounded-[2rem] border border-primary/10 bg-white p-9 text-center shadow-soft sm:p-12">
-      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-50 text-green-600">
-        <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
+    <div className="motion-safe:animate-[thanks-rise_0.5s_ease-out] overflow-hidden rounded-[2rem] border border-primary/10 bg-white p-9 text-center shadow-soft sm:p-12">
+      <style>{`
+        @keyframes thanks-rise {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: none; }
+        }
+        @keyframes thanks-pop {
+          0%   { opacity: 0; transform: scale(0.4) rotate(-18deg); }
+          70%  { opacity: 1; transform: scale(1.18) rotate(4deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        @keyframes thanks-draw { to { stroke-dashoffset: 0; } }
+        @keyframes thanks-ring {
+          0%   { opacity: 0.55; transform: scale(0.85); }
+          100% { opacity: 0; transform: scale(1.7); }
+        }
+      `}</style>
+
+      <span className="relative mx-auto flex h-20 w-20 items-center justify-center">
+        {/* Ripple behind the tick. Purely decorative. */}
+        <span className="absolute inset-0 rounded-full bg-green-400/30 motion-safe:animate-[thanks-ring_1.1s_ease-out_0.15s]" />
+        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-green-50 text-green-600">
+          <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 13l4 4L19 7"
+              // Dash length ~24 covers the path, so animating the offset to 0
+              // draws the tick left to right.
+              strokeDasharray="24"
+              strokeDashoffset="24"
+              className="motion-safe:animate-[thanks-draw_0.45s_ease-out_0.25s_forwards] motion-reduce:[stroke-dashoffset:0]"
+            />
+          </svg>
+        </span>
       </span>
-      <h2 className="mt-5 font-display text-2xl font-bold text-primaryDark">
-        Jazakum Allahu khayran
+
+      {/* The rating they just gave, played back one star at a time. */}
+      <span className="mt-5 flex items-center justify-center gap-1" aria-label={`You rated us ${rating} out of 5`}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <svg
+            key={n}
+            className={`h-7 w-7 motion-safe:opacity-0 motion-safe:animate-[thanks-pop_0.45s_ease-out_forwards] ${
+              n <= rating ? 'text-amber-400' : 'text-black/10'
+            }`}
+            style={{ animationDelay: `${0.35 + n * 0.09}s` }}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.958c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.175 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.958a1 1 0 00-.364-1.118L2.98 9.385c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.958z" />
+          </svg>
+        ))}
+      </span>
+
+      <h2 className="mt-5 font-display text-2xl font-bold text-primaryDark sm:text-3xl">
+        Jazakum Allahu khayran{name ? `, ${name.split(' ')[0]}` : ''}
       </h2>
       <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted">
-        Your review has been sent. We read every one before it goes on the site, so it will appear on
-        our reviews page shortly.
+        Thank you for taking the time. Feedback like yours is how we know what is working and what we
+        can do better. We read every review before it goes on the site, so yours will appear on our
+        reviews page shortly.
       </p>
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link
@@ -83,13 +141,19 @@ export default function NewReviewClient() {
       setDone(true)
     } catch (err) {
       console.error('Submit review failed:', err)
-      // Surface the function's own message when it sent one: it explains what
-      // to fix far better than a generic failure line.
-      const detail = (err as { message?: string })?.message ?? ''
+      // Surface the function's own message when it is one we wrote (a bad
+      // rating, a flood). Firebase's own transport errors ("internal",
+      // "unavailable", "deadline-exceeded") say nothing a customer can act on,
+      // so those get a plain sentence and the reassurance that the text is
+      // still in the box.
+      const code = String((err as { code?: string })?.code ?? '')
+      const detail = String((err as { message?: string })?.message ?? '')
+      const ourMessage =
+        detail && !/internal|unavailable|deadline|network|unknown/i.test(code + detail)
       setError(
-        detail && !/internal/i.test(detail)
+        ourMessage
           ? detail
-          : 'Could not send your review just now. Please try again in a moment.'
+          : 'We could not send your review just now. Your words are still here, so please try again in a moment.'
       )
     } finally {
       setBusy(false)
@@ -112,7 +176,7 @@ export default function NewReviewClient() {
         </nav>
 
         {done ? (
-          <ThankYou />
+          <ThankYou rating={rating} name={name} />
         ) : (
           <>
             <div className="text-center">

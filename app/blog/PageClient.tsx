@@ -53,52 +53,18 @@ function ArticleFallback({ className = '' }: { className?: string }) {
   )
 }
 
-/** The newest article, given the space to breathe. */
-function FeaturedPost({ post, likes, liked }: { post: BlogPost; likes: number; liked: boolean }) {
-  return (
-    <article className="group relative overflow-hidden rounded-[2rem] border border-primary/10 bg-white shadow-[0_20px_60px_-25px_rgba(124,58,237,0.35)] transition-all duration-500 hover:shadow-[0_28px_70px_-25px_rgba(124,58,237,0.45)]">
-      <Link href={`/blog/${post.slug}`} className="grid md:grid-cols-2">
-        <div className="relative aspect-[16/10] overflow-hidden md:aspect-auto md:h-full md:min-h-[22rem]">
-          {post.images.length ? (
-            <ImageSlider images={post.images} alt={post.title} className="h-full w-full" showDots={false} />
-          ) : (
-            <ArticleFallback className="h-full w-full" />
-          )}
-          <span className="absolute left-5 top-5 rounded-full bg-white/95 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-primaryDark shadow-lg backdrop-blur">
-            Latest
-          </span>
-        </div>
-
-        <div className="flex flex-col justify-center gap-4 p-7 sm:p-10">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted">
-            <span>{formatDate(post.publishedAt)}</span>
-            <span aria-hidden="true">&middot;</span>
-            <span>{readingMinutes(post.body)} min read</span>
-            <LikeBadge likes={likes} liked={liked} />
-          </div>
-
-          <h2 className="font-display text-2xl font-bold leading-tight text-primaryDark transition-colors duration-300 group-hover:text-primary sm:text-3xl">
-            {post.title}
-          </h2>
-
-          {post.excerpt && <p className="text-sm leading-relaxed text-muted sm:text-base">{post.excerpt}</p>}
-
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-xs font-bold text-white shadow-soft transition-transform duration-300 group-hover:translate-x-0.5">
-              Read the article
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-            <span className="text-[11px] font-semibold text-muted">by {post.author}</span>
-          </div>
-        </div>
-      </Link>
-    </article>
-  )
-}
-
-function PostCard({ post, likes, liked }: { post: BlogPost; likes: number; liked: boolean }) {
+function PostCard({
+  post,
+  likes,
+  liked,
+  latest = false
+}: {
+  post: BlogPost
+  likes: number
+  liked: boolean
+  /** Badges the newest article. Marks it without changing the card's shape. */
+  latest?: boolean
+}) {
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-primary/10 bg-white shadow-soft transition-all duration-300 hover:-translate-y-1.5 hover:border-primary/25 hover:shadow-[0_18px_45px_-20px_rgba(124,58,237,0.4)]">
       <Link href={`/blog/${post.slug}`} className="flex h-full flex-col">
@@ -111,6 +77,11 @@ function PostCard({ post, likes, liked }: { post: BlogPost; likes: number; liked
           {post.tags[0] && (
             <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-primaryDark shadow backdrop-blur">
               {post.tags[0]}
+            </span>
+          )}
+          {latest && (
+            <span className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-primary to-secondary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white shadow">
+              Latest
             </span>
           )}
         </div>
@@ -192,11 +163,6 @@ export default function BlogListClient({ posts }: { posts: BlogPost[] }) {
   const likesFor = (p: BlogPost) => liveLikes[p.slug] ?? p.likes
   const likedBy = (p: BlogPost) => likedSlugs.includes(p.slug)
 
-  // The newest article leads, but only in the unfiltered view: inside a tag,
-  // singling one out implies an editorial ranking that does not exist.
-  const featured = tag === 'all' ? shown[0] : undefined
-  const rest = featured ? shown.slice(1) : shown
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-cream via-white to-white text-ink">
       <SiteHeader current="/blog" />
@@ -253,21 +219,31 @@ export default function BlogListClient({ posts }: { posts: BlogPost[] }) {
         )}
 
         {shown.length ? (
-          <>
-            {featured && (
-              <div className="mb-10">
-                <FeaturedPost post={featured} likes={likesFor(featured)} liked={likedBy(featured)} />
-              </div>
-            )}
-
-            {rest.length > 0 && (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {rest.map((post) => (
-                  <PostCard key={post.id} post={post} likes={likesFor(post)} liked={likedBy(post)} />
-                ))}
-              </div>
-            )}
-          </>
+          /* Every post gets the same card. A "featured" variant used to give the
+             newest post a wide banner, but that put two different shapes on the
+             page and left a lone narrow card stranded beside it whenever the
+             post count was low. One shape reads as a deliberate grid at any
+             count; the newest post still leads, because the list is sorted. */
+          /* Capped and centred: with one or two posts a full-width 3-column
+             grid stretches each card into a wide, ungainly shape. The cap keeps
+             a card the same size whether there are two posts or twenty. */
+          <div
+            className={`grid items-stretch gap-6 sm:grid-cols-2 ${
+              shown.length < 3 ? 'mx-auto max-w-3xl' : 'lg:grid-cols-3'
+            }`}
+          >
+            {shown.map((post, index) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                likes={likesFor(post)}
+                liked={likedBy(post)}
+                // Only in the unfiltered view: inside a tag the first result is
+                // not necessarily the newest article on the site.
+                latest={tag === 'all' && index === 0}
+              />
+            ))}
+          </div>
         ) : (
           <div className="rounded-[2rem] border-2 border-dashed border-primary/20 bg-white/60 p-14 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primaryDark">

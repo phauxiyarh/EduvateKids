@@ -14,8 +14,10 @@
  *
  * The review is invisible on the site until an admin approves it.
  */
+import { createHash } from 'crypto';
 import * as logger from 'firebase-functions/logger';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const MAX_QUOTE = 1200;
 const MAX_NAME = 80;
@@ -60,25 +62,49 @@ const clampRating = (value: unknown): number => {
  * The IP is not on the review doc (that doc is publicly readable once approved),
  * so this reads the flat `reviewSubmissions` log instead: one small doc per
  * submission, admin-only, holding just the IP and a timestamp.
+ *
+ * One document per IP, keyed by a hash of it, holding the timestamps of that
+ * IP's recent submissions. A single get() by key: no composite query, and so no
+ * index to deploy alongside the function. An `ip == x AND at >= y` query needs
+ * one, and shipping the function without it made every submission fail.
+ *
+ * Rate limiting must never be the reason a genuine review is lost, so a failure
+ * to read the log lets the submission through rather than rejecting it.
  */
 async function assertNotFlooding(
   db: FirebaseFirestore.Firestore,
   ip: string,
-): Promise<void> {
-  if (!ip) return;
-  const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
-  const recent = await db
-    .collection('reviewSubmissions')
-    .where('ip', '==', ip)
-    .where('at', '>=', since)
-    .limit(RATE_LIMIT)
-    .get();
-  if (recent.size >= RATE_LIMIT) {
+): Promise<FirebaseFirestore.DocumentReference | null> {
+  if (!ip) return null;
+  // Hashed so the raw address is not the document id.
+  const key = createHash('sha256').update(ip).digest('hex').slice(0, 32);
+  const ref = db.collection('reviewSubmissions').doc(key);
+
+  let recent: number[] = [];
+  try {
+    const snap = await ref.get();
+    const stored = snap.exists ? (snap.get('at') as unknown) : null;
+    if (Array.isArray(stored)) {
+      const cutoff = Date.now() - RATE_WINDOW_MS;
+      recent = stored
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value >= cutoff);
+    }
+  } catch (error) {
+    logger.warn('Rate-limit read failed; allowing the submission', error);
+    return null;
+  }
+
+  if (recent.length >= RATE_LIMIT) {
     throw new HttpsError(
       'resource-exhausted',
       'You have left several reviews recently. Please try again later.',
     );
   }
+
+  // Returned so the caller can record this submission only once it has actually
+  // stored the review.
+  return ref;
 }
 
 /**
@@ -112,7 +138,7 @@ export async function submitReview(
     throw new HttpsError('invalid-argument', 'That email address does not look right.');
   }
 
-  await assertNotFlooding(db, ip);
+  const limiterRef = await assertNotFlooding(db, ip);
 
   const now = new Date().toISOString();
 
@@ -139,9 +165,20 @@ export async function submitReview(
     await ref.collection('private').doc('contact').set({ email, at: now });
   }
 
-  // Abuse log for the rate limiter above. Separate from the review so deleting a
-  // review does not reopen the window.
-  await db.collection('reviewSubmissions').add({ ip, at: now, reviewId: ref.id });
+  // Record this submission against the IP for the rate limiter. Written only
+  // after the review is safely stored, and never allowed to fail the request:
+  // the review already exists, so throwing here would tell the customer their
+  // review was lost when it was not.
+  if (limiterRef) {
+    try {
+      await limiterRef.set(
+        { at: FieldValue.arrayUnion(Date.now()) },
+        { merge: true },
+      );
+    } catch (error) {
+      logger.warn('Rate-limit write failed', error);
+    }
+  }
 
   logger.info('Review submitted', { id: ref.id, rating });
   return { id: ref.id, status: 'pending' };

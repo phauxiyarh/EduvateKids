@@ -934,6 +934,10 @@ export default function DashboardPage() {
   // here unapproved; nothing reaches the site until an admin approves it.
   const [reviews, setReviews] = useState<Review[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
+  // Whether the one-time testimonial import has been run. Read from the
+  // function's own ledger rather than inferred from the list, so deleting an
+  // imported testimonial does not offer to import it all over again.
+  const [reviewsSeeded, setReviewsSeeded] = useState(true)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewFilter, setReviewFilter] = useState<'pending' | 'approved' | 'all'>('pending')
   const [showReviewEditor, setShowReviewEditor] = useState(false)
@@ -3183,6 +3187,25 @@ export default function DashboardPage() {
     return () => unsub()
   }, [activeView, demoMode])
 
+  // Has the one-time testimonial import already run? Defaults to "yes" so the
+  // panel never flashes before this resolves.
+  useEffect(() => {
+    if (activeView !== 'website' || demoMode) return
+    let cancelled = false
+    getDoc(doc(db, 'system', 'seededReviews'))
+      .then((snap) => {
+        if (cancelled) return
+        const ids = (snap.get('ids') as string[] | undefined) ?? []
+        setReviewsSeeded(ids.length > 0)
+      })
+      // On a read failure, keep the panel hidden: offering an import that may
+      // duplicate is worse than not offering one at all.
+      .catch(() => !cancelled && setReviewsSeeded(true))
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, demoMode])
+
   const resetReviewForm = () => {
     setEditingReview(null)
     setReviewName('')
@@ -3325,6 +3348,18 @@ export default function DashboardPage() {
         'seedInitialReviews'
       )
       const { data } = await callable()
+      // The ledger is now written, so the offer is done either way.
+      setReviewsSeeded(true)
+      // created 0 / skipped 0 means every original has been imported and then
+      // deleted. Saying "imported 0" would read as a failure, so say what
+      // actually happened: there is nothing left to bring in.
+      if (!data.created && !data.skipped) {
+        setReviewMessage(
+          'Nothing to import: these testimonials were already imported and then deleted. ' +
+            'The home page still shows the built-in copy when no reviews are approved.'
+        )
+        return
+      }
       setReviewMessage(
         `Imported ${data.created} testimonial${data.created === 1 ? '' : 's'}` +
           (data.skipped ? `, skipped ${data.skipped} already present` : '') +
@@ -9708,14 +9743,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Only while the collection is empty. Once the originals are in (or
-            the admin has deliberately cleared them) this has nothing to do. */}
-        {!reviewsLoading && reviews.length === 0 && (
+        {/* Shown until the import has been run. Not gated on an empty list: a
+            real customer review would otherwise hide the button before the
+            originals were ever imported. The function keeps its own ledger, so
+            pressing this twice cannot duplicate anything or bring back a
+            testimonial that has since been deleted. */}
+        {!reviewsLoading && !reviewsSeeded && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-primary/20 bg-primary/5 p-4">
             <p className="text-xs font-medium text-primaryDark">
               <span className="font-bold">Import the original testimonials.</span> The six quotes on
-              the home page were written into the page itself, so they cannot be edited or deleted
-              here. Import them once and they become ordinary reviews you control.
+              the home page are built into the page as a fallback, so they cannot be edited or
+              deleted here. Import them once and you get an editable copy of each; from then on the
+              imported reviews are what the home page shows.
             </p>
             <button
               type="button"

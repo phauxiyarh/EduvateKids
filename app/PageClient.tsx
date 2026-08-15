@@ -54,11 +54,17 @@ const partners = [
 ]
 
 /**
- * Seed testimonials, shown only until real customer reviews exist.
+ * Fallback testimonials. Deliberately kept, not dead code.
  *
- * The carousel below prefers approved reviews from the `reviews` collection.
- * These stay as a fallback so a brand-new deployment (or a Firestore read that
- * fails) still shows a populated section rather than an empty panel.
+ * The carousel prefers approved reviews from the `reviews` collection and only
+ * falls back to these when it can read none: an empty collection, a rules
+ * change, a Firestore outage. Without them the home page would show an empty
+ * testimonials panel in exactly the situations where it can least afford to.
+ *
+ * The same six are also importable into Firestore (Website > Reviews > Import
+ * them) so the admin can edit and delete them. Once imported, the database
+ * copy is what renders and this array simply stops being reached; the two
+ * never show at the same time.
  */
 const seedTestimonials = [
   {
@@ -209,7 +215,11 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
     return () => unsub()
   }, [])
 
-  // Real reviews win; the seed copy fills the section only while there are none.
+  // Reviews from Firestore always win. The seed copy below is a safety net for
+  // exactly one case: nothing approved is readable, whether because the
+  // collection is empty or because the read failed. Once the originals have
+  // been imported (Website > Reviews > Import them) the database serves them
+  // and the array goes dormant, so there is no double-up.
   const realReviews = liveReviews ?? reviews
   const testimonials = realReviews.length
     ? realReviews.map((r) => ({ quote: r.quote, name: r.name, role: r.role, rating: r.rating }))

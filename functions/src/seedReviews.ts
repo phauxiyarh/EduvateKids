@@ -68,11 +68,26 @@ export async function seedReviews(
   let created = 0;
   let skipped = 0;
 
+  // A deleted review leaves no trace, so an existence check alone cannot tell
+  // "never imported" from "imported, then deliberately deleted" - and re-running
+  // the import would resurrect something the admin removed on purpose. This doc
+  // records which ids have ever been written, which is the difference.
+  const ledgerRef = db.doc('system/seededReviews');
+  const everSeeded = new Set<string>(
+    ((await ledgerRef.get()).get('ids') as string[] | undefined) ?? [],
+  );
+
   for (const row of SEED) {
+    if (everSeeded.has(row.id)) {
+      // Already imported once. Whether it still exists or the admin has since
+      // deleted it, importing again is not what they want.
+      skipped += 1;
+      continue;
+    }
     const ref = db.collection('reviews').doc(row.id);
-    // Never resurrect a review the admin has already dealt with.
     if ((await ref.get()).exists) {
       skipped += 1;
+      everSeeded.add(row.id);
       continue;
     }
     await ref.set({
@@ -88,8 +103,11 @@ export async function seedReviews(
       createdAt: now,
       updatedAt: now,
     });
+    everSeeded.add(row.id);
     created += 1;
   }
+
+  await ledgerRef.set({ ids: [...everSeeded], updatedAt: now }, { merge: true });
 
   logger.info('Seeded testimonials', { created, skipped });
   return { created, skipped };

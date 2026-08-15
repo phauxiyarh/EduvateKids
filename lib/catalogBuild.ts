@@ -252,7 +252,14 @@ export async function getApprovedReviews(): Promise<
           limit: 300
         }
       }),
-      next: { revalidate: false }
+      // Short revalidate rather than `false`. Next persists fetch results in
+      // .next/cache across builds, and an indefinitely-cached FAILURE is
+      // replayed as an authoritative empty list on every later build - which
+      // once left the site rendering "No reviews yet" while the reviews were
+      // live in Firestore and readable by curl. A 60s window still collapses
+      // the repeated reads within a single build (the module-level cache below
+      // does most of that anyway) without outliving it.
+      next: { revalidate: 60 }
     })
     if (!res.ok) throw new Error(`Firestore REST ${res.status}: ${await res.text()}`)
     const rows = (await res.json()) as Array<{
@@ -267,7 +274,17 @@ export async function getApprovedReviews(): Promise<
   } catch (error) {
     // Reviews are additive: a site with an empty testimonials section is valid,
     // and failing the build over one would be worse than shipping without it.
-    console.warn(`[build] could not read reviews: ${(error as Error).message}`)
+    //
+    // Deliberately NOT cached. Next persists fetch results in .next/cache
+    // between builds, and a `revalidate: false` response is kept indefinitely,
+    // so a failed read (a rules block not yet deployed, a transient 403) would
+    // otherwise be replayed as an authoritative empty list on every later
+    // build. That is exactly what happened once: the reviews were live in
+    // Firestore and readable by curl, while the site kept rendering
+    // "No reviews yet" until .next was deleted by hand.
+    console.warn(
+      `[build] could not read reviews (rendering without them): ${(error as Error).message}`
+    )
     return []
   }
 

@@ -164,6 +164,15 @@ service cloud.firestore {
     }
 
     // ── System state: admin read only, written by Cloud Functions ───────────
+    // Editable email templates (currently the Summer Reads reminder). The admin
+    // reads the saved copy into the dashboard editor; writes go through the
+    // saveReminderTemplate callable so the payload is validated and normalised
+    // before it becomes the template every broadcast renders from.
+    match /emailTemplates/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Holds system/publishState, which tells the dashboard whether the static
     // product pages are behind the catalog. Only the Admin SDK writes here.
     match /system/{document=**} {

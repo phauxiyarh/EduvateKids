@@ -58,6 +58,12 @@ import QRCode from 'qrcode'
 import { auth, db, functions } from '../../lib/firebase'
 import { isAdminHostAllowed } from '../../lib/adminAccess'
 import { uploadCatalogImage } from '../../lib/uploadImage'
+import {
+  DEFAULT_REMINDER_CONTENT,
+  normalizeReminderContent,
+  buildReminderEmail,
+  type ReminderContent
+} from '../../lib/summerReminderEmail'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import { BookPlaceholder } from '../components/BookPlaceholder'
 import logo from '../../assets/logo.png'
@@ -242,86 +248,6 @@ function buildPurchaseEmailHtml(order: OnlineOrder): string {
   </div>`
 }
 
-/**
- * Build the Summer Reads reminder-broadcast email HTML for previewing in the
- * dashboard. Mirrors the server template in functions/src/email.ts
- * (buildSummerReminderEmailHtml) so the admin sees what will actually send.
- * The real send is done server-side to each registered parent.
- */
-function buildReminderEmailHtml(): string {
-  const logUrl = 'https://eduvatekids.com/summer-reads/log'
-  const booksUrl = 'https://eduvatekids.com/summer-reads'
-  return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
-      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
-      <h1 style="margin:0;font-size:22px">📚 A little Summer Reads reminder</h1>
-      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
-    </div>
-    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
-      <p style="margin:0 0 14px"><strong>Assalamu alaikum dear parent,</strong></p>
-      <p style="margin:0 0 14px">MashaAllah, the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with your reader this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
-      <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
-        <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
-        <ul style="margin:0;padding-left:20px">
-          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. Ensure to review the recommended books from the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
-          <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
-          <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
-        </ul>
-      </div>
-      <div style="text-align:center;margin:22px 0">
-        <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
-        <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
-      </div>
-      <div style="border-top:1px solid #eee;padding-top:18px;margin-top:22px">
-        <p style="margin:0 0 12px;font-weight:bold;font-size:16px;color:#1f2937">Frequently asked questions</p>
-        ${reminderEmailFaqs
-          .map(
-            (f) =>
-              `<div style="margin:0 0 14px">
-                <p style="margin:0 0 4px;font-weight:bold;color:#4c1d95;font-size:14px">${f.q}</p>
-                <p style="margin:0;font-size:14px;color:#374151">${f.a}</p>
-              </div>`
-          )
-          .join('')}
-      </div>
-      <div style="text-align:center;margin:24px 0 8px">
-        <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
-      </div>
-      <p style="margin:18px 0 0">Keep up the wonderful reading!<br><strong>The Eduvate Kids Team</strong></p>
-      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">You're receiving this because a child is registered for Eduvate Kids Summer Reads. Questions? Just reply to this email.</p>
-    </div>
-  </div>`
-}
-
-/**
- * FAQ content mirrored in the reminder email preview. Kept identical to the
- * server list (functions/src/email.ts summerReminderFaqs) so the dashboard
- * preview matches what actually sends.
- */
-const reminderEmailFaqs: { q: string; a: string }[] = [
-  {
-    q: 'Can I begin to log the books I finish reading?',
-    a: 'Yes! As soon as you finish a book, let your parent know first. They will help confirm you truly read and understood it, then log it together.',
-  },
-  {
-    q: 'What do I need to log a book?',
-    a: 'Your registration code. Share it with your parent and log the book together on the <a href="https://eduvatekids.com/summer-reads/log" style="color:#7c3aed;font-weight:bold">Log a Book</a> page, since every book is parent verified.',
-  },
-  {
-    q: 'What if I read a book outside the recommended list?',
-    a: 'We do our best to consider all books that align with our values. When a book is clearly outside this scope we are unable to count it, so it is marked invalid. Choosing from the recommended list keeps every book counting.',
-  },
-  {
-    q: 'Can we buy a book we like online so we can read it?',
-    a: 'Absolutely, though you are not required to buy any book to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Browse our <a href="https://eduvatekids.com/catalog" style="color:#7c3aed;font-weight:bold">catalog</a> any time.',
-  },
-  {
-    q: 'Why is it important to take part in the reading?',
-    a: 'Reading nurtures the heart and the mind. It builds a lifelong love of reading rooted in faith and growing in knowledge, strengthens understanding, and is a joyful habit for the whole family, with a certificate and raffle entry when the goal is met.',
-  },
-]
 
 /** Summer Reading Program registration (written to the `summerReads` collection). */
 // `valid` is an admin's silent review flag: only valid books (valid !== false)
@@ -1002,6 +928,15 @@ export default function DashboardPage() {
   // the full broadcast, and its own in-flight flag.
   const [reminderTestEmail, setReminderTestEmail] = useState('')
   const [reminderTestSending, setReminderTestSending] = useState(false)
+  // The editable reminder email. Loaded from emailTemplates/summerReminder so
+  // the editor opens on the saved wording, not the built-in default.
+  const [reminderContent, setReminderContent] = useState<ReminderContent>(DEFAULT_REMINDER_CONTENT)
+  const [reminderEditing, setReminderEditing] = useState(false)
+  const [reminderSaving, setReminderSaving] = useState(false)
+  const [reminderTemplateMessage, setReminderTemplateMessage] = useState('')
+  // Set once the saved copy has been read, so the editor never shows defaults
+  // over a saved template that simply had not loaded yet.
+  const [reminderLoaded, setReminderLoaded] = useState(false)
   const [bookRequests, setBookRequests] = useState<BookRequest[]>([])
   const [bookRequestsLoading, setBookRequestsLoading] = useState(false)
   // Daily Pulse figures are hidden by default (privacy on a shared screen);
@@ -5877,6 +5812,74 @@ export default function DashboardPage() {
   // Admin: send the Summer Reads reminder. With no args it broadcasts to every
   // registered parent (recipients gathered server-side); with a testEmail it
   // sends only to that address so the admin can preview it in a real inbox.
+  // Load the saved reminder template when the dialog opens, so the editor and
+  // the preview both start from what will actually send.
+  useEffect(() => {
+    if (!reminderOpen || reminderLoaded || demoMode) return
+    let cancelled = false
+    getDoc(doc(db, 'emailTemplates', 'summerReminder'))
+      .then((snap) => {
+        if (cancelled) return
+        // normalize fills any missing field from the defaults, so a partially
+        // saved document still opens a complete editor.
+        setReminderContent(normalizeReminderContent(snap.exists() ? snap.data() : null))
+        setReminderLoaded(true)
+      })
+      .catch((error) => {
+        // Keep the defaults on screen rather than blocking the dialog; the
+        // admin can still edit and save, which overwrites cleanly.
+        console.warn('Could not load the reminder template; showing the default.', error)
+        if (!cancelled) setReminderLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [reminderOpen, reminderLoaded, demoMode])
+
+  /** Persist the edited template. This is what every future broadcast renders. */
+  const saveReminderTemplate = async () => {
+    setReminderSaving(true)
+    setReminderTemplateMessage('')
+    try {
+      const callable = httpsCallable<{ content: ReminderContent }, { ok: boolean; content: ReminderContent }>(
+        functions,
+        'saveReminderTemplate'
+      )
+      const { data } = await callable({ content: reminderContent })
+      // Show the server's normalised copy, so what is on screen is exactly what
+      // was stored rather than the unvalidated draft.
+      if (data?.content) setReminderContent(normalizeReminderContent(data.content))
+      setReminderEditing(false)
+      setReminderTemplateMessage('Saved. Every future reminder uses this wording.')
+    } catch (error) {
+      console.error('Save reminder template error:', error)
+      setReminderTemplateMessage('Could not save the template. Your edits are still here, so try again.')
+    } finally {
+      setReminderSaving(false)
+    }
+  }
+
+  /** Restore the built-in wording. */
+  const resetReminderTemplate = async () => {
+    if (!confirm('Discard the saved wording and go back to the built-in reminder email?')) return
+    setReminderSaving(true)
+    setReminderTemplateMessage('')
+    try {
+      const callable = httpsCallable<undefined, { ok: boolean; content: ReminderContent }>(
+        functions,
+        'resetReminderTemplate'
+      )
+      const { data } = await callable()
+      setReminderContent(normalizeReminderContent(data?.content ?? null))
+      setReminderTemplateMessage('Reset to the built-in wording.')
+    } catch (error) {
+      console.error('Reset reminder template error:', error)
+      setReminderTemplateMessage('Could not reset the template. Please try again.')
+    } finally {
+      setReminderSaving(false)
+    }
+  }
+
   const sendReminder = async (opts?: { testEmail?: string }) => {
     const isTest = Boolean(opts?.testEmail)
     if (isTest) setReminderTestSending(true)
@@ -11982,12 +11985,355 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 This sends one email to each unique parent email on file. Recipients are gathered on the server, so each parent sees only their own address.
               </div>
+              {/* Subject line: part of the template, so it is edited here too. */}
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Preview</p>
-                <div className="rounded-2xl border border-black/10 bg-gray-50 p-3">
-                  <div className="overflow-hidden rounded-xl bg-white" dangerouslySetInnerHTML={{ __html: buildReminderEmailHtml() }} />
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted">
+                    {reminderEditing ? 'Edit the email' : 'Preview'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {reminderEditing && (
+                      <button
+                        type="button"
+                        onClick={resetReminderTemplate}
+                        disabled={reminderSaving}
+                        className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] font-bold text-muted transition hover:bg-gray-50 hover:text-ink disabled:opacity-50"
+                      >
+                        Reset to default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setReminderEditing((v) => !v)}
+                      disabled={reminderSaving}
+                      className="rounded-full border-2 border-primary/25 bg-white px-4 py-1.5 text-[11px] font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
+                    >
+                      {reminderEditing ? 'Done editing' : 'Edit email'}
+                    </button>
+                  </div>
                 </div>
+
+                {reminderTemplateMessage && (
+                  <p className="mb-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-medium text-primaryDark">
+                    {reminderTemplateMessage}
+                  </p>
+                )}
+
+                {reminderEditing ? (
+                  /* Field-by-field editing. The branded shell (logo, gradient
+                     header, palette) is deliberately not editable: inline CSS
+                     is what makes an email render across Gmail, Outlook and
+                     Apple Mail, and a free-text HTML box invites a stray tag
+                     that breaks the send for every parent at once. */
+                  <div className="space-y-3 rounded-2xl border border-black/10 bg-gray-50 p-3">
+                    <p className="text-[11px] leading-relaxed text-muted">
+                      Basic HTML is allowed in the body copy: <code className="rounded bg-black/5 px-1">&lt;strong&gt;</code>,{' '}
+                      <code className="rounded bg-black/5 px-1">&lt;a href&gt;</code>. Use{' '}
+                      <code className="rounded bg-black/5 px-1">{'{{child}}'}</code> for the child&rsquo;s name and{' '}
+                      <code className="rounded bg-black/5 px-1">{'{{parent}}'}</code> for the parent&rsquo;s; each
+                      recipient gets their own.
+                    </p>
+
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Subject</span>
+                      <input
+                        type="text"
+                        value={reminderContent.subject}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, subject: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                        Greeting (follows &ldquo;Assalamu alaikum&rdquo;)
+                      </span>
+                      <input
+                        type="text"
+                        value={reminderContent.greeting}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, greeting: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                      />
+                      <span className="mt-1 block text-[11px] text-muted">
+                        Replaced by the parent&rsquo;s own name when one is on file.
+                      </span>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Opening paragraph</span>
+                      <textarea
+                        rows={4}
+                        value={reminderContent.intro}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, intro: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-primary/50"
+                      />
+                    </label>
+
+                    {/* Reminder bullets */}
+                    <div className="rounded-xl border border-black/10 bg-white p-3">
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Reminder box heading</span>
+                        <input
+                          type="text"
+                          value={reminderContent.remindersTitle}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, remindersTitle: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                      <div className="mt-3 space-y-2">
+                        {reminderContent.bullets.map((b, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="mt-2 text-[11px] font-bold text-muted">{i + 1}</span>
+                            <textarea
+                              rows={3}
+                              value={b}
+                              onChange={(e) =>
+                                setReminderContent((c) => ({
+                                  ...c,
+                                  bullets: c.bullets.map((x, j) => (j === i ? e.target.value : x))
+                                }))
+                              }
+                              className="flex-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-primary/50"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setReminderContent((c) => ({
+                                  ...c,
+                                  bullets: c.bullets.filter((_, j) => j !== i)
+                                }))
+                              }
+                              aria-label={`Remove bullet ${i + 1}`}
+                              className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-red-50 hover:text-red-600"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReminderContent((c) => ({ ...c, bullets: [...c.bullets, ''] }))}
+                        className="mt-2 rounded-full border border-primary/20 bg-white px-3 py-1.5 text-[11px] font-bold text-primaryDark transition hover:bg-primary/5"
+                      >
+                        + Add bullet
+                      </button>
+                      {reminderContent.bullets.length === 0 && (
+                        <p className="mt-2 text-[11px] text-muted">
+                          With no bullets the whole reminder box is left out of the email.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Deadline */}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Deadline label</span>
+                        <input
+                          type="text"
+                          value={reminderContent.deadlineLabel}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, deadlineLabel: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Deadline date</span>
+                        <input
+                          type="text"
+                          value={reminderContent.deadlineValue}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, deadlineValue: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                    </div>
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Note under the deadline</span>
+                      <input
+                        type="text"
+                        value={reminderContent.deadlineNote}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, deadlineNote: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                      />
+                    </label>
+
+                    {/* FAQs */}
+                    <div className="rounded-xl border border-black/10 bg-white p-3">
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">FAQ section heading</span>
+                        <input
+                          type="text"
+                          value={reminderContent.faqsTitle}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, faqsTitle: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                      <div className="mt-3 space-y-3">
+                        {reminderContent.faqs.map((f, i) => (
+                          <div key={i} className="rounded-xl border border-black/10 bg-gray-50 p-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Q{i + 1}</span>
+                              <div className="flex items-center gap-1">
+                                {/* Order is the reading order in the email, so
+                                    moving a question matters. */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setReminderContent((c) => {
+                                      if (i === 0) return c
+                                      const faqs = [...c.faqs]
+                                      ;[faqs[i - 1], faqs[i]] = [faqs[i], faqs[i - 1]]
+                                      return { ...c, faqs }
+                                    })
+                                  }
+                                  disabled={i === 0}
+                                  aria-label={`Move question ${i + 1} up`}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted transition hover:bg-white hover:text-ink disabled:opacity-30"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setReminderContent((c) => {
+                                      if (i === c.faqs.length - 1) return c
+                                      const faqs = [...c.faqs]
+                                      ;[faqs[i], faqs[i + 1]] = [faqs[i + 1], faqs[i]]
+                                      return { ...c, faqs }
+                                    })
+                                  }
+                                  disabled={i === reminderContent.faqs.length - 1}
+                                  aria-label={`Move question ${i + 1} down`}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted transition hover:bg-white hover:text-ink disabled:opacity-30"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setReminderContent((c) => ({ ...c, faqs: c.faqs.filter((_, j) => j !== i) }))
+                                  }
+                                  aria-label={`Remove question ${i + 1}`}
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted transition hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                              </div>
+                            </div>
+                            <input
+                              type="text"
+                              value={f.q}
+                              placeholder="Question"
+                              onChange={(e) =>
+                                setReminderContent((c) => ({
+                                  ...c,
+                                  faqs: c.faqs.map((x, j) => (j === i ? { ...x, q: e.target.value } : x))
+                                }))
+                              }
+                              className="mt-1.5 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-primary/50"
+                            />
+                            <textarea
+                              rows={3}
+                              value={f.a}
+                              placeholder="Answer"
+                              onChange={(e) =>
+                                setReminderContent((c) => ({
+                                  ...c,
+                                  faqs: c.faqs.map((x, j) => (j === i ? { ...x, a: e.target.value } : x))
+                                }))
+                              }
+                              className="mt-1.5 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-primary/50"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReminderContent((c) => ({ ...c, faqs: [...c.faqs, { q: '', a: '' }] }))}
+                        className="mt-2 rounded-full border border-primary/20 bg-white px-3 py-1.5 text-[11px] font-bold text-primaryDark transition hover:bg-primary/5"
+                      >
+                        + Add question
+                      </button>
+                      <p className="mt-2 text-[11px] text-muted">
+                        A question with an empty box is dropped when saved, so a half-filled row cannot reach a parent.
+                      </p>
+                    </div>
+
+                    {/* Closing */}
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Button label</span>
+                      <input
+                        type="text"
+                        value={reminderContent.ctaLabel}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, ctaLabel: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                      />
+                    </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Sign-off</span>
+                        <input
+                          type="text"
+                          value={reminderContent.signOff}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, signOff: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Signature</span>
+                        <input
+                          type="text"
+                          value={reminderContent.signature}
+                          onChange={(e) => setReminderContent((c) => ({ ...c, signature: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-primary/50"
+                        />
+                      </label>
+                    </div>
+                    <label className="block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Footer note</span>
+                      <textarea
+                        rows={2}
+                        value={reminderContent.footerNote}
+                        onChange={(e) => setReminderContent((c) => ({ ...c, footerNote: e.target.value }))}
+                        className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-primary/50"
+                      />
+                    </label>
+
+                    {/* Live preview under the fields, so an edit can be judged
+                        without leaving the editor. */}
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">Live preview</p>
+                      <div className="rounded-2xl border border-black/10 bg-white p-2">
+                        <div
+                          className="overflow-hidden rounded-xl bg-white"
+                          dangerouslySetInnerHTML={{ __html: buildReminderEmail(reminderContent) }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={saveReminderTemplate}
+                      disabled={reminderSaving}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-soft transition-all hover:-translate-y-0.5 disabled:opacity-60"
+                    >
+                      {reminderSaving ? 'Saving…' : 'Save this wording'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mb-2 text-[11px] text-muted">
+                      Subject: <span className="font-semibold text-ink">{reminderContent.subject}</span>
+                    </p>
+                    <div className="rounded-2xl border border-black/10 bg-gray-50 p-3">
+                      <div
+                        className="overflow-hidden rounded-xl bg-white"
+                        dangerouslySetInnerHTML={{ __html: buildReminderEmail(reminderContent) }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
+
               {/* Test send: preview the exact email in a real inbox first. */}
               <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted">Send a test first</p>

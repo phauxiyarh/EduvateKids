@@ -7,6 +7,12 @@ import { Resend } from 'resend';
 import * as logger from 'firebase-functions/logger';
 import { RESEND_API_KEY, ORDER_NOTIFY_TO, ORDER_NOTIFY_FROM, emailConfigured } from './config';
 import type { CustomerInfo, ShippingAddress, OrderItem } from './types';
+import {
+  DEFAULT_REMINDER_CONTENT,
+  normalizeReminderContent,
+  buildReminderEmail,
+  type ReminderContent,
+} from './summerReminderEmail';
 
 const esc = (s: string) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -204,92 +210,37 @@ export async function sendReaderWelcome(params: {
 }
 
 /**
- * Build the Summer Reads reminder/broadcast email HTML. Pure function (no side
- * effects) so the exact markup can be previewed in the dashboard and sent to
- * every registered parent. Mirrors the welcome email's look. `parentName` is
- * optional so a single generic body works for a bulk send. The deadline and
- * key reminders (recommended-book list, valid-books-only-count) are baked in.
+ * Build the Summer Reads reminder email.
+ *
+ * The content comes from Firestore (emailTemplates/summerReminder) so the admin
+ * can edit every line of copy in the dashboard preview and have the real send
+ * use exactly what they approved. Falls back to the built-in wording when no
+ * template has been saved yet.
+ *
+ * The markup itself lives in the shared module, imported by both this function
+ * and the dashboard preview. Two hand-maintained copies of an email template
+ * drift, and a preview that has drifted is worse than no preview at all.
  */
-export function buildSummerReminderEmailHtml(params?: { parentName?: string; childName?: string }): string {
-  const greetName = params?.parentName ? esc(params.parentName) : 'dear parent';
-  const child = params?.childName ? esc(params.childName) : 'your reader';
-  const logUrl = 'https://eduvatekids.com/summer-reads/log';
-  const booksUrl = 'https://eduvatekids.com/summer-reads';
-  return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-    <div style="background:linear-gradient(135deg,#1a7a3c,#7c3aed);color:#fff;padding:26px 24px;border-radius:14px 14px 0 0;text-align:center">
-      <img src="https://eduvatekids.com/email-logo.png" alt="Eduvate Kids" width="60" height="86" style="display:block;margin:0 auto 12px;width:60px;height:86px;background:#fff;border-radius:14px;padding:8px 12px;object-fit:contain" />
-      <h1 style="margin:0;font-size:22px">📚 A little Summer Reads reminder</h1>
-      <p style="margin:8px 0 0;opacity:.92;font-size:14px">Rooted in Faith. Growing in Knowledge.</p>
-    </div>
-    <div style="border:1px solid #eee;border-top:none;border-radius:0 0 14px 14px;padding:26px;font-size:15px;line-height:1.6">
-      <p style="margin:0 0 14px"><strong>Assalamu alaikum ${greetName},</strong></p>
-      <p style="margin:0 0 14px">MashaAllah, the reading has started with such excitement, and we've seen fantastic performances so far! 🌟 Thank you for reading along with ${child} this summer. It's a joy to watch these seeds of knowledge grow, biidhnillah.</p>
-
-      <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:14px;padding:16px 18px;margin:18px 0">
-        <p style="margin:0 0 8px;font-weight:bold;color:#4c1d95">A gentle reminder as you keep reading:</p>
-        <ul style="margin:0;padding-left:20px">
-          <li style="margin-bottom:8px">📖 <strong>Please stick to the recommended book list.</strong> We've noticed a few books logged from outside the recommendations, and those won't count towards the reading record. Ensure to review the recommended books from the <a href="${booksUrl}" style="color:#7c3aed;font-weight:bold">Summer Reads page</a>.</li>
-          <li style="margin-bottom:8px">✅ <strong>Only books from the recommended list count</strong> towards completing a level and entering the raffle draw, so choosing from the list keeps every book counting.</li>
-          <li style="margin-bottom:0">✍️ Don't forget to <a href="${logUrl}" style="color:#7c3aed;font-weight:bold">log each finished book</a> using your reading code.</li>
-        </ul>
-      </div>
-
-      <div style="text-align:center;margin:22px 0">
-        <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280">Program deadline</p>
-        <div style="display:inline-block;border:2px dashed #1a7a3c;border-radius:14px;padding:10px 24px;font-size:20px;font-weight:bold;color:#166534">31 August</div>
-        <p style="margin:8px 0 0;font-size:13px;color:#6b7280">There's no rush, but do aim to finish reading as soon as you comfortably can. 😊</p>
-      </div>
-
-      <div style="border-top:1px solid #eee;padding-top:18px;margin-top:22px">
-        <p style="margin:0 0 12px;font-weight:bold;font-size:16px;color:#1f2937">Frequently asked questions</p>
-        ${summerReminderFaqs
-          .map(
-            (f) =>
-              `<div style="margin:0 0 14px">
-                <p style="margin:0 0 4px;font-weight:bold;color:#4c1d95;font-size:14px">${esc(f.q)}</p>
-                <p style="margin:0;font-size:14px;color:#374151">${f.a}</p>
-              </div>`
-          )
-          .join('')}
-      </div>
-
-      <div style="text-align:center;margin:24px 0 8px">
-        <a href="${logUrl}" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;text-decoration:none;font-weight:bold;padding:13px 28px;border-radius:999px">Log the next book →</a>
-      </div>
-
-      <p style="margin:18px 0 0">Keep up the wonderful reading!<br><strong>The Eduvate Kids Team</strong></p>
-      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #eee;padding-top:14px">You're receiving this because a child is registered for Eduvate Kids Summer Reads. Questions? Just reply to this email.</p>
-    </div>
-  </div>`;
+export async function loadReminderContent(
+  db: FirebaseFirestore.Firestore,
+): Promise<ReminderContent> {
+  try {
+    const snap = await db.doc('emailTemplates/summerReminder').get();
+    // normalize merges a partial or malformed doc over the defaults, so a
+    // half-saved template cannot produce a broken email.
+    return normalizeReminderContent(snap.exists ? snap.data() : null);
+  } catch (err) {
+    logger.warn('Could not read the reminder template; using the default', err);
+    return DEFAULT_REMINDER_CONTENT;
+  }
 }
 
-/**
- * FAQ content shown in the reminder email. Kept as data so the email body and
- * the dashboard preview stay identical. Answers may contain inline links.
- */
-const summerReminderFaqs: { q: string; a: string }[] = [
-  {
-    q: 'Can I begin to log the books I finish reading?',
-    a: 'Yes! As soon as you finish a book, let your parent know first. They will help confirm you truly read and understood it, then log it together.',
-  },
-  {
-    q: 'What do I need to log a book?',
-    a: 'Your registration code. Share it with your parent and log the book together on the <a href="https://eduvatekids.com/summer-reads/log" style="color:#7c3aed;font-weight:bold">Log a Book</a> page, since every book is parent verified.',
-  },
-  {
-    q: 'What if I read a book outside the recommended list?',
-    a: 'We do our best to consider all books that align with our values. When a book is clearly outside this scope we are unable to count it, so it is marked invalid. Choosing from the recommended list keeps every book counting.',
-  },
-  {
-    q: 'Can we buy a book we like online so we can read it?',
-    a: 'Absolutely, though you are not required to buy any book to take part. We currently deliver direct online purchases across the USA and hope to expand further, in-sha-Allah. Browse our <a href="https://eduvatekids.com/catalog" style="color:#7c3aed;font-weight:bold">catalog</a> any time.',
-  },
-  {
-    q: 'Why is it important to take part in the reading?',
-    a: 'Reading nurtures the heart and the mind. It builds a lifelong love of reading rooted in faith and growing in knowledge, strengthens understanding, and is a joyful habit for the whole family, with a certificate and raffle entry when the goal is met.',
-  },
-];
+export function buildSummerReminderEmailHtml(
+  content: ReminderContent,
+  params?: { parentName?: string; childName?: string },
+): string {
+  return buildReminderEmail(content, params);
+}
 
 /**
  * Broadcast the Summer Reads reminder to a list of parent recipients. Sends one
@@ -299,14 +250,17 @@ const summerReminderFaqs: { q: string; a: string }[] = [
  * one bad address can't abort the whole broadcast.
  */
 export async function sendSummerReminderBroadcast(
-  recipients: { email: string; parentName?: string; childName?: string }[]
+  recipients: { email: string; parentName?: string; childName?: string }[],
+  content: ReminderContent,
 ): Promise<{ sent: number; failed: number; skipped: boolean }> {
   if (!emailConfigured()) {
     logger.info('Summer reminder broadcast skipped: RESEND_API_KEY not set', { count: recipients.length });
     return { sent: 0, failed: 0, skipped: true };
   }
   const resend = new Resend(RESEND_API_KEY.value());
-  const subject = '📚 Summer Reads reminder: keep reading from the recommended list (deadline 31 Aug)';
+  // The admin edits the subject alongside the body, so it comes from the
+  // saved template rather than being fixed here.
+  const subject = content.subject;
   let sent = 0;
   let failed = 0;
   for (const r of recipients) {
@@ -316,7 +270,7 @@ export async function sendSummerReminderBroadcast(
         to: r.email,
         replyTo: ORDER_NOTIFY_TO,
         subject,
-        html: buildSummerReminderEmailHtml({ parentName: r.parentName, childName: r.childName }),
+        html: buildReminderEmail(content, { parentName: r.parentName, childName: r.childName }),
       });
       sent++;
     } catch (err) {

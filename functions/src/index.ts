@@ -33,9 +33,10 @@ import { noteCatalogChange, publishIfDue, publishNow } from './publish';
 import { subscribeAndReveal } from './freebies';
 import { submitReview } from './reviews';
 import { seedReviews } from './seedReviews';
+import { DEFAULT_REMINDER_CONTENT, normalizeReminderContent } from './summerReminderEmail';
 import { validateUsAddress } from './address';
 import { priceCart, finalizeOrder } from './orders';
-import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast } from './email';
+import { sendOrderNotification, sendBookRequestNotification, sendCustomerPurchaseEmail, sendSummerReminderBroadcast, loadReminderContent } from './email';
 import { registerReader, logBook, editBook, deleteBook, resendReaderWelcome, setBookValidity, setReaderEligibility, type RegisterInput, type LogBookInput, type EditBookInput } from './summer';
 import type { CreatePaymentInput, CustomerInfo, ShippingAddress, OrderItem } from './types';
 
@@ -448,6 +449,34 @@ export const setSummerReaderEligibility = onCall({ cors: ALLOWED_ORIGINS }, asyn
  * one address (a preview send for the admin to check before the real broadcast),
  * the registered parents are NOT contacted. The response carries `test: true`.
  */
+/**
+ * Save the Summer Reads reminder email template the admin edited in the
+ * dashboard preview. Admin-only: this document is what every future broadcast
+ * renders from, so an unauthenticated write would let anyone rewrite an email
+ * sent to every registered parent.
+ *
+ * Normalised before storing, so a partial or malformed payload cannot persist a
+ * template that renders a broken email.
+ */
+export const saveReminderTemplate = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  const content = normalizeReminderContent((request.data as { content?: unknown })?.content);
+  await db.doc('emailTemplates/summerReminder').set(
+    { ...content, updatedAt: new Date().toISOString(), updatedBy: request.auth?.token?.email ?? '' },
+    { merge: true },
+  );
+  logger.info('Reminder template saved', { by: request.auth?.token?.email });
+  return { ok: true, content };
+});
+
+/** Reset the reminder email back to the built-in wording. */
+export const resetReminderTemplate = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  await assertAdmin(request);
+  await db.doc('emailTemplates/summerReminder').delete();
+  logger.info('Reminder template reset to default', { by: request.auth?.token?.email });
+  return { ok: true, content: DEFAULT_REMINDER_CONTENT };
+});
+
 export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLOWED_ORIGINS }, async (request) => {
   await assertAdmin(request);
   const testEmail = String((request.data as { testEmail?: string })?.testEmail ?? '').trim();
@@ -457,7 +486,8 @@ export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLO
       if (!isValidEmail(testEmail)) {
         throw new HttpsError('invalid-argument', 'The test email address is not valid.');
       }
-      const result = await sendSummerReminderBroadcast([{ email: testEmail }]);
+      const content = await loadReminderContent(db);
+      const result = await sendSummerReminderBroadcast([{ email: testEmail }], content);
       logger.info('Summer reminder TEST send', { testEmail, ...result });
       return { ...result, recipients: 1, test: true };
     }
@@ -477,7 +507,8 @@ export const sendSummerReminder = onCall({ secrets: [RESEND_API_KEY], cors: ALLO
     if (recipients.length === 0) {
       return { sent: 0, failed: 0, recipients: 0, skipped: false };
     }
-    const result = await sendSummerReminderBroadcast(recipients);
+    const content = await loadReminderContent(db);
+    const result = await sendSummerReminderBroadcast(recipients, content);
     logger.info('Summer reminder broadcast triggered', { recipients: recipients.length, ...result });
     return { ...result, recipients: recipients.length };
   } catch (err) {

@@ -31,6 +31,6 @@
   ],
   "exclude": [
     "node_modules",
-    "functions"
+    "functions/lib", "functions/node_modules"
   ]
 }

@@ -1,3 +1,6 @@
+// GENERATED FILE - DO NOT EDIT.
+// Copied from lib/summerReminderEmail.ts by scripts/sync-shared-email.mjs.
+// Edit the original in lib/ and run: node scripts/sync-shared-email.mjs
 /**
  * Summer Reads reminder email: the editable content, and the one function that
  * turns it into HTML.

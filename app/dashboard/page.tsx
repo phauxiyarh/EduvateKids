@@ -1017,6 +1017,12 @@ export default function DashboardPage() {
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('active')
   const [viewingOrderHistory, setViewingOrderHistory] = useState<EventRecord | null>(null)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  // Re-filing POS orders saved under the wrong group. byDate picks up every
+  // order (and stray sale) the source recorded on moveDate, local time.
+  const [moveRequest, setMoveRequest] = useState<{ fromId: string; orders: Order[]; byDate: boolean } | null>(null)
+  const [moveTargetId, setMoveTargetId] = useState('')
+  const [moveDate, setMoveDate] = useState('')
+  const [isMovingOrders, setIsMovingOrders] = useState(false)
   const [editOrderItems, setEditOrderItems] = useState<OrderItem[]>([])
   const [editOrderPaymentType, setEditOrderPaymentType] = useState<Sale['paymentType']>('Cash')
   const [generalOrders, setGeneralOrders] = useState<Order[]>([])
@@ -4089,6 +4095,136 @@ export default function DashboardPage() {
         console.error('Delete order error:', error)
       }
     }
+  }
+
+  const localDateKey = (iso: string) => {
+    const d = new Date(iso)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  // Re-files POS orders rung up under the wrong group, e.g. an event sale saved
+  // to General Sales. Inventory is untouched: the stock left the shelf either
+  // way, only the ledger it is recorded in changes. Sales follow their order by
+  // timestamp, the same link delete relies on; extraSales carries sales that
+  // have no order of their own.
+  const moveOrders = async (fromId: string, toId: string, ordersToMove: Order[], extraSales: Sale[] = []) => {
+    if (fromId === toId || (ordersToMove.length === 0 && extraSales.length === 0)) return false
+    const source = fromId === 'general' ? null : events.find((e) => e.id === fromId)
+    const target = toId === 'general' ? null : events.find((e) => e.id === toId)
+    if ((fromId !== 'general' && !source) || (toId !== 'general' && !target)) return false
+
+    const sourceOrders = source ? source.orders : generalOrders
+    const sourceSales = source ? source.sales : generalSales
+    const movingOrderIds = new Set(ordersToMove.map((o) => o.id))
+    const movingStamps = new Set(ordersToMove.map((o) => o.timestamp))
+    const extraSaleIds = new Set(extraSales.map((s) => s.id))
+    const movingSales = sourceSales.filter((s) => movingStamps.has(s.timestamp) || extraSaleIds.has(s.id))
+    const movingSaleIds = new Set(movingSales.map((s) => s.id))
+    // Orders read from generalOrders carry the _live flag; it belongs on the
+    // document, not on an entry inside an event's orders array.
+    const movedOrders = ordersToMove.map((o) => {
+      const { _live, ...rest } = o as Order & { _live?: boolean }
+      void _live
+      return { ...rest, eventId: toId }
+    })
+    const byNewest = <T extends { timestamp: string }>(a: T, b: T) => b.timestamp.localeCompare(a.timestamp)
+
+    const remainingOrders = sourceOrders.filter((o) => !movingOrderIds.has(o.id))
+    const remainingSales = sourceSales.filter((s) => !movingSaleIds.has(s.id))
+    const targetOrders = [...movedOrders, ...(target ? target.orders : generalOrders)].sort(byNewest)
+    const targetSales = [...movingSales, ...(target ? target.sales : generalSales)].sort(byNewest)
+
+    // Writes to the destination go first, so a failure part-way through a large
+    // move leaves a duplicate to delete rather than a sale lost from both.
+    type BatchOp = (batch: ReturnType<typeof writeBatch>) => void
+    const ops: BatchOp[] = []
+    if (target) {
+      ops.push((b) => b.update(doc(db, 'events', target.id), { orders: targetOrders, sales: targetSales, _live: true }))
+    } else {
+      movedOrders.forEach((o) => ops.push((b) => b.set(doc(db, 'generalOrders', o.id), { ...o, _live: true })))
+      movingSales.forEach((s) => ops.push((b) => b.set(doc(db, 'generalSales', s.id), { ...s, _live: true })))
+    }
+    if (source) {
+      ops.push((b) => b.update(doc(db, 'events', source.id), { orders: remainingOrders, sales: remainingSales, _live: true }))
+    } else {
+      ordersToMove.forEach((o) => ops.push((b) => b.delete(doc(db, 'generalOrders', o.id))))
+      movingSales.forEach((s) => ops.push((b) => b.delete(doc(db, 'generalSales', s.id))))
+    }
+    try {
+      for (let i = 0; i < ops.length; i += 450) {
+        const batch = writeBatch(db)
+        ops.slice(i, i + 450).forEach((op) => op(batch))
+        await batch.commit()
+      }
+    } catch (error) {
+      console.error('Move order error:', error)
+      setEventMessage('⚠️ Move failed. Nothing was changed on this screen; reload and check both groups before retrying.')
+      return false
+    }
+
+    // Local state and backups only change once the cloud has the move. The
+    // backups matter: load-time recovery restores an event from localStorage
+    // whenever the backup holds more orders, which would resurrect the move.
+    if (source) {
+      saveOrderBackupToLocal(source.id, remainingOrders, remainingSales)
+    } else {
+      setGeneralOrders(remainingOrders)
+      setGeneralSales(remainingSales)
+      saveOrderBackupToLocal('general', remainingOrders)
+    }
+    if (target) {
+      saveOrderBackupToLocal(target.id, targetOrders, targetSales)
+    } else {
+      setGeneralOrders(targetOrders)
+      setGeneralSales(targetSales)
+      saveOrderBackupToLocal('general', targetOrders)
+    }
+    setEvents((current) =>
+      current.map((e) => {
+        if (source && e.id === source.id) return { ...e, orders: remainingOrders, sales: remainingSales }
+        if (target && e.id === target.id) return { ...e, orders: targetOrders, sales: targetSales }
+        return e
+      })
+    )
+    if (viewingOrderHistory?.id === fromId) {
+      setViewingOrderHistory({ ...viewingOrderHistory, orders: remainingOrders, sales: remainingSales })
+    }
+    if (viewingEventTransactions?.id === fromId) {
+      setViewingEventTransactions({ ...viewingEventTransactions, orders: remainingOrders, sales: remainingSales })
+    }
+    const targetName = target?.name ?? 'General Sales'
+    const movedTotal = ordersToMove.reduce((sum, o) => sum + o.total, 0)
+    setEventMessage(`✅ Moved ${ordersToMove.length} order${ordersToMove.length !== 1 ? 's' : ''} ($${formatNumber(movedTotal)}) to ${targetName}.`)
+    return true
+  }
+
+  // Orders and sales the open move request covers, resolved against live state
+  // so a by-date move always sees what the source holds right now.
+  const moveSelection = (() => {
+    if (!moveRequest) return { orders: [] as Order[], strays: [] as Sale[] }
+    if (!moveRequest.byDate) return { orders: moveRequest.orders, strays: [] as Sale[] }
+    if (!moveDate) return { orders: [] as Order[], strays: [] as Sale[] }
+    const source = moveRequest.fromId === 'general' ? null : events.find((e) => e.id === moveRequest.fromId)
+    const orders = (source ? source.orders : generalOrders).filter((o) => localDateKey(o.timestamp) === moveDate)
+    const stamps = new Set(orders.map((o) => o.timestamp))
+    const strays = (source ? source.sales : generalSales).filter(
+      (s) => localDateKey(s.timestamp) === moveDate && !stamps.has(s.timestamp)
+    )
+    return { orders, strays }
+  })()
+
+  const openMoveOrders = (fromId: string, orders: Order[], byDate: boolean) => {
+    setMoveRequest({ fromId, orders, byDate })
+    setMoveTargetId('')
+    setMoveDate(byDate && orders[0] ? localDateKey(orders[0].timestamp) : '')
+  }
+
+  const handleConfirmMove = async () => {
+    if (!moveRequest || !moveTargetId || isMovingOrders) return
+    setIsMovingOrders(true)
+    const moved = await moveOrders(moveRequest.fromId, moveTargetId, moveSelection.orders, moveSelection.strays)
+    setIsMovingOrders(false)
+    if (moved) setMoveRequest(null)
   }
 
   const handleSaveEditOrder = async () => {
@@ -7974,7 +8110,17 @@ export default function DashboardPage() {
                   {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {userRole === 'admin' && viewingOrderHistory.orders.length > 0 && (
+                  <button
+                    onClick={() => openMoveOrders(viewingOrderHistory.id, viewingOrderHistory.orders, true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                    type="button"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    Move by date
+                  </button>
+                )}
                 {viewingOrderHistory.orders.length > 0 && (
                   <button
                     onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
@@ -8037,6 +8183,15 @@ export default function DashboardPage() {
                             >
                               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               Edit
+                            </button>
+                            <button
+                              onClick={() => openMoveOrders(viewingOrderHistory.id, [order], false)}
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
+                              type="button"
+                              aria-label="Move order to another event"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                              Move
                             </button>
                             <button
                               onClick={() => handleDeleteOrder(order)}
@@ -8262,6 +8417,113 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Move Orders Modal (Admin Only) */}
+      {moveRequest && (() => {
+        const sourceName = moveRequest.fromId === 'general'
+          ? 'General Sales'
+          : events.find((e) => e.id === moveRequest.fromId)?.name ?? 'this event'
+        const { orders: selected, strays } = moveSelection
+        const selectedTotal = selected.reduce((sum, o) => sum + o.total, 0) + strays.reduce((sum, s) => sum + s.total, 0)
+        const destinations = [
+          ...(moveRequest.fromId === 'general' ? [] : [{ id: 'general', label: '💰 General Sales' }]),
+          ...[...events]
+            .filter((e) => e.id !== moveRequest.fromId)
+            .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+            .map((e) => ({
+              id: e.id,
+              label: `${e.name}${e.startDate ? ` · ${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` – ${e.endDate}` : ''}` : ''}${e.status === 'closed' ? ' (closed)' : ''}`
+            }))
+        ]
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
+            <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-8">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h4 className="font-display text-2xl gradient-text">
+                    {moveRequest.byDate ? 'Move Sales by Date' : 'Move Order'}
+                  </h4>
+                  <p className="mt-2 text-sm text-muted">
+                    From {sourceName}. Inventory is not changed, only where the sale is recorded.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setMoveRequest(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                  aria-label="Close"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {moveRequest.byDate && (
+                <div className="mb-4">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Sales made on</label>
+                  <input
+                    type="date"
+                    value={moveDate}
+                    onChange={(e) => setMoveDate(e.target.value)}
+                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                  />
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Move to</label>
+                <select
+                  value={moveTargetId}
+                  onChange={(e) => setMoveTargetId(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                >
+                  <option value="">Choose an event…</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/10 text-sm mb-4">
+                {selected.length === 0 && strays.length === 0 ? (
+                  <p className="text-muted">{moveRequest.byDate && !moveDate ? 'Pick a date.' : `No orders in ${sourceName} on this date.`}</p>
+                ) : (
+                  <div className="flex justify-between font-semibold">
+                    <span>
+                      {selected.length} order{selected.length !== 1 ? 's' : ''}
+                      {strays.length > 0 && ` + ${strays.length} sale record${strays.length !== 1 ? 's' : ''} without an order`}
+                    </span>
+                    <span className="gradient-text">${formatNumber(selectedTotal)}</span>
+                  </div>
+                )}
+              </div>
+
+              {eventMessage.startsWith('⚠️ Move') && (
+                <p className="mb-4 text-sm font-semibold text-red-600">{eventMessage}</p>
+              )}
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setMoveRequest(null)}
+                  className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmMove}
+                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                  type="button"
+                  disabled={!moveTargetId || isMovingOrders || (selected.length === 0 && strays.length === 0)}
+                >
+                  {isMovingOrders ? 'Moving…' : 'Move'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Expenses Modal */}
       {viewingExpenses && (

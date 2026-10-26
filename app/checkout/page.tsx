@@ -141,10 +141,10 @@ export default function CheckoutPage() {
                 )}
                 <div className="mt-5 grid gap-4">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Full Name *"><input className={inputClass} value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} required /></Field>
-                    <Field label="Email *"><input type="email" className={inputClass} value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} required /></Field>
+                    <Field label="Full Name *"><input className={inputClass} autoComplete="name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} required /></Field>
+                    <Field label="Email *"><input type="email" autoComplete="email" className={inputClass} value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} required /></Field>
                   </div>
-                  <Field label="Phone"><input type="tel" className={inputClass} value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} /></Field>
+                  <Field label="Phone"><input type="tel" autoComplete="tel" className={inputClass} value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} /></Field>
                   <Field label="Address Line 1 *">
                     <AddressAutocomplete
                       className={inputClass}
@@ -154,14 +154,14 @@ export default function CheckoutPage() {
                       onSelect={(p) => setAddress({ ...address, line1: p.line1, city: p.city, state: p.state, postalCode: p.postalCode, country: p.country })}
                     />
                   </Field>
-                  <Field label="Address Line 2"><input className={inputClass} value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} /></Field>
+                  <Field label="Address Line 2"><input className={inputClass} autoComplete="address-line2" value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} /></Field>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="City *"><input className={inputClass} value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} required /></Field>
-                    <Field label="State / Province *"><input className={inputClass} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} required /></Field>
+                    <Field label="City *"><input className={inputClass} autoComplete="address-level2" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} required /></Field>
+                    <Field label="State / Province *"><input className={inputClass} autoComplete="address-level1" value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value })} required /></Field>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Postal Code *"><input className={inputClass} value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} required /></Field>
-                    <Field label="Country *"><input className={inputClass} value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} required /></Field>
+                    <Field label="Postal Code *"><input className={inputClass} autoComplete="postal-code" value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} required /></Field>
+                    <Field label="Country *"><input className={inputClass} autoComplete="country-name" value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value })} required /></Field>
                   </div>
                   <button
                     type="submit"
@@ -202,7 +202,8 @@ export default function CheckoutPage() {
                           fontFamily: 'inherit',
                           borderRadius: '14px',
                           spacingUnit: '4px',
-                          fontSizeBase: '15px',
+                          // 16px: iOS zooms into any smaller input, iframe included.
+                          fontSizeBase: '16px',
                         },
                         rules: {
                           '.Tab': { border: '1px solid #e7e1f5', boxShadow: '0 1px 2px rgba(124,58,237,0.05)' },
@@ -305,6 +306,13 @@ function PaymentForm({ total }: { total: number | null }) {
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           <svg className="mt-0.5 h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg>
           <span>{error}</span>
+        </div>
+      )}
+      {/* On mobile the order summary sits below the form; repeat the total here. */}
+      {total !== null && (
+        <div className="mt-5 flex items-center justify-between rounded-xl bg-primary/5 px-4 py-2.5 text-sm lg:hidden">
+          <span className="text-muted">Total incl. shipping &amp; tax</span>
+          <span className="font-bold text-primaryDark">${total.toFixed(2)}</span>
         </div>
       )}
       <button

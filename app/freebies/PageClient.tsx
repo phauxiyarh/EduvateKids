@@ -95,13 +95,13 @@ function SubscribeModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-black/5"
+          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-black/5"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -163,7 +163,7 @@ function SubscribeModal({
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError('') }}
               placeholder="you@example.com"
-              autoFocus
+              autoComplete="email"
               required
               className="mt-2 w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
             />

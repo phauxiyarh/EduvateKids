@@ -318,6 +318,22 @@ export default function SummerReadsPage() {
         @keyframes sr-steps-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .sr-steps-track { animation: sr-steps-scroll 26s linear infinite; }
         .sr-steps-marquee:hover .sr-steps-track { animation-play-state: paused; }
+        /* Touch screens can't hover to pause, so there the marquee becomes a
+           swipeable row: no animation, one copy of the steps, snap per card. */
+        @media (hover: none) {
+          .sr-steps-marquee {
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+            -webkit-mask-image: none !important;
+            mask-image: none !important;
+          }
+          .sr-steps-marquee::-webkit-scrollbar { display: none; }
+          .sr-steps-track { animation: none; }
+          .sr-steps-track > * { scroll-snap-align: center; }
+          .sr-step-dup { display: none; }
+        }
 
         @media (prefers-reduced-motion: reduce) {
           .sr-sun, .sr-float, .sr-twinkle, .sr-numpill,
@@ -327,7 +343,7 @@ export default function SummerReadsPage() {
           .reveal.is-visible .sr-sheen { animation: none !important; opacity: 1 !important; }
         }
       `}</style>
-      <SiteHeader />
+      <SiteHeader current="/summer-reads" />
 
       <main>
         {/* Hero */}
@@ -402,7 +418,8 @@ export default function SummerReadsPage() {
             </div>
             {/* Auto-scrolling marquee that loops continuously and pauses on hover.
                The steps are rendered twice so the track can translate -50% for a
-               seamless circular repeat. Edges are masked so cards fade in/out. */}
+               seamless circular repeat. Edges are masked so cards fade in/out.
+               On touch screens it is a plain swipeable row instead (see styles). */}
             <div
               className="sr-steps-marquee mt-10 overflow-hidden"
               style={{ WebkitMaskImage: 'linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)', maskImage: 'linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent)' }}
@@ -412,7 +429,7 @@ export default function SummerReadsPage() {
                   const num = (i % steps.length) + 1
                   return s.highlight ? (
                     // Highlighted steps (certificate + raffle): animated neon border.
-                    <div key={i} className="sr-neon relative w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl p-[2px]" aria-hidden={i >= steps.length || undefined}>
+                    <div key={i} className={`sr-neon relative w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl p-[2px] ${i >= steps.length ? 'sr-step-dup' : ''}`} aria-hidden={i >= steps.length || undefined}>
                       <span className="sr-neon-ring absolute inset-0 rounded-3xl" style={{ animationDelay: `${-(num % steps.length) * 0.6}s` }} aria-hidden="true" />
                       <div className="relative h-full rounded-[calc(1.5rem-2px)] bg-white p-5 sm:p-6">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-secondary text-white shadow-md">
@@ -426,7 +443,7 @@ export default function SummerReadsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div key={i} className="w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-5 sm:p-6 shadow-soft border border-primary/10" aria-hidden={i >= steps.length || undefined}>
+                    <div key={i} className={`w-[78vw] max-w-[300px] sm:w-[320px] flex-shrink-0 rounded-3xl bg-gradient-to-br from-white to-purple-50/40 p-5 sm:p-6 shadow-soft border border-primary/10 ${i >= steps.length ? 'sr-step-dup' : ''}`} aria-hidden={i >= steps.length || undefined}>
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 text-primaryDark">
                         <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={s.icon} /></svg>
                       </div>

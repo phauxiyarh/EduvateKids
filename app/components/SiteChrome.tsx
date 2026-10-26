@@ -26,6 +26,19 @@ const NAV = [
   { label: 'Freebies', href: '/freebies', icon: 'M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z' }
 ]
 
+// Event pages sit behind the desktop dropdown; on narrow screens they become
+// plain chips so every page is one tap away.
+const EVENT_NAV = [
+  { label: 'Summer Reads', href: '/summer-reads' },
+  { label: 'Book Event', href: '/book-event' }
+]
+
+// Contact and FAQs only fit the desktop nav from xl; below lg they join the strip.
+const SUPPORT_NAV = [
+  { label: 'Contact', href: '/contact-us', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z' },
+  { label: 'FAQs', href: '/faqs', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
+]
+
 export function SiteHeader({ current }: { current?: string }) {
   return (
     <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
@@ -69,7 +82,27 @@ export function SiteHeader({ current }: { current?: string }) {
               </Link>
             )
           })}
-          <EventNavDropdown />
+          <EventNavDropdown active={EVENT_NAV.some((e) => e.href === current)} />
+          {SUPPORT_NAV.map((item) => {
+            const active = item.href === current
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                className={`hidden xl:flex items-center gap-2 rounded-full px-3.5 py-2.5 text-sm font-bold transition-all duration-300 ${
+                  active
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
+                    : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -80,13 +113,13 @@ export function SiteHeader({ current }: { current?: string }) {
       {/* Below the desktop breakpoint the full nav does not fit; show a
           scrollable strip rather than hiding navigation entirely. */}
       <div className="lg:hidden border-t border-primary/10 bg-white/70">
-        <div className="mx-auto flex w-11/12 max-w-6xl gap-2 overflow-x-auto py-2 text-xs">
-          {NAV.map((item) => (
+        <div className="mx-auto flex w-11/12 max-w-6xl flex-nowrap gap-2 overflow-x-auto overscroll-x-contain py-2 text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[...NAV, ...EVENT_NAV, ...SUPPORT_NAV].map((item) => (
             <Link
               key={item.label}
               href={item.href}
               aria-current={item.href === current ? 'page' : undefined}
-              className={`shrink-0 rounded-full px-3 py-1.5 font-bold transition ${
+              className={`inline-flex min-h-[40px] shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-2.5 font-bold transition ${
                 item.href === current
                   ? 'bg-gradient-to-r from-primary to-secondary text-white'
                   : 'bg-primary/5 text-primaryDark'

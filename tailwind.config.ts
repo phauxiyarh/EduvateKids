@@ -3,7 +3,10 @@ import type { Config } from 'tailwindcss'
 const config: Config = {
   content: [
     './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}'
+    './components/**/*.{ts,tsx}',
+    // lib/blog.ts emits classed HTML (lists, code blocks, quotes); unscanned,
+    // those classes were never generated and blog posts lost their styling.
+    './lib/**/*.{ts,tsx}'
   ],
   theme: {
     extend: {

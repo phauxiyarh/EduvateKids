@@ -3,15 +3,34 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, getDocs, deleteDoc, doc, getDoc, setDoc, query, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, setDoc, query, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebase'
 import Image from 'next/image'
 import logo from '../../assets/logo.png'
 
+// Firestore batches cap at 500 writes; stay well under.
+const BATCH_LIMIT = 450
+
+type WakeLockHandle = { release: () => Promise<void> }
+
+/** Keep the screen on during long restore/purge runs (best-effort). */
+const requestWakeLock = async (): Promise<WakeLockHandle | null> => {
+  try {
+    const wl = (navigator as unknown as { wakeLock?: { request: (type: 'screen') => Promise<WakeLockHandle> } }).wakeLock
+    return (await wl?.request('screen')) ?? null
+  } catch {
+    return null
+  }
+}
+
+const releaseWakeLock = (lock: WakeLockHandle | null) => {
+  lock?.release().catch(() => {})
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [userRole, setUserRole] = useState<string>('admin')
+  const [userRole, setUserRole] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [demoMode, setDemoMode] = useState(false)
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false)
@@ -38,7 +57,7 @@ export default function SettingsPage() {
         try {
           const userDoc = await getDoc(doc(db, 'users', currentUser.uid))
           if (userDoc.exists()) {
-            setUserRole(userDoc.data().role || 'admin')
+            setUserRole(userDoc.data().role || '')
           }
         } catch (error) {
           console.error('Error fetching user role:', error)
@@ -81,8 +100,8 @@ export default function SettingsPage() {
         console.error('Error loading last backup:', error)
       }
     }
-    if (user) loadLastBackup()
-  }, [user])
+    if (user && userRole === 'admin') loadLastBackup()
+  }, [user, userRole])
 
   // Helper to convert Firestore data to plain JSON-safe objects
   const sanitizeForJSON = (obj: any): any => {
@@ -228,7 +247,8 @@ export default function SettingsPage() {
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // Revoking immediately can cancel the download on some mobile browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
     } catch (error) {
       console.error('Error downloading backup:', error)
       alert('❌ Failed to download backup.')
@@ -264,6 +284,7 @@ export default function SettingsPage() {
   const handleRestoreBackup = async () => {
     if (!restoreFileData || !user) return
     setRestoring(true)
+    const wakeLock = await requestWakeLock()
     try {
       const collectionsToRestore: { name: string; items: any[] }[] = [
         { name: 'inventory', items: restoreFileData.inventory || [] },
@@ -273,22 +294,26 @@ export default function SettingsPage() {
         { name: 'catalog', items: restoreFileData.catalog || [] }
       ]
 
-      // Step 1: Delete existing data in each collection
+      // Step 1: Delete existing data in each collection (chunked batches)
       for (const col of collectionsToRestore) {
         const snap = await getDocs(collection(db, col.name))
-        if (!snap.empty) {
+        for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
           const batch = writeBatch(db)
-          snap.docs.forEach(d => batch.delete(doc(db, col.name, d.id)))
+          snap.docs.slice(i, i + BATCH_LIMIT).forEach(d => batch.delete(doc(db, col.name, d.id)))
           await batch.commit()
         }
       }
 
-      // Step 2: Write restored data
+      // Step 2: Write restored data (chunked batches)
       for (const col of collectionsToRestore) {
-        for (const item of col.items) {
-          const { id, ...data } = item
-          const docId = id || doc(collection(db, col.name)).id
-          await setDoc(doc(db, col.name, docId), data)
+        for (let i = 0; i < col.items.length; i += BATCH_LIMIT) {
+          const batch = writeBatch(db)
+          for (const item of col.items.slice(i, i + BATCH_LIMIT)) {
+            const { id, ...data } = item
+            const docId = id || doc(collection(db, col.name)).id
+            batch.set(doc(db, col.name, docId), data)
+          }
+          await batch.commit()
         }
       }
 
@@ -301,6 +326,7 @@ export default function SettingsPage() {
       console.error('Error restoring backup:', error)
       alert('❌ Failed to restore backup. Please try again.')
     } finally {
+      releaseWakeLock(wakeLock)
       setRestoring(false)
     }
   }
@@ -322,24 +348,17 @@ export default function SettingsPage() {
 
     setPurging(true)
     setPurgeError('')
+    const wakeLock = await requestWakeLock()
 
     try {
-      // Delete all inventory items
-      const inventorySnap = await getDocs(collection(db, 'inventory'))
-      for (const docSnap of inventorySnap.docs) {
-        await deleteDoc(doc(db, 'inventory', docSnap.id))
-      }
-
-      // Delete all events
-      const eventsSnap = await getDocs(collection(db, 'events'))
-      for (const docSnap of eventsSnap.docs) {
-        await deleteDoc(doc(db, 'events', docSnap.id))
-      }
-
-      // Delete all general sales
-      const salesSnap = await getDocs(collection(db, 'generalSales'))
-      for (const docSnap of salesSnap.docs) {
-        await deleteDoc(doc(db, 'generalSales', docSnap.id))
+      // Delete all inventory items, events and general sales (chunked batches)
+      for (const colName of ['inventory', 'events', 'generalSales']) {
+        const snap = await getDocs(collection(db, colName))
+        for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+          const batch = writeBatch(db)
+          snap.docs.slice(i, i + BATCH_LIMIT).forEach(d => batch.delete(doc(db, colName, d.id)))
+          await batch.commit()
+        }
       }
 
       alert('All live data has been reset successfully!')
@@ -350,6 +369,7 @@ export default function SettingsPage() {
       console.error('Error purging data:', error)
       setPurgeError('Failed to reset data. Please try again.')
     } finally {
+      releaseWakeLock(wakeLock)
       setPurging(false)
     }
   }
@@ -503,6 +523,23 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* Non-admins: admin tools are hidden */}
+          {userRole !== 'admin' && (
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-lg border border-primary/10">
+              <h2 className="font-display text-xl font-bold text-primaryDark">Admins only</h2>
+              <p className="mt-2 text-sm text-muted">
+                Backup, restore and data reset are only available to administrators.
+              </p>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="mt-4 inline-flex min-h-11 items-center rounded-full border-2 border-primary/30 bg-white px-5 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-all duration-300"
+                type="button"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          )}
 
           {/* Backup & Restore Card - Admin Only */}
           {!demoMode && userRole === 'admin' && (
@@ -782,10 +819,10 @@ export default function SettingsPage() {
       {/* Restore Confirmation Modal */}
       {showRestoreConfirm && restoreFileData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={() => { setShowRestoreConfirm(false); setRestoreFileData(null) }}>
-          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-8 shadow-2xl animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl animate-fadeIn" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => { setShowRestoreConfirm(false); setRestoreFileData(null) }}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-300"
+              className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-300"
               type="button"
               aria-label="Close"
             >
@@ -839,6 +876,9 @@ export default function SettingsPage() {
                 </svg>
                 <p className="text-xs text-red-700 font-semibold">Warning: This will overwrite all existing data. Create a backup first if needed.</p>
               </div>
+              {restoring && (
+                <p className="text-center text-xs font-semibold text-amber-700" role="status">Keep this screen open until it finishes.</p>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -882,10 +922,10 @@ export default function SettingsPage() {
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" onClick={() => setShowPurgeConfirm(false)}>
-          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-8 shadow-2xl animate-fadeIn" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl animate-fadeIn" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowPurgeConfirm(false)}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-300"
+              className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors duration-300"
               type="button"
               aria-label="Close"
             >
@@ -919,6 +959,10 @@ export default function SettingsPage() {
                   placeholder="Type RESET2025"
                 />
               </div>
+
+              {purging && (
+                <p className="text-center text-xs font-semibold text-red-700" role="status">Keep this screen open until it finishes.</p>
+              )}
 
               {purgeError && (
                 <div className="rounded-xl bg-red-50 border border-red-200 p-3">

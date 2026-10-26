@@ -44,9 +44,10 @@ export function CookieConsent() {
       role="dialog"
       aria-modal="false"
       aria-label="Cookie preferences"
-      className="fixed inset-x-0 bottom-0 z-[100] px-3 pb-3 sm:px-4 sm:pb-4"
+      className="fixed inset-x-0 bottom-0 z-[60] px-3 pb-3 sm:px-4 sm:pb-4"
     >
-      <div className="mx-auto max-w-3xl rounded-2xl border border-primary/15 bg-white/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)] backdrop-blur-md sm:p-6">
+      {/* z-[60]: above the sticky header, below the cart drawer and modals. */}
+      <div className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl border border-primary/15 bg-white/95 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)] backdrop-blur-md sm:p-6">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">

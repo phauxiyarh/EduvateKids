@@ -80,14 +80,14 @@ export function PreorderModal({
     >
       <div className="sr-preorder-backdrop absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="sr-preorder-card relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.3)]">
+      <div className="sr-preorder-card relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-3xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.3)]">
         {/* header band */}
         <div className="relative bg-gradient-to-br from-primary to-secondary px-6 py-5 text-white">
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
+            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -136,13 +136,13 @@ export function PreorderModal({
 
             <div className="mt-4 grid gap-3">
               <label className="grid gap-1.5 text-sm font-semibold">Your Name *
-                <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                <input className={inputClass} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
               </label>
               <label className="grid gap-1.5 text-sm font-semibold">Email *
-                <input type="email" className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                <input type="email" autoComplete="email" className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
               </label>
               <label className="grid gap-1.5 text-sm font-semibold">Phone
-                <input type="tel" className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <input type="tel" autoComplete="tel" className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </label>
               <div className="grid gap-1.5 text-sm font-semibold">How many copies? *
                 <div className="flex items-center gap-3">

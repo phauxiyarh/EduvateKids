@@ -211,7 +211,8 @@ function CatalogInner() {
                 </svg>
               </div>
               <input
-                type="text"
+                type="search"
+                enterKeyHint="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by book title..."
@@ -281,6 +282,9 @@ function CatalogInner() {
                             key={imgIdx}
                             src={img}
                             alt={`${item.title} ${imgIdx + 1}`}
+                            // Only the cover is needed up front; the rest load as they come near.
+                            loading={imgIdx === 0 ? undefined : 'lazy'}
+                            decoding="async"
                             className={`absolute inset-0 h-full w-full object-contain p-3 transition-all duration-700 ease-out ${
                               imgIdx === (catalogSlider[item.id] ?? 0)
                                 ? 'opacity-100 scale-100'
@@ -299,7 +303,7 @@ function CatalogInner() {
                               const cur = catalogSlider[item.id] ?? 0
                               setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === 0 ? item.images.length - 1 : cur - 1 }))
                             }}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                            className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                           </button>
@@ -311,23 +315,28 @@ function CatalogInner() {
                               const cur = catalogSlider[item.id] ?? 0
                               setCatalogSlider((prev) => ({ ...prev, [item.id]: cur === item.images.length - 1 ? 0 : cur + 1 }))
                             }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                           </button>
-                          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                          {/* Padding gives each dot a 24px hit area; the visible dot stays small. */}
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex">
                             {item.images.map((_, dotIdx) => (
                               <button
                                 key={dotIdx}
                                 type="button"
                                 aria-label={`Go to image ${dotIdx + 1}`}
                                 onClick={(e) => { e.stopPropagation(); setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx })) }}
-                                className={`h-1.5 rounded-full transition-all duration-300 ${
-                                  dotIdx === (catalogSlider[item.id] ?? 0)
-                                    ? 'w-5 bg-white shadow-sm'
-                                    : 'w-1.5 bg-white/50 hover:bg-white/80'
-                                }`}
-                              />
+                                className="group/dot flex p-[9px]"
+                              >
+                                <span
+                                  className={`block h-1.5 rounded-full transition-all duration-300 ${
+                                    dotIdx === (catalogSlider[item.id] ?? 0)
+                                      ? 'w-5 bg-white shadow-sm'
+                                      : 'w-1.5 bg-white/50 group-hover/dot:bg-white/80'
+                                  }`}
+                                />
+                              </button>
                             ))}
                           </div>
                         </>
@@ -382,7 +391,7 @@ function CatalogInner() {
                           addItem({ id: item.id, title: item.title, price: item.price, image: item.images[0] })
                         }
                       }}
-                      className="btn-shine mt-2 sm:mt-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-secondary px-3 py-2 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                      className="btn-shine mt-2 sm:mt-3 flex w-full items-center justify-center gap-1.5 min-h-[40px] rounded-full bg-gradient-to-r from-primary to-secondary px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
                       aria-label={`Add ${item.title} to cart`}
                     >
                       <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>

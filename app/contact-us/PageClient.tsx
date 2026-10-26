@@ -213,7 +213,8 @@ export default function ContactUsPage() {
                 </div>
               </div>
 
-              <div ref={formReveal} className="reveal flex justify-center">
+              {/* Form first on mobile: it is what visitors came for. */}
+              <div ref={formReveal} className="reveal order-first flex justify-center md:order-none">
                 <div className="w-full">
                   {submitted ? (
                     <div className="animate-fadeIn rounded-3xl bg-gradient-to-br from-emerald-50 to-green-50 p-8 sm:p-10 shadow-soft border border-emerald-200 text-center">
@@ -244,6 +245,7 @@ export default function ContactUsPage() {
                           className={inputClass}
                           type="text"
                           name="name"
+                          autoComplete="name"
                           value={formData.name}
                           onChange={handleChange}
                           placeholder="Your full name"
@@ -257,6 +259,7 @@ export default function ContactUsPage() {
                           className={inputClass}
                           type="email"
                           name="email"
+                          autoComplete="email"
                           value={formData.email}
                           onChange={handleChange}
                           placeholder="your@email.com"
@@ -270,6 +273,7 @@ export default function ContactUsPage() {
                           className={inputClass}
                           type="tel"
                           name="phone"
+                          autoComplete="tel"
                           value={formData.phone}
                           onChange={handleChange}
                           placeholder="(555) 123-4567"

@@ -3,17 +3,41 @@
 import { useState } from 'react'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../../lib/firebase'
-import { isAdminHostAllowed } from '../../../lib/adminAccess'
+import { ADMIN_ALLOWED_HOSTS, isAdminHostAllowed } from '../../../lib/adminAccess'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import bg4 from '../../../assets/bg4.png'
 import logo from '../../../assets/logo.png'
 
+const CANONICAL_ADMIN_HOST = ADMIN_ALLOWED_HOSTS[0]
+
+/** Turn a Firebase Auth error into something staff can act on. */
+const friendlyAuthError = (err: unknown): string => {
+  const code = (err as { code?: string } | null)?.code ?? ''
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+    case 'auth/invalid-email':
+      return 'Email or password is incorrect.'
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a few minutes and try again.'
+    case 'auth/network-request-failed':
+      return 'No internet connection.'
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Contact an admin.'
+    default:
+      return 'Could not sign in. Please try again.'
+  }
+}
+
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [hostBlocked, setHostBlocked] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
@@ -21,10 +45,12 @@ export default function AdminLoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setHostBlocked(false)
 
     // Admin backend is only permitted from the canonical host.
     if (!isAdminHostAllowed()) {
-      setError('Login error. Please try again.')
+      setHostBlocked(true)
+      setError(`Staff sign-in only works at ${CANONICAL_ADMIN_HOST}.`)
       return
     }
 
@@ -33,8 +59,8 @@ export default function AdminLoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password)
       router.push('/dashboard')
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+    } catch (err) {
+      setError(friendlyAuthError(err))
     } finally {
       setLoading(false)
     }
@@ -50,7 +76,7 @@ export default function AdminLoginPage() {
           backgroundRepeat: 'repeat'
         }}
       />
-      <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-16">
+      <main className="relative z-10 mx-auto flex min-h-screen w-11/12 max-w-5xl items-center justify-center py-6 sm:py-16">
         <div className="animate-fadeIn grid w-full gap-6 sm:gap-10 rounded-3xl bg-white p-5 sm:p-10 shadow-soft md:grid-cols-[1.1fr_0.9fr]">
           <Link className="flex items-center gap-3 md:col-span-2 transition-all duration-300 hover:-translate-y-0.5" href="/">
             <Image
@@ -64,7 +90,8 @@ export default function AdminLoginPage() {
               <p className="font-display text-lg text-primaryDark">Eduvate Kids</p>
             </div>
           </Link>
-          <section>
+          {/* Marketing copy sits below the form on phones so the form is reachable without scrolling. */}
+          <section className="order-last md:order-none">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-accentThree">
               Admin Portal
             </p>
@@ -118,7 +145,20 @@ export default function AdminLoginPage() {
                     <line x1="12" y1="9" x2="12" y2="13" />
                     <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
-                  <span>{error}</span>
+                  <span>
+                    {error}
+                    {hostBlocked && (
+                      <>
+                        {' '}
+                        <a
+                          className="font-semibold underline"
+                          href={`https://${CANONICAL_ADMIN_HOST}/auth/login`}
+                        >
+                          Go to {CANONICAL_ADMIN_HOST}
+                        </a>
+                      </>
+                    )}
+                  </span>
                 </div>
               )}
               <label className="grid gap-1 font-semibold">
@@ -126,6 +166,12 @@ export default function AdminLoginPage() {
                 <input
                   className="rounded-xl border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30"
                   type="email"
+                  name="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="admin@eduvatekids.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -138,6 +184,8 @@ export default function AdminLoginPage() {
                   <input
                     className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 pr-12 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30"
                     type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="current-password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -146,7 +194,7 @@ export default function AdminLoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-muted transition-colors hover:text-primary"
+                    className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-muted transition-colors hover:text-primary"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (

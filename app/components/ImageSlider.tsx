@@ -130,7 +130,8 @@ export function ImageSlider({
       )}
 
       {showDots && multiple && (
-        <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+        // Padding gives each dot a 24px hit area; the visible dot stays small.
+        <div className="absolute bottom-0.5 left-1/2 z-10 flex -translate-x-1/2">
           {images.map((src, i) => (
             <button
               key={src}
@@ -141,10 +142,14 @@ export function ImageSlider({
                 e.stopPropagation()
                 setIndex(i)
               }}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === index ? 'w-5 bg-white shadow' : 'w-1.5 bg-white/60 hover:bg-white/90'
-              }`}
-            />
+              className="group/dot flex p-[9px]"
+            >
+              <span
+                className={`block h-1.5 rounded-full transition-all duration-300 ${
+                  i === index ? 'w-5 bg-white shadow' : 'w-1.5 bg-white/60 group-hover/dot:bg-white/90'
+                }`}
+              />
+            </button>
           ))}
         </div>
       )}

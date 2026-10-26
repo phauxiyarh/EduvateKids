@@ -1391,11 +1391,46 @@ export default function DashboardPage() {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return inventory
     return inventory.filter((item) =>
-      [item.title, item.publisher, item.category].some((field) =>
-        field.toLowerCase().includes(query)
+      // code/altCode so a cashier can type the ISBN off a book whose barcode won't scan
+      [item.title, item.publisher, item.category, item.code, item.altCode].some((field) =>
+        (field || '').toLowerCase().includes(query)
       )
     )
   }, [inventory, searchQuery])
+
+  // Where the POS will record the next sale. A sale rung up against the wrong
+  // group is the most common correction, so the checkout states it and warns
+  // when General Sales is picked while an event is running.
+  const activePosEvents = useMemo(() => events.filter((e) => e.status === 'active'), [events])
+  const posGroupName = selectedEventId === 'general'
+    ? 'General Sales'
+    : events.find((e) => e.id === selectedEventId)?.name ?? 'No event selected'
+  const posGeneralWhileEventActive = selectedEventId === 'general' && activePosEvents.length > 0
+
+  // Remember the POS group on this device. It used to reset to General Sales
+  // on every reload, so a phone that refreshed mid-event quietly started
+  // recording event sales as general ones.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('eduvate-pos-event')
+      if (saved) setSelectedEventId(saved)
+    } catch { /* storage unavailable */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('eduvate-pos-event', selectedEventId) } catch { /* ignore */ }
+  }, [selectedEventId])
+  useEffect(() => {
+    // Routine POS confirmations clear themselves so the toast never parks over
+    // the cart; warnings (⚠️) stay until the cashier dismisses them.
+    if (activeView !== 'pos' || !eventMessage || eventMessage.startsWith('⚠️')) return
+    const timer = setTimeout(() => setEventMessage(''), 5000)
+    return () => clearTimeout(timer)
+  }, [activeView, eventMessage])
+  useEffect(() => {
+    // Once events have loaded, drop a remembered event that has since closed.
+    if (!events.length || selectedEventId === 'general' || selectedEventId === '') return
+    if (!activePosEvents.some((e) => e.id === selectedEventId)) setSelectedEventId('general')
+  }, [events.length, activePosEvents, selectedEventId])
 
   const cartTotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -4238,22 +4273,24 @@ export default function DashboardPage() {
         const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
         const discAmt = editingOrder.discountType === 'percentage'
           ? sub * (editingOrder.discountValue / 100)
-          : editingOrder.discountValue
+          : Math.min(sub, editingOrder.discountValue)
         const afterDiscount = sub - discAmt
         const fee = editOrderPaymentType === 'Card' ? afterDiscount * 0.03 : 0
         return Number((afterDiscount + fee).toFixed(2))
       })(),
       discount: (() => {
         const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
+        // An amount discount can't exceed what's left once items are removed,
+        // or the edited order would total less than zero.
         return editingOrder.discountType === 'percentage'
           ? Number((sub * (editingOrder.discountValue / 100)).toFixed(2))
-          : editingOrder.discountValue
+          : Math.min(sub, editingOrder.discountValue)
       })(),
       convenienceFee: (() => {
         const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
         const discAmt = editingOrder.discountType === 'percentage'
           ? sub * (editingOrder.discountValue / 100)
-          : editingOrder.discountValue
+          : Math.min(sub, editingOrder.discountValue)
         const afterDiscount = sub - discAmt
         return editOrderPaymentType === 'Card' ? Number((afterDiscount * 0.03).toFixed(2)) : 0
       })()
@@ -4316,7 +4353,7 @@ export default function DashboardPage() {
               Real-time snapshot of sales momentum, inventory health, and top performing events.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setPulseVisible((v) => !v)}
@@ -5278,7 +5315,7 @@ export default function DashboardPage() {
             return next
           })
         }}
-        className="group absolute right-0 top-0 z-10 flex h-full w-3 translate-x-1/2 cursor-col-resize items-center justify-center touch-none"
+        className="group absolute right-0 top-0 z-10 hidden [@media(pointer:fine)]:flex h-full w-3 translate-x-1/2 cursor-col-resize items-center justify-center touch-none"
       >
         <span className="h-1/2 w-0.5 rounded bg-primaryDark/15 transition-colors group-hover:bg-primary" />
       </span>
@@ -6061,7 +6098,7 @@ export default function DashboardPage() {
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
           {[
             { label: 'Total Orders', value: String(orders.length) },
             { label: 'Awaiting Shipment', value: String(paidCount) },
@@ -6076,13 +6113,13 @@ export default function DashboardPage() {
 
         <div className="rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {(['all', 'paid', 'shipped', 'delivered', 'cancelled'] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => setOrderStatusFilter(f)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-bold capitalize transition-all duration-300 ${
+                  className={`rounded-full px-4 py-2 text-xs font-bold capitalize transition-all duration-300 ${
                     orderStatusFilter === f ? 'bg-gradient-to-r from-primary to-secondary text-white shadow' : 'bg-primary/5 text-primaryDark hover:bg-primary/10'
                   }`}
                 >
@@ -6127,14 +6164,14 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {filtered.map((o) => (
-                    <tr key={o.id} className="border-b border-black/5 transition hover:bg-primary/5">
+                    <tr key={o.id} onClick={() => setExpandedOrder(o)} className="cursor-pointer border-b border-black/5 transition hover:bg-primary/5">
                       <td className="py-3 pr-4 font-mono text-xs text-muted">{o.id.slice(0, 8)}…</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{o.customer?.name}</span><br /><span className="text-xs text-muted">{o.customer?.email}</span></td>
                       <td className="py-3 pr-4 text-muted">{fmtDate(o.createdAt)}</td>
                       <td className="py-3 pr-4 font-bold text-primaryDark">${o.total?.toFixed(2)}</td>
                       <td className="py-3 pr-4"><span className={orderStatusBadge(o.status)}>{o.status}</span></td>
                       <td className="py-3 text-right">
-                        <button type="button" onClick={() => setExpandedOrder(o)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
+                        <button type="button" onClick={() => setExpandedOrder(o)} className="rounded-full bg-primary/10 px-4 py-2 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
                       </td>
                     </tr>
                   ))}
@@ -6234,7 +6271,7 @@ export default function DashboardPage() {
     return (
       <div className="fade-up space-y-6">
         {/* Summary */}
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { label: 'Total Registered', value: String(summerReaders.length) },
             { label: 'Goals Met', value: String(goalsMet) },
@@ -6403,7 +6440,7 @@ export default function DashboardPage() {
                     const met = readerGoalMet(r)
                     const eligible = readerRaffleEligible(r)
                     return (
-                    <tr key={r.id} className="border-b border-black/5 transition hover:bg-primary/5">
+                    <tr key={r.id} onClick={() => setExpandedReader(r)} className="cursor-pointer border-b border-black/5 transition hover:bg-primary/5">
                       <td className="py-3 pr-4 font-mono text-xs text-muted">{r.code}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.childName}</span>{r.childAge != null && <><br /><span className="text-xs text-muted">Age {r.childAge}</span></>}</td>
                       <td className="py-3 pr-4"><span className="font-medium text-ink">{r.parentName}</span><br /><span className="text-xs text-muted">{r.parentEmail}</span></td>
@@ -6418,7 +6455,7 @@ export default function DashboardPage() {
                           : <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-semibold text-gray-500" title={r.country || 'Country not on file'}>Not eligible</span>}
                       </td>
                       <td className="py-3 text-right">
-                        <button type="button" onClick={() => setExpandedReader(r)} className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
+                        <button type="button" onClick={() => setExpandedReader(r)} className="rounded-full bg-primary/10 px-4 py-2 text-xs font-semibold text-primaryDark transition hover:bg-primary/20">View</button>
                       </td>
                     </tr>
                     )
@@ -6458,7 +6495,7 @@ export default function DashboardPage() {
     const totalCopies = bookRequests.reduce((s, r) => s + (r.quantity ?? 0), 0)
     return (
       <div className="fade-up space-y-6">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
           {[
             { label: 'Total Requests', value: String(bookRequests.length) },
             { label: 'Copies Requested', value: String(totalCopies) },
@@ -6932,12 +6969,69 @@ export default function DashboardPage() {
             )}
           </p>
         </div>
+        {/* Phones get cards: the table is ~1,450px wide, so on a 360px screen
+            the title scrolled away from its price, stock and buttons. */}
+        <ul className="md:hidden divide-y divide-black/5">
+          {sortedInventory.map((item) => (
+            <li key={item.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-gray-800 line-clamp-2">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-muted truncate">
+                    {item.category}{item.publisher ? ` · ${item.publisher}` : ''}
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                    {item.code ? (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700 border border-emerald-200">{item.code}</span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 font-bold text-gray-500 border border-gray-200">No code</span>
+                    )}
+                    {duplicateIds.has(item.id) && (
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-700 border border-red-200">Duplicate</span>
+                    )}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-bold text-primaryDark">${formatNumber(item.sellingPrice)}</p>
+                  {item.discount > 0 && <p className="text-[11px] text-muted line-through">${formatNumber(item.rrp)}</p>}
+                  <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    item.quantity <= 5
+                      ? 'bg-red-100 text-red-700 border border-red-200'
+                      : item.quantity <= restockThreshold
+                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                      : 'bg-green-100 text-green-700 border border-green-200'
+                  }`}>
+                    {item.quantity} in stock
+                  </span>
+                </div>
+              </div>
+              {userRole === 'admin' && (
+                <div className="mt-2 grid grid-cols-4 gap-2">
+                  <button type="button" onClick={() => openEditInventoryItem(item)} className="min-h-[40px] rounded-xl bg-blue-50 text-xs font-bold text-blue-700 border border-blue-200">Edit</button>
+                  {item.code ? (
+                    <button type="button" onClick={() => handleUnbindCode(item)} className="min-h-[40px] rounded-xl bg-amber-50 text-xs font-bold text-amber-700 border border-amber-200">Unbind</button>
+                  ) : (
+                    <button type="button" onClick={() => setBindTargetItem(item)} className="min-h-[40px] rounded-xl bg-purple-50 text-xs font-bold text-primaryDark border border-primary/30">Bind</button>
+                  )}
+                  <button type="button" onClick={() => openQrLabel(item)} className="min-h-[40px] rounded-xl bg-pink-50 text-xs font-bold text-secondary border border-secondary/30" aria-label={`Print QR label for ${item.title}`}>QR</button>
+                  <button type="button" onClick={() => handleDeleteInventoryItem(item)} className="min-h-[40px] rounded-xl bg-red-50 text-xs font-bold text-red-700 border border-red-200" aria-label={`Delete ${item.title}`}>Delete</button>
+                </div>
+              )}
+            </li>
+          ))}
+          {sortedInventory.length === 0 && (
+            <li className="px-6 py-10 text-center text-sm text-muted">
+              {inventorySearch.trim() ? <>No items match &ldquo;{inventorySearch.trim()}&rdquo;.</> : 'No inventory items yet.'}
+            </li>
+          )}
+        </ul>
+
         {/* Scrollbar above the header, mirroring the table's. Without it the
             only horizontal scrollbar sits below ~350 rows, off-screen. */}
         <div
           ref={topScrollRef}
           onScroll={syncScroll('top')}
-          className="inv-scroll overflow-x-auto overflow-y-hidden border-b border-primary/10"
+          className="hidden md:block inv-scroll overflow-x-auto overflow-y-hidden border-b border-primary/10"
           aria-hidden="true"
         >
           <div style={{ width: totalTableWidth, minWidth: '100%', height: 1 }} />
@@ -6949,7 +7043,7 @@ export default function DashboardPage() {
         <div
           ref={tableScrollRef}
           onScroll={syncScroll('table')}
-          className="inv-scroll overflow-x-auto overscroll-x-contain"
+          className="hidden md:block inv-scroll overflow-x-auto overscroll-x-contain"
         >
           <table className="text-sm table-fixed" style={{ width: totalTableWidth, minWidth: '100%' }}>
             <colgroup>
@@ -7156,7 +7250,7 @@ export default function DashboardPage() {
   )
 
   const renderPOS = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-28 lg:pb-0">
       {/* Left Column: Search & Browse */}
       <div className="lg:col-span-2 space-y-6">
         {/* Event Selection Card */}
@@ -7166,8 +7260,9 @@ export default function DashboardPage() {
               <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5a4 4 0 100 8 4 4 0 000-8zm0 3a1 1 0 100 2 1 1 0 000-2z" /></svg>
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-bold text-gray-700 mb-1">Select Event</label>
+              <label htmlFor="pos-event" className="block text-sm font-bold text-gray-700 mb-1">Select Event</label>
               <select
+                id="pos-event"
                 value={selectedEventId}
                 onChange={(event) => setSelectedEventId(event.target.value)}
                 className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
@@ -7184,6 +7279,11 @@ export default function DashboardPage() {
               </select>
             </div>
           </div>
+          {posGeneralWhileEventActive && (
+            <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              {activePosEvents.map((e) => e.name).join(', ')} {activePosEvents.length === 1 ? 'is' : 'are'} running, but sales are going to General Sales. Pick the event above if you are selling there.
+            </p>
+          )}
           {selectedEventId && selectedEventId !== 'general' && (
             <button
               onClick={() => {
@@ -7204,10 +7304,15 @@ export default function DashboardPage() {
           <div className="mb-6 flex items-stretch gap-3">
             <div className="relative flex-1">
               <input
-                type="text"
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Search products"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search products by title, publisher, or category..."
+                placeholder="Search title, ISBN, publisher..."
                 className="w-full h-full rounded-2xl border-2 border-primary/20 px-5 py-4 pr-12 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors shadow-sm"
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40">
@@ -7230,16 +7335,18 @@ export default function DashboardPage() {
           </div>
 
           {/* Product Grid */}
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          {/* Bounded scroll box on desktop only: on a phone a nested scroller
+              traps the thumb, so the list just flows with the page. */}
+          <div className="space-y-3 lg:max-h-[500px] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
             {filteredInventory.length ? (
               filteredInventory.map((item) => (
                 <div
                   key={item.id}
-                  className="group flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-purple-50/50 to-pink-50/50 hover:from-purple-50 hover:to-pink-50 border border-primary/10 hover:border-primary/20 hover:shadow-md transition-all duration-200"
+                  className="group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-50/50 to-pink-50/50 hover:from-purple-50 hover:to-pink-50 border border-primary/10 hover:border-primary/20 hover:shadow-md transition-all duration-200"
                 >
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-gray-800 text-sm mb-1 truncate">{item.title}</h4>
-                    <div className="flex items-center gap-3 text-xs text-muted">
+                    <h4 className="font-bold text-gray-800 text-sm mb-1 line-clamp-2 sm:truncate">{item.title}</h4>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                       <span className="px-2 py-1 rounded-full bg-white/80 border border-primary/10">
                         {item.category}
                       </span>
@@ -7248,11 +7355,11 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-primary mb-2">${formatNumber(item.sellingPrice)}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-lg sm:text-xl font-bold text-primary mb-2">${formatNumber(item.sellingPrice)}</p>
                     <button
                       onClick={() => handleAddToCart(item.id)}
-                      className="rounded-xl bg-gradient-to-r from-primary to-secondary px-4 py-2 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
+                      className="min-h-[44px] rounded-xl bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-bold text-white hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none"
                       type="button"
                       disabled={item.quantity === 0}
                     >
@@ -7282,7 +7389,7 @@ export default function DashboardPage() {
       {/* Right Column: Cart & Checkout */}
       <div className="space-y-6">
         {/* Shopping Cart Card */}
-        <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10 lg:sticky lg:top-6">
+        <div id="pos-cart" className="panel-card scroll-mt-24 rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10 lg:sticky lg:top-24">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 text-primaryDark">
@@ -7298,7 +7405,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Cart Items */}
-          <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 mb-6 lg:max-h-[300px] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
             {cartItems.length ? (
               cartItems.map((item) => (
                 <div key={item.itemId} className="p-3 rounded-xl bg-gradient-to-r from-purple-50/30 to-pink-50/30 border border-primary/10">
@@ -7309,8 +7416,9 @@ export default function DashboardPage() {
                     </div>
                     <button
                       onClick={() => handleRemoveFromCart(item.itemId)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                      className="-mr-1 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
                       type="button"
+                      aria-label={`Remove ${item.title}`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -7319,18 +7427,23 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      {/* − stops at 1: removing a line is the × button's job, so a
+                          mis-tap can't silently drop a book from the sale. */}
                       <button
                         onClick={() => handleUpdateCartQuantity(item.itemId, item.quantity - 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors disabled:opacity-40"
                         type="button"
+                        disabled={item.quantity <= 1}
+                        aria-label={`One fewer ${item.title}`}
                       >
                         <span className="text-sm font-bold">−</span>
                       </button>
-                      <span className="w-10 text-center font-bold text-sm">{item.quantity}</span>
+                      <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
                       <button
                         onClick={() => handleUpdateCartQuantity(item.itemId, item.quantity + 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-white border-2 border-primary/20 hover:border-primary/40 transition-colors"
                         type="button"
+                        aria-label={`One more ${item.title}`}
                       >
                         <span className="text-sm font-bold">+</span>
                       </button>
@@ -7408,7 +7521,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button
                     onClick={() => setDiscountType('percentage')}
-                    className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
                       discountType === 'percentage'
                         ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
                         : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
@@ -7419,7 +7532,7 @@ export default function DashboardPage() {
                   </button>
                   <button
                     onClick={() => setDiscountType('amount')}
-                    className={`py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
                       discountType === 'amount'
                         ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
                         : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
@@ -7435,8 +7548,14 @@ export default function DashboardPage() {
                     min={0}
                     max={discountType === 'percentage' ? 100 : cartTotal}
                     step={discountType === 'percentage' ? 1 : 0.01}
+                    inputMode="decimal"
                     value={discount || ''}
-                    onChange={(e) => setDiscount(Number(e.target.value))}
+                    onChange={(e) => {
+                      // Clamp as typed so the label never reads "150%" while the
+                      // maths quietly caps it at 100.
+                      const raw = Math.max(0, Number(e.target.value) || 0)
+                      setDiscount(discountType === 'percentage' ? Math.min(100, raw) : Math.min(cartTotal, raw))
+                    }}
                     placeholder={discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount'}
                     className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 focus:border-primary focus:outline-none transition-colors pr-10"
                   />
@@ -7488,31 +7607,82 @@ export default function DashboardPage() {
                     Complete Sale
                   </span>
                 </button>
+                {!selectedEventId && (
+                  <p className="text-center text-xs font-semibold text-red-600">Select an event above to complete the sale.</p>
+                )}
                 <button
-                  onClick={handleClearCart}
-                  className="w-full rounded-xl border-2 border-red-200 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  onClick={() => { if (confirm('Clear every item from the cart?')) handleClearCart() }}
+                  className="w-full min-h-[44px] rounded-xl border-2 border-red-200 py-3 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
                   type="button"
                 >
                   Clear Cart
                 </button>
               </div>
-
-              {eventMessage && (
-                <div className="mt-4 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200">
-                  <p className="text-xs text-center text-blue-700 font-medium">{eventMessage}</p>
-                </div>
-              )}
             </>
           )}
         </div>
       </div>
+
+      {/* Status toast. It used to sit at the foot of the cart, out of sight on a
+          phone and missing entirely while the cart was empty. */}
+      {eventMessage && (
+        <div
+          role="status"
+          className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[70] flex items-start gap-2 rounded-2xl border border-blue-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur lg:inset-x-auto lg:bottom-6 lg:right-6 lg:max-w-sm"
+        >
+          <p className="flex-1 text-sm font-medium text-blue-800">{eventMessage}</p>
+          <button
+            type="button"
+            onClick={() => setEventMessage('')}
+            aria-label="Dismiss message"
+            className="-m-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-blue-700 hover:bg-blue-50"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
+
+      {/* Phone checkout bar: the cart and total sit below the whole product
+          list on a phone, so keep the total and Checkout under the thumb. */}
+      {cartItems.length > 0 && (
+        <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-primary/15 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(124,58,237,0.12)] backdrop-blur">
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+            <span className={`truncate font-bold ${posGeneralWhileEventActive || !selectedEventId ? 'text-amber-700' : 'text-primaryDark'}`}>
+              {selectedEventId ? `→ ${posGroupName}` : 'No event selected'}
+            </span>
+            <button
+              type="button"
+              onClick={() => document.getElementById('pos-cart')?.scrollIntoView({ behavior: 'smooth' })}
+              className="shrink-0 font-bold text-primary underline underline-offset-2"
+            >
+              Edit cart
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!selectedEventId) {
+                document.getElementById('pos-event')?.focus()
+                return
+              }
+              setShowConfirmSale(true)
+            }}
+            className="flex min-h-[52px] w-full items-center justify-between rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 text-white shadow-lg"
+          >
+            <span className="text-sm font-bold">
+              {cartItems.reduce((sum, item) => sum + item.quantity, 0)} item{cartItems.reduce((sum, item) => sum + item.quantity, 0) !== 1 ? 's' : ''} · Checkout
+            </span>
+            <span className="text-lg font-bold">${formatNumber(totalWithFee)}</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 
   const renderEvents = () => (
     <div className="fade-up space-y-6">
-      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-6 shadow-xl border border-blue-200/50">
-        <div className="flex items-center justify-between">
+      <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-5 sm:p-6 shadow-xl border border-blue-200/50">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-accentThree shadow-soft">
               <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg>
@@ -7608,7 +7778,7 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => openEditEvent(event)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200 transition-all hover:scale-105"
                           type="button"
                           aria-label={`Edit ${event.name}`}
                         >
@@ -7617,7 +7787,7 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => setViewingEventTransactions(event)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                           type="button"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6m4 6V9m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -7625,7 +7795,7 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => setViewingOrderHistory(event)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                           type="button"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
@@ -7633,7 +7803,7 @@ export default function DashboardPage() {
                         </button>
                         <button
                           onClick={() => openExpenses(event)}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 border border-teal-200 transition-all hover:scale-105"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 border border-teal-200 transition-all hover:scale-105"
                           type="button"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -7642,7 +7812,7 @@ export default function DashboardPage() {
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
+                            className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 transition-all hover:scale-105"
                             type="button"
                             aria-label={`Delete ${event.name}`}
                           >
@@ -7705,7 +7875,7 @@ export default function DashboardPage() {
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
                           startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200 transition-all hover:scale-105"
                         type="button"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6m4 6V9m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -7716,7 +7886,7 @@ export default function DashboardPage() {
                           id: 'general', name: 'General Sales', type: 'Bazaar', location: 'Various',
                           startDate: '', endDate: '', cost: 0, status: 'active', sales: generalSales, orders: generalOrders, expenses: []
                         })}
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border border-amber-200 transition-all hover:scale-105"
                         type="button"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
@@ -7746,8 +7916,8 @@ export default function DashboardPage() {
       </div>
 
       {showCreateEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Create New Event</h4>
@@ -7823,6 +7993,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Vendor fee ($) *</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={newEventCost}
                   onChange={(event) => setNewEventCost(event.target.value)}
                   placeholder="e.g., 120"
@@ -7852,8 +8023,8 @@ export default function DashboardPage() {
       )}
 
       {editingEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Edit Event</h4>
@@ -7927,6 +8098,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Vendor fee ($) *</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={editEventCost}
                   onChange={(e) => setEditEventCost(e.target.value)}
                   placeholder="e.g., 120"
@@ -7972,8 +8144,8 @@ export default function DashboardPage() {
       )}
 
       {viewingEventTransactions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-8">
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">{viewingEventTransactions.name} - Sales Record</h4>
@@ -8099,439 +8271,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Order History Modal */}
-      {viewingOrderHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
-                <p className="mt-2 text-sm text-muted">
-                  {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {userRole === 'admin' && viewingOrderHistory.orders.length > 0 && (
-                  <button
-                    onClick={() => openMoveOrders(viewingOrderHistory.id, viewingOrderHistory.orders, true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition-colors"
-                    type="button"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                    Move by date
-                  </button>
-                )}
-                {viewingOrderHistory.orders.length > 0 && (
-                  <button
-                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
-                    type="button"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download TXT
-                  </button>
-                )}
-                <button
-                  onClick={() => setViewingOrderHistory(null)}
-                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                  type="button"
-                  aria-label="Close"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  <span>Close</span>
-                </button>
-              </div>
-            </div>
-
-            {viewingOrderHistory.orders.length === 0 ? (
-              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl flex flex-col items-center">
-                <svg className="h-14 w-14 mb-4 text-amber-500/50" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                <p className="text-lg font-semibold text-gray-700">No orders yet</p>
-                <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                {viewingOrderHistory.orders.map((order, idx) => (
-                  <div key={order.id} className="rounded-2xl border-2 border-amber-100 p-5 bg-gradient-to-br from-white to-amber-50/50 hover:border-amber-200 transition-all">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
-                          Order #{viewingOrderHistory.orders.length - idx}
-                        </p>
-                        <p className="text-xs text-muted inline-flex items-center gap-1.5">
-                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          {new Date(order.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                          order.paymentType === 'Cash'
-                            ? 'bg-green-100 text-green-700 border border-green-200'
-                            : order.paymentType === 'Card'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-purple-100 text-purple-700 border border-purple-200'
-                        }`}>
-                          {order.paymentType === 'Cash' ? '💵' : order.paymentType === 'Card' ? '💳' : '🏦'} {order.paymentType}
-                        </span>
-                        {userRole === 'admin' && (
-                          <>
-                            <button
-                              onClick={() => openEditOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Edit order"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openMoveOrders(viewingOrderHistory.id, [order], false)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Move order to another event"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                              Move
-                            </button>
-                            <button
-                              onClick={() => handleDeleteOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Delete order"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              Delete
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mb-3">
-                      {order.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-primary/5 text-sm">
-                          <div>
-                            <span className="font-semibold">{item.quantity}× </span>
-                            <span>{item.title}</span>
-                          </div>
-                          <span className="font-bold text-primaryDark">${formatNumber(item.lineTotal)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1 px-3 py-2 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/5 text-sm">
-                      <div className="flex justify-between text-muted">
-                        <span>Subtotal</span>
-                        <span>${formatNumber(order.subtotal)}</span>
-                      </div>
-                      {order.discount > 0 && (
-                        <div className="flex justify-between text-red-600">
-                          <span>Discount ({order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})</span>
-                          <span>-${formatNumber(order.discount)}</span>
-                        </div>
-                      )}
-                      {order.convenienceFee > 0 && (
-                        <div className="flex justify-between text-amber-600">
-                          <span>Card fee (3%)</span>
-                          <span>+${formatNumber(order.convenienceFee)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
-                        <span className="gradient-text">Total</span>
-                        <span className="gradient-text">${formatNumber(order.total)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {viewingOrderHistory.orders.length > 0 && (
-              <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Orders</p>
-                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
-                    <p className="text-2xl font-bold gradient-text">${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
-                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Order</p>
-                    <p className="text-2xl font-bold gradient-text">
-                      ${formatNumber(viewingOrderHistory.orders.length > 0
-                        ? viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0) / viewingOrderHistory.orders.length
-                        : 0
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Edit Order Modal (Admin Only) */}
-      {editingOrder && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-fadeIn my-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
-                <p className="mt-2 text-sm text-muted">
-                  {new Date(editingOrder.timestamp).toLocaleString()}
-                </p>
-              </div>
-              <button
-                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
-                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-                aria-label="Close"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-3 mb-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted">Items</label>
-              {editOrderItems.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
-                  <div className="flex-1">
-                    <p className="font-semibold text-sm">{item.title}</p>
-                    <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditOrderItems((prev) =>
-                          prev.map((it, idx) => idx === i && it.quantity > 1
-                            ? { ...it, quantity: it.quantity - 1, lineTotal: Number(((it.quantity - 1) * it.price).toFixed(2)) }
-                            : it
-                          )
-                        )
-                      }}
-                      className="w-7 h-7 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
-                      type="button"
-                    >
-                      −
-                    </button>
-                    <span className="w-8 text-center font-bold">{item.quantity}</span>
-                    <button
-                      onClick={() => {
-                        setEditOrderItems((prev) =>
-                          prev.map((it, idx) => idx === i
-                            ? { ...it, quantity: it.quantity + 1, lineTotal: Number(((it.quantity + 1) * it.price).toFixed(2)) }
-                            : it
-                          )
-                        )
-                      }}
-                      className="w-7 h-7 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <span className="font-bold text-primaryDark min-w-[70px] text-right">${formatNumber(item.quantity * item.price)}</span>
-                  <button
-                    onClick={() => setEditOrderItems((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="flex items-center justify-center w-8 h-8 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-colors"
-                    type="button"
-                    aria-label="Remove item"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Payment Type</label>
-              <select
-                value={editOrderPaymentType}
-                onChange={(e) => setEditOrderPaymentType(e.target.value as Sale['paymentType'])}
-                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-              >
-                <option value="Cash">💵 Cash</option>
-                <option value="Card">💳 Card</option>
-                <option value="Transfer">🏦 Transfer</option>
-              </select>
-            </div>
-
-            <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10 text-sm space-y-1 mb-6">
-              <div className="flex justify-between text-muted">
-                <span>Subtotal</span>
-                <span>${formatNumber(editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0))}</span>
-              </div>
-              {editingOrder.discountValue > 0 && (
-                <div className="flex justify-between text-red-600">
-                  <span>Discount ({editingOrder.discountType === 'percentage' ? `${editingOrder.discountValue}%` : `$${editingOrder.discountValue}`})</span>
-                  <span>-${formatNumber(
-                    editingOrder.discountType === 'percentage'
-                      ? editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0) * (editingOrder.discountValue / 100)
-                      : editingOrder.discountValue
-                  )}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
-                <span>Total</span>
-                <span className="gradient-text">${formatNumber((() => {
-                  const sub = editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0)
-                  const disc = editingOrder.discountType === 'percentage' ? sub * (editingOrder.discountValue / 100) : editingOrder.discountValue
-                  const after = sub - disc
-                  const fee = editOrderPaymentType === 'Card' ? after * 0.03 : 0
-                  return after + fee
-                })())}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
-                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEditOrder}
-                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                type="button"
-                disabled={editOrderItems.length === 0}
-              >
-                <span className="inline-flex items-center justify-center gap-2">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  Save Changes
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Move Orders Modal (Admin Only) */}
-      {moveRequest && (() => {
-        const sourceName = moveRequest.fromId === 'general'
-          ? 'General Sales'
-          : events.find((e) => e.id === moveRequest.fromId)?.name ?? 'this event'
-        const { orders: selected, strays } = moveSelection
-        const selectedTotal = selected.reduce((sum, o) => sum + o.total, 0) + strays.reduce((sum, s) => sum + s.total, 0)
-        const destinations = [
-          ...(moveRequest.fromId === 'general' ? [] : [{ id: 'general', label: '💰 General Sales' }]),
-          ...[...events]
-            .filter((e) => e.id !== moveRequest.fromId)
-            .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
-            .map((e) => ({
-              id: e.id,
-              label: `${e.name}${e.startDate ? ` · ${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` – ${e.endDate}` : ''}` : ''}${e.status === 'closed' ? ' (closed)' : ''}`
-            }))
-        ]
-        return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-            <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-8">
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <h4 className="font-display text-2xl gradient-text">
-                    {moveRequest.byDate ? 'Move Sales by Date' : 'Move Order'}
-                  </h4>
-                  <p className="mt-2 text-sm text-muted">
-                    From {sourceName}. Inventory is not changed, only where the sale is recorded.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setMoveRequest(null)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
-                  type="button"
-                  aria-label="Close"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {moveRequest.byDate && (
-                <div className="mb-4">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Sales made on</label>
-                  <input
-                    type="date"
-                    value={moveDate}
-                    onChange={(e) => setMoveDate(e.target.value)}
-                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-                  />
-                </div>
-              )}
-
-              <div className="mb-4">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Move to</label>
-                <select
-                  value={moveTargetId}
-                  onChange={(e) => setMoveTargetId(e.target.value)}
-                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
-                >
-                  <option value="">Choose an event…</option>
-                  {destinations.map((d) => (
-                    <option key={d.id} value={d.id}>{d.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/10 text-sm mb-4">
-                {selected.length === 0 && strays.length === 0 ? (
-                  <p className="text-muted">{moveRequest.byDate && !moveDate ? 'Pick a date.' : `No orders in ${sourceName} on this date.`}</p>
-                ) : (
-                  <div className="flex justify-between font-semibold">
-                    <span>
-                      {selected.length} order{selected.length !== 1 ? 's' : ''}
-                      {strays.length > 0 && ` + ${strays.length} sale record${strays.length !== 1 ? 's' : ''} without an order`}
-                    </span>
-                    <span className="gradient-text">${formatNumber(selectedTotal)}</span>
-                  </div>
-                )}
-              </div>
-
-              {eventMessage.startsWith('⚠️ Move') && (
-                <p className="mb-4 text-sm font-semibold text-red-600">{eventMessage}</p>
-              )}
-
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  onClick={() => setMoveRequest(null)}
-                  className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmMove}
-                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
-                  type="button"
-                  disabled={!moveTargetId || isMovingOrders || (selected.length === 0 && strays.length === 0)}
-                >
-                  {isMovingOrders ? 'Moving…' : 'Move'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
       {/* Expenses Modal */}
       {viewingExpenses && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-fadeIn my-8">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h4 className="font-display text-2xl gradient-text">{viewingExpenses.name} - Expenses</h4>
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-fadeIn my-auto">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+              <div className="min-w-0">
+                <h4 className="font-display text-xl sm:text-2xl gradient-text break-words">{viewingExpenses.name} - Expenses</h4>
                 <p className="mt-2 text-sm text-muted">
                   {viewingExpenses.expenses.length} expense{viewingExpenses.expenses.length !== 1 ? 's' : ''} · ${formatNumber(viewingExpenses.expenses.reduce((sum, e) => sum + e.amount, 0))} total
                 </p>
@@ -8591,6 +8337,7 @@ export default function DashboardPage() {
                     <label className="text-xs font-bold uppercase tracking-wider text-muted mb-1 block">Amount ($) *</label>
                     <input
                       type="number"
+                      inputMode="decimal"
                       value={expenseAmount}
                       onChange={(e) => setExpenseAmount(e.target.value)}
                       placeholder="0.00"
@@ -8858,7 +8605,7 @@ export default function DashboardPage() {
 
   const renderCatalogFormModal = (isEdit: boolean) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+      <div className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h4 className="font-display text-2xl gradient-text">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
@@ -9041,6 +8788,7 @@ export default function DashboardPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Price ($) *</label>
             <input
               type="number"
+              inputMode="decimal"
               value={catalogPrice}
               onChange={(e) => setCatalogPrice(e.target.value)}
               placeholder="e.g., 12.99"
@@ -9096,6 +8844,7 @@ export default function DashboardPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Stock</label>
             <input
               type="number"
+              inputMode="decimal"
               min={0}
               value={catalogQty}
               onChange={(e) => setCatalogQty(e.target.value)}
@@ -9344,7 +9093,7 @@ export default function DashboardPage() {
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+          className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
         >
           <div className="flex items-center justify-between gap-3 border-b border-black/5 bg-gradient-to-r from-primary/5 to-secondary/5 px-6 py-4">
             <div>
@@ -9405,6 +9154,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={shelfOrder}
                   onChange={(e) => setShelfOrder(e.target.value)}
                   placeholder="0"
@@ -9420,7 +9170,7 @@ export default function DashboardPage() {
                 </p>
                 {onShelf.length === 0 ? (
                   <p className="rounded-xl border-2 border-dashed border-primary/20 bg-primary/5 px-3 py-4 text-[11px] text-muted">
-                    No books yet. Pick some from the list on the right.
+                    No books yet. Pick some from the catalog list.
                   </p>
                 ) : (
                   <ul className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
@@ -9442,7 +9192,7 @@ export default function DashboardPage() {
                           type="button"
                           onClick={() => setShelfPendingBooks((prev) => prev.filter((id) => id !== item.id))}
                           aria-label={`Remove ${item.title} from this shelf`}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 transition hover:bg-red-200"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 transition hover:bg-red-200"
                         >
                           &times;
                         </button>
@@ -9459,7 +9209,8 @@ export default function DashboardPage() {
                 Add books from the catalog
               </label>
               <input
-                type="text"
+                type="search"
+                enterKeyHint="search"
                 value={shelfBookSearch}
                 onChange={(e) => setShelfBookSearch(e.target.value)}
                 placeholder="Search by title or publisher..."
@@ -9470,7 +9221,7 @@ export default function DashboardPage() {
                 {available.length === 60 && ', showing the first 60. Search to narrow it down.'}
               </p>
 
-              <div className="mt-3 grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+              <div className="mt-3 grid max-h-[52dvh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
                 {available.map((item) => (
                   <button
                     key={item.id}
@@ -9487,9 +9238,11 @@ export default function DashboardPage() {
                           No cover
                         </span>
                       )}
-                      <span className="absolute inset-0 flex items-center justify-center bg-primary/70 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">
+                      <span className="absolute inset-0 hidden items-center justify-center bg-primary/70 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100 [@media(hover:hover)]:flex">
                         + Add
                       </span>
+                      {/* Touch screens never see the hover overlay, so the tile needs a visible cue. */}
+                      <span className="absolute right-1 top-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-white shadow [@media(hover:hover)]:hidden">+ Add</span>
                     </span>
                     <span className="line-clamp-2 text-[11px] font-semibold leading-snug text-primaryDark">
                       {item.title}
@@ -9797,6 +9550,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Likes</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   value={postLikes}
                   onChange={(e) => setPostLikes(e.target.value)}
@@ -10351,6 +10105,7 @@ export default function DashboardPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Order</label>
             <input
               type="number"
+              inputMode="decimal"
               value={freebieOrder}
               onChange={(e) => setFreebieOrder(e.target.value)}
               placeholder="0"
@@ -10644,7 +10399,7 @@ export default function DashboardPage() {
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+              className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="font-display text-lg gradient-text">Details</h3>
@@ -11188,11 +10943,14 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* No z-index on the wrapper below or on <main>: either one makes a
+          stacking context below the z-50 header, which then covered the top of
+          every full-screen modal and the mobile menu drawer rendered inside it. */}
       {(() => {
         const navItems = NAV_ITEMS.filter((item) => userRole === 'admin' || item.id === 'pos')
         const current = NAV_ITEMS.find((n) => n.id === activeView) ?? NAV_ITEMS[0]
         return (
-      <div className="relative z-10 flex">
+      <div className="relative flex">
         {/* ── Left sidebar (desktop): collapsible icon rail ── */}
         <aside
           className={`sticky top-[71px] hidden md:flex h-[calc(100vh-71px)] flex-col border-r border-primary/10 bg-white/70 backdrop-blur-xl transition-all duration-300 ${sidebarCollapsed ? 'w-[74px]' : 'w-60'}`}
@@ -11239,7 +10997,7 @@ export default function DashboardPage() {
             <aside className="absolute left-0 top-0 h-full w-72 max-w-[82%] bg-white shadow-2xl animate-slideInLeft flex flex-col">
               <div className="flex items-center justify-between border-b border-primary/10 px-4 py-4">
                 <span className="font-display text-lg font-bold gradient-text">Menu</span>
-                <button onClick={() => setMobileMenuOpen(false)} type="button" aria-label="Close menu" className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 text-primaryDark hover:bg-primary/5">
+                <button onClick={() => setMobileMenuOpen(false)} type="button" aria-label="Close menu" className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 text-primaryDark hover:bg-primary/5">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -11266,7 +11024,7 @@ export default function DashboardPage() {
         )}
 
         {/* ── Main content ── */}
-        <main className="relative z-10 min-w-0 flex-1 px-4 py-8 md:px-8 md:py-10">
+        <main className="relative min-w-0 flex-1 px-4 py-8 md:px-8 md:py-10">
           <div className="mx-auto max-w-6xl">
             <section className="flex-1 space-y-8">
               <div className="fade-up">
@@ -11291,6 +11049,434 @@ export default function DashboardPage() {
       })()}
 
       {/* Global Modals - rendered outside page views */}
+      {/* Order history, edit and move are reachable from the POS view as well as
+          Events, so they live here rather than inside renderEvents(). */}
+      {/* Order History Modal */}
+      {viewingOrderHistory && (
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-auto">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {userRole === 'admin' && viewingOrderHistory.orders.length > 0 && (
+                  <button
+                    onClick={() => openMoveOrders(viewingOrderHistory.id, viewingOrderHistory.orders, true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                    type="button"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    Move by date
+                  </button>
+                )}
+                {viewingOrderHistory.orders.length > 0 && (
+                  <button
+                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
+                    type="button"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download TXT
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewingOrderHistory(null)}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                  aria-label="Close"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <span>Close</span>
+                </button>
+              </div>
+            </div>
+
+            {viewingOrderHistory.orders.length === 0 ? (
+              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl flex flex-col items-center">
+                <svg className="h-14 w-14 mb-4 text-amber-500/50" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                <p className="text-lg font-semibold text-gray-700">No orders yet</p>
+                <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
+              </div>
+            ) : (
+              <div className="space-y-4 sm:max-h-[600px] sm:overflow-y-auto sm:pr-2">
+                {viewingOrderHistory.orders.map((order, idx) => (
+                  <div key={order.id} className="rounded-2xl border-2 border-amber-100 p-4 sm:p-5 bg-gradient-to-br from-white to-amber-50/50 hover:border-amber-200 transition-all">
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
+                          Order #{viewingOrderHistory.orders.length - idx}
+                        </p>
+                        <p className="text-xs text-muted inline-flex items-center gap-1.5">
+                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          {new Date(order.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                          order.paymentType === 'Cash'
+                            ? 'bg-green-100 text-green-700 border border-green-200'
+                            : order.paymentType === 'Card'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-purple-100 text-purple-700 border border-purple-200'
+                        }`}>
+                          {order.paymentType === 'Cash' ? '💵' : order.paymentType === 'Card' ? '💳' : '🏦'} {order.paymentType}
+                        </span>
+                        {userRole === 'admin' && (
+                          <>
+                            <button
+                              onClick={() => openEditOrder(order)}
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
+                              type="button"
+                              aria-label="Edit order"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => openMoveOrders(viewingOrderHistory.id, [order], false)}
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
+                              type="button"
+                              aria-label="Move order to another event"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                              Move
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOrder(order)}
+                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
+                              type="button"
+                              aria-label="Delete order"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-3">
+                      {order.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-primary/5 text-sm">
+                          <div>
+                            <span className="font-semibold">{item.quantity}× </span>
+                            <span>{item.title}</span>
+                          </div>
+                          <span className="font-bold text-primaryDark">${formatNumber(item.lineTotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1 px-3 py-2 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/5 text-sm">
+                      <div className="flex justify-between text-muted">
+                        <span>Subtotal</span>
+                        <span>${formatNumber(order.subtotal)}</span>
+                      </div>
+                      {order.discount > 0 && (
+                        <div className="flex justify-between text-red-600">
+                          <span>Discount ({order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})</span>
+                          <span>-${formatNumber(order.discount)}</span>
+                        </div>
+                      )}
+                      {order.convenienceFee > 0 && (
+                        <div className="flex justify-between text-amber-600">
+                          <span>Card fee (3%)</span>
+                          <span>+${formatNumber(order.convenienceFee)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
+                        <span className="gradient-text">Total</span>
+                        <span className="gradient-text">${formatNumber(order.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {viewingOrderHistory.orders.length > 0 && (
+              <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Orders</p>
+                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
+                    <p className="text-2xl font-bold gradient-text">${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
+                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Order</p>
+                    <p className="text-2xl font-bold gradient-text">
+                      ${formatNumber(viewingOrderHistory.orders.length > 0
+                        ? viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0) / viewingOrderHistory.orders.length
+                        : 0
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Order Modal (Admin Only) */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-[60] flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-fadeIn my-auto">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
+                <p className="mt-2 text-sm text-muted">
+                  {new Date(editingOrder.timestamp).toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted">Items</label>
+              {editOrderItems.map((item, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                  <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                    <p className="font-semibold text-sm">{item.title}</p>
+                    <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditOrderItems((prev) =>
+                          prev.map((it, idx) => idx === i && it.quantity > 1
+                            ? { ...it, quantity: it.quantity - 1, lineTotal: Number(((it.quantity - 1) * it.price).toFixed(2)) }
+                            : it
+                          )
+                        )
+                      }}
+                      className="h-10 w-10 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
+                      type="button"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center font-bold">{item.quantity}</span>
+                    <button
+                      onClick={() => {
+                        setEditOrderItems((prev) =>
+                          prev.map((it, idx) => idx === i
+                            ? { ...it, quantity: it.quantity + 1, lineTotal: Number(((it.quantity + 1) * it.price).toFixed(2)) }
+                            : it
+                          )
+                        )
+                      }}
+                      className="h-10 w-10 rounded-full bg-white border-2 border-primary/20 text-sm font-bold hover:bg-primary/10 transition-colors"
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="ml-auto font-bold text-primaryDark min-w-[70px] text-right">${formatNumber(item.quantity * item.price)}</span>
+                  <button
+                    onClick={() => setEditOrderItems((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="flex items-center justify-center h-10 w-10 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition-colors"
+                    type="button"
+                    aria-label="Remove item"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Payment Type</label>
+              <select
+                value={editOrderPaymentType}
+                onChange={(e) => setEditOrderPaymentType(e.target.value as Sale['paymentType'])}
+                className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+              >
+                <option value="Cash">💵 Cash</option>
+                <option value="Card">💳 Card</option>
+                <option value="Transfer">🏦 Transfer</option>
+              </select>
+            </div>
+
+            <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-primary/5 border border-primary/10 text-sm space-y-1 mb-6">
+              <div className="flex justify-between text-muted">
+                <span>Subtotal</span>
+                <span>${formatNumber(editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0))}</span>
+              </div>
+              {editingOrder.discountValue > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Discount ({editingOrder.discountType === 'percentage' ? `${editingOrder.discountValue}%` : `$${editingOrder.discountValue}`})</span>
+                  <span>-${formatNumber(
+                    editingOrder.discountType === 'percentage'
+                      ? editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0) * (editingOrder.discountValue / 100)
+                      : Math.min(editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0), editingOrder.discountValue)
+                  )}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
+                <span>Total</span>
+                <span className="gradient-text">${formatNumber((() => {
+                  const sub = editOrderItems.reduce((sum, it) => sum + it.quantity * it.price, 0)
+                  const disc = editingOrder.discountType === 'percentage' ? sub * (editingOrder.discountValue / 100) : Math.min(sub, editingOrder.discountValue)
+                  const after = sub - disc
+                  const fee = editOrderPaymentType === 'Card' ? after * 0.03 : 0
+                  return after + fee
+                })())}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => { setEditingOrder(null); setEditOrderItems([]); }}
+                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEditOrder}
+                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                type="button"
+                disabled={editOrderItems.length === 0}
+              >
+                <span className="inline-flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Save Changes
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move Orders Modal (Admin Only) */}
+      {moveRequest && (() => {
+        const sourceName = moveRequest.fromId === 'general'
+          ? 'General Sales'
+          : events.find((e) => e.id === moveRequest.fromId)?.name ?? 'this event'
+        const { orders: selected, strays } = moveSelection
+        const selectedTotal = selected.reduce((sum, o) => sum + o.total, 0) + strays.reduce((sum, s) => sum + s.total, 0)
+        const destinations = [
+          ...(moveRequest.fromId === 'general' ? [] : [{ id: 'general', label: '💰 General Sales' }]),
+          ...[...events]
+            .filter((e) => e.id !== moveRequest.fromId)
+            .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+            .map((e) => ({
+              id: e.id,
+              label: `${e.name}${e.startDate ? ` · ${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` – ${e.endDate}` : ''}` : ''}${e.status === 'closed' ? ' (closed)' : ''}`
+            }))
+        ]
+        return (
+          <div className="fixed inset-0 z-[60] flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+            <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-auto">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h4 className="font-display text-2xl gradient-text">
+                    {moveRequest.byDate ? 'Move Sales by Date' : 'Move Order'}
+                  </h4>
+                  <p className="mt-2 text-sm text-muted">
+                    From {sourceName}. Inventory is not changed, only where the sale is recorded.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setMoveRequest(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                  aria-label="Close"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {moveRequest.byDate && (
+                <div className="mb-4">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Sales made on</label>
+                  <input
+                    type="date"
+                    value={moveDate}
+                    onChange={(e) => setMoveDate(e.target.value)}
+                    className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                  />
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Move to</label>
+                <select
+                  value={moveTargetId}
+                  onChange={(e) => setMoveTargetId(e.target.value)}
+                  className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
+                >
+                  <option value="">Choose an event…</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/10 text-sm mb-4">
+                {selected.length === 0 && strays.length === 0 ? (
+                  <p className="text-muted">{moveRequest.byDate && !moveDate ? 'Pick a date.' : `No orders in ${sourceName} on this date.`}</p>
+                ) : (
+                  <div className="flex justify-between font-semibold">
+                    <span>
+                      {selected.length} order{selected.length !== 1 ? 's' : ''}
+                      {strays.length > 0 && ` + ${strays.length} sale record${strays.length !== 1 ? 's' : ''} without an order`}
+                    </span>
+                    <span className="gradient-text">${formatNumber(selectedTotal)}</span>
+                  </div>
+                )}
+              </div>
+
+              {eventMessage.startsWith('⚠️ Move') && (
+                <p className="mb-4 text-sm font-semibold text-red-600">{eventMessage}</p>
+              )}
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setMoveRequest(null)}
+                  className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmMove}
+                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                  type="button"
+                  disabled={!moveTargetId || isMovingOrders || (selected.length === 0 && strays.length === 0)}
+                >
+                  {isMovingOrders ? 'Moving…' : 'Move'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {showCreateCatalog && renderCatalogFormModal(false)}
       {editingCatalogItem && renderCatalogFormModal(true)}
 
@@ -11327,7 +11513,7 @@ export default function DashboardPage() {
         const remaining = scanCartConfirm.quantity - inCart
         return (
           <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setScanCartConfirm(null)}>
-            <div className="w-full sm:max-w-sm max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full sm:max-w-sm max-h-[92dvh] overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6 rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start gap-3">
                 <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
@@ -11352,11 +11538,21 @@ export default function DashboardPage() {
               {remaining <= 0 && (
                 <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">No remaining stock for this book.</p>
               )}
-              <div className="mt-5 flex gap-3">
+              {/* Add & scan next is the primary action: ringing up a pile of books
+                  otherwise took scan, confirm, reopen the camera, per book. */}
+              <button
+                type="button"
+                onClick={() => { confirmScanToCart(); setPosScannerOpen(true) }}
+                disabled={remaining <= 0}
+                className="mt-5 w-full min-h-[48px] rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-3 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                Add &amp; scan next
+              </button>
+              <div className="mt-3 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setScanCartConfirm(null)}
-                  className="flex-1 rounded-full border-2 border-primary/20 px-4 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5"
+                  className="flex-1 min-h-[44px] rounded-full border-2 border-primary/20 px-4 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5"
                 >
                   Cancel
                 </button>
@@ -11364,9 +11560,9 @@ export default function DashboardPage() {
                   type="button"
                   onClick={confirmScanToCart}
                   disabled={remaining <= 0}
-                  className="flex-1 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                  className="flex-1 min-h-[44px] rounded-full border-2 border-primary/30 px-4 py-2.5 text-sm font-bold text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
                 >
-                  Add to cart
+                  Add &amp; finish
                 </button>
               </div>
             </div>
@@ -11377,7 +11573,7 @@ export default function DashboardPage() {
       {/* Scan-to-inventory confirmation: add a chosen quantity to a matched book's stock */}
       {scanStockConfirm && (
         <div className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setScanStockConfirm(null)}>
-          <div className="w-full sm:max-w-sm max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full sm:max-w-sm max-h-[92dvh] overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6 rounded-t-3xl sm:rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 011-1h2m10 0h2a1 1 0 011 1v2m0 10v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M4 12h16" /></svg>
@@ -11408,6 +11604,7 @@ export default function DashboardPage() {
                 </button>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={1}
                   value={scanStockQty}
                   onChange={(e) => setScanStockQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
@@ -11487,7 +11684,7 @@ export default function DashboardPage() {
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:px-4 animate-fadeIn">
-          <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+          <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-8 rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">
@@ -11573,6 +11770,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">RRP ($)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step={0.01}
                   value={invEditRrp}
@@ -11585,6 +11783,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Discount %</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   max={100}
                   step={1}
@@ -11598,6 +11797,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Quantity *</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step={1}
                   value={invEditQuantity}
@@ -11610,6 +11810,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Selling Price ($) *</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step={0.01}
                   value={invEditSellingPrice}
@@ -11622,6 +11823,7 @@ export default function DashboardPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Weight (grams)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step={1}
                   value={invEditWeight}
@@ -11667,16 +11869,14 @@ export default function DashboardPage() {
 
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-8">
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
                 <p className="mt-2 text-sm text-muted">
-                  {selectedEventId === 'general'
-                    ? 'General Sales (no event)'
-                    : events.find((event) => event.id === selectedEventId)?.name ??
-                      'Selected event'}
+                  Recording to{' '}
+                  <span className="font-bold text-primaryDark">{posGroupName}</span>
                 </p>
               </div>
               <button
@@ -11691,10 +11891,16 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-1">
+            {posGeneralWhileEventActive && (
+              <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                {activePosEvents.map((e) => e.name).join(', ')} {activePosEvents.length === 1 ? 'is' : 'are'} running. Is this sale really for General Sales?
+              </p>
+            )}
+
+            <div className="space-y-3 mb-6 sm:max-h-[300px] sm:overflow-y-auto sm:pr-1">
               {cartItems.map((item) => (
-                <div key={item.itemId} className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
-                  <div>
+                <div key={item.itemId} className="flex items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
+                  <div className="min-w-0">
                     <p className="font-semibold">{item.title}</p>
                     <p className="text-xs text-muted mt-1">
                       {item.quantity} x ${formatNumber(item.price)}
@@ -11711,6 +11917,16 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Subtotal</span>
                 <span className="font-semibold">${formatNumber(cartTotal)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between text-sm text-green-600">
+                  <span>Discount ({discountType === 'percentage' ? `${discount}%` : `$${formatNumber(discount)}`})</span>
+                  <span className="font-semibold">-${formatNumber(discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Payment</span>
+                <span className="font-semibold">{paymentType}</span>
               </div>
               {paymentType === 'Card' && (
                 <div className="flex items-center justify-between text-sm text-amber-600">
@@ -11729,17 +11945,17 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="mt-8 flex items-center justify-end gap-3">
+            <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <button
                 onClick={() => setShowConfirmSale(false)}
-                className="rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
+                className="w-full sm:w-auto rounded-full border-2 border-primary/20 px-6 py-3 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleRecordSale()}
-                className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
+                className="w-full sm:w-auto rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3.5 text-sm font-bold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50"
                 type="button"
                 disabled={isSubmittingSale}
               >
@@ -11767,12 +11983,19 @@ export default function DashboardPage() {
           transition: transform 0.35s ease, box-shadow 0.35s ease;
         }
 
-        .panel-card:hover {
-          transform: translateY(-4px);
+        /* Hover only where there is a real pointer: on touch, :hover sticks after
+           a tap, so cards jumped on every tap. Any transform also turns the card
+           into the containing block for position:fixed, trapping its modals. */
+        @media (hover: hover) {
+          .panel-card:hover {
+            transform: translateY(-4px);
+          }
         }
 
+        /* backwards, not both: a fill that outlives the animation keeps a
+           transform on the view root, which traps its fixed modals inside it. */
         .fade-up {
-          animation: fade-up 0.6s ease both;
+          animation: fade-up 0.6s ease backwards;
         }
 
         @keyframes fade-up {
@@ -11844,13 +12067,13 @@ export default function DashboardPage() {
       {/* Online order detail modal */}
       {expandedOrder && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedOrder(null)}>
-          <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0 rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">Order Details</h3>
                 <p className="font-mono text-xs text-muted">{expandedOrder.id}</p>
               </div>
-              <button type="button" onClick={() => setExpandedOrder(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+              <button type="button" onClick={() => setExpandedOrder(null)} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -11867,16 +12090,16 @@ export default function DashboardPage() {
                     <li key={idx} className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 p-2 text-sm">
                       <span className="min-w-0 flex-1 truncate text-ink" title={it.title}>{it.title}</span>
                       <div className="flex items-center gap-1 rounded-full border border-gray-200">
-                        <button type="button" aria-label={`Decrease ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
+                        <button type="button" aria-label={`Decrease ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)) : cur)} className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
                         </button>
                         <span className="min-w-[1.5rem] text-center font-semibold">{it.quantity}</span>
-                        <button type="button" aria-label={`Increase ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: x.quantity + 1 } : x)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
+                        <button type="button" aria-label={`Increase ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.map((x, i) => i === idx ? { ...x, quantity: x.quantity + 1 } : x)) : cur)} className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-gray-100">
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         </button>
                       </div>
                       <span className="w-16 text-right font-semibold text-primaryDark">${it.lineTotal?.toFixed(2)}</span>
-                      <button type="button" aria-label={`Remove ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.filter((_, i) => i !== idx)) : cur)} className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition hover:bg-red-50 hover:text-red-500">
+                      <button type="button" aria-label={`Remove ${it.title}`} onClick={() => setExpandedOrder((cur) => cur ? recomputeOrder(cur, cur.items.filter((_, i) => i !== idx)) : cur)} className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-red-50 hover:text-red-500">
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     </li>
@@ -12005,7 +12228,7 @@ export default function DashboardPage() {
       {/* Purchase-email draft preview */}
       {purchaseEmailPreview && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setPurchaseEmailPreview(null)}>
-          <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0 rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/10 bg-white/95 backdrop-blur px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">Email draft</h3>
@@ -12042,13 +12265,13 @@ export default function DashboardPage() {
 
       {expandedReader && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedReader(null)}>
-          <div className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0 rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">{expandedReader.childName}</h3>
                 <p className="font-mono text-xs text-muted">{expandedReader.code}</p>
               </div>
-              <button type="button" onClick={() => setExpandedReader(null)} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
+              <button type="button" onClick={() => setExpandedReader(null)} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-gray-100 hover:text-ink">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>

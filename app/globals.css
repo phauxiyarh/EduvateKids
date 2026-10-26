@@ -20,6 +20,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* iOS Safari zooms the page when a field under 16px takes focus, and the zoom
+   stays after the keyboard closes. Nearly every field in the app is text-sm, so
+   one rule here beats editing each one. !important because a bare element
+   selector loses to Tailwind's text-* classes on specificity. Desktop keeps the
+   smaller text. Never "fix" this with maximum-scale=1: it blocks pinch zoom. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Visible keyboard focus ring across all interactive elements */
 a:focus-visible,
 button:focus-visible,
@@ -535,6 +548,8 @@ textarea:focus-visible,
   font-size: 1.0625rem;
   line-height: 1.85;
   color: rgba(31, 41, 55, 0.9);
+  /* A pasted URL is one unbreakable word; without this it widens the page on a phone. */
+  overflow-wrap: anywhere;
 }
 .article-body > p:first-of-type {
   /* Lead paragraph, slightly larger to ease the reader in. */

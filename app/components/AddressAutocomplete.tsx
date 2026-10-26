@@ -106,7 +106,8 @@ export function AddressAutocomplete({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      autoComplete="off"
+      // Google's dropdown fights the browser's, so only opt out when it is active.
+      autoComplete={KEY ? 'off' : 'address-line1'}
       required
     />
   )

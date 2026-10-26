@@ -1,15 +1,13 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useCart } from '../../../lib/cart'
 import type { CatalogProduct } from '../../../lib/catalogBuild'
-import { EventNavDropdown } from '../../components/EventNavDropdown'
-import { HeaderCart } from '../../components/HeaderCart'
 import { BookPlaceholder } from '../../components/BookPlaceholder'
+import { PreorderModal } from '../../components/PreorderModal'
+import { SiteHeader } from '../../components/SiteChrome'
 import { trackViewItem } from '../../../lib/analytics'
-import logo from '../../../assets/logo.png'
 
 /**
  * Product detail view. The surrounding page is a server component, so the
@@ -28,6 +26,7 @@ export default function ProductPageClient({
   const { addItem, openCart } = useCart()
   const [activeImage, setActiveImage] = useState(0)
   const [added, setAdded] = useState(false)
+  const [preorderOpen, setPreorderOpen] = useState(false)
 
   // Feeds GA4's standard ecommerce funnel: view_item -> add_to_cart ->
   // begin_checkout -> purchase. add_to_cart is reported from the cart itself.
@@ -42,62 +41,15 @@ export default function ProductPageClient({
     setTimeout(() => setAdded(false), 2000)
   }
 
-  const navItems = [
-    { label: 'Home', href: '/', icon: 'M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10' },
-    {
-      label: 'Catalog',
-      href: '/catalog',
-      icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
-    },
-    {
-      label: 'Shelves',
-      href: '/shelves',
-      icon: 'M6 5v10M10 7v8M14 4v11M18 8v7M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5'
-    }
-  ]
+  // Out of stock offers the same reserve flow as the catalog instead of a
+  // dead button. Shared by the inline button and the mobile buy bar.
+  const handleBuy = inStock ? handleAdd : () => setPreorderOpen(true)
+  const buyLabel = added ? 'Added to cart ✓' : inStock ? 'Add to cart' : 'Reserve a copy'
 
   return (
-    <div className="min-h-screen text-ink">
-      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
-        <div className="pointer-events-none absolute inset-0 -z-10 backdrop-blur-xl" aria-hidden="true" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-3 sm:gap-6 py-3">
-          <Link className="group flex items-center gap-2 sm:gap-3 min-w-0" href="/">
-            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 transition-transform duration-500 group-hover:rotate-6" />
-            <span className="flex flex-col min-w-0 leading-tight">
-              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">Islamic Bookstore</span>
-            </span>
-          </Link>
-          <nav className="hidden flex-1 justify-center items-center gap-1 md:flex">
-            {navItems.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-            <EventNavDropdown />
-            <Link
-              href="/faqs"
-              className="flex items-center gap-2 rounded-full bg-primary/5 px-4 py-2.5 text-sm font-bold text-primaryDark transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>FAQs</span>
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <HeaderCart />
-          </div>
-        </div>
-      </header>
+    // Bottom padding below lg keeps the footer clear of the fixed buy bar.
+    <div className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))] text-ink lg:pb-0">
+      <SiteHeader current="/catalog" />
 
       <main className="mx-auto w-11/12 max-w-6xl py-8 sm:py-12">
         {/* Breadcrumb — also an internal link path for crawlers. */}
@@ -184,12 +136,14 @@ export default function ProductPageClient({
             <div className="mt-6">
               <button
                 type="button"
-                onClick={handleAdd}
-                disabled={!inStock}
-                className="w-full rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 text-base font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0 sm:w-auto"
+                onClick={handleBuy}
+                className="w-full rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 text-base font-bold text-white shadow-soft transition-all hover:shadow-lg hover:-translate-y-0.5 sm:w-auto"
               >
-                {added ? 'Added to cart ✓' : inStock ? 'Add to cart' : 'Out of stock'}
+                {buyLabel}
               </button>
+              {!inStock && (
+                <p className="mt-2 text-xs text-muted">Free to reserve. We&apos;ll email you when it&apos;s back.</p>
+              )}
             </div>
 
             {product.description && (
@@ -236,6 +190,30 @@ export default function ProductPageClient({
           </nav>
         </div>
       </footer>
+
+      {/* Mobile buy bar: price and the same action, always within thumb reach. */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs text-muted">{product.title}</p>
+            <p className="text-lg font-bold leading-tight text-primaryDark">${product.price.toFixed(2)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleBuy}
+            className="min-h-[44px] flex-shrink-0 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-bold text-white shadow-soft transition active:scale-[0.98]"
+          >
+            {buyLabel}
+          </button>
+        </div>
+      </div>
+
+      {preorderOpen && (
+        <PreorderModal
+          book={{ id: product.id, title: product.title, image: product.images[0] }}
+          onClose={() => setPreorderOpen(false)}
+        />
+      )}
     </div>
   )
 }

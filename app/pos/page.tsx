@@ -2,9 +2,11 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { collection, doc, getDocs, increment, writeBatch } from 'firebase/firestore'
+import { auth, db } from '../../lib/firebase'
 import { BarcodeScanner } from '../components/BarcodeScanner'
 import logo from '../../assets/logo.png'
 
@@ -54,6 +56,7 @@ const categoryColors: Record<InventoryCategory, string> = {
 }
 
 export default function POSPage() {
+  const router = useRouter()
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -62,50 +65,77 @@ export default function POSPage() {
   const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessageText] = useState('')
+  // Bumped on every message so a repeated identical message restarts the dismiss timer.
+  const [messageId, setMessageId] = useState(0)
+  const setMessage = useCallback((text: string) => {
+    setMessageText(text)
+    setMessageId((id) => id + 1)
+  }, [])
+  const [loadError, setLoadError] = useState('')
+  // Raw text of a quantity input while it is being edited (so clearing it doesn't remove the line).
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({})
+  const cartRef = useRef<HTMLDivElement>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [discount, setDiscount] = useState(0)
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage')
 
-  useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        const inventorySnap = await getDocs(collection(db, 'inventory'))
+  const fetchInventory = useCallback(async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      const inventorySnap = await getDocs(collection(db, 'inventory'))
 
-        if (!inventorySnap.empty) {
-          // Filter for _live items only (same as admin dashboard)
-          const items = inventorySnap.docs
-            .filter((d) => d.data()._live === true)
-            .map((d) => {
-              const data = d.data()
-              return {
-                id: d.id,
-                title: String(data.title ?? ''),
-                category: String(data.category ?? 'Books') as InventoryCategory,
-                publisher: String(data.publisher ?? ''),
-                rrp: Number(data.rrp ?? 0),
-                discount: Number(data.discount ?? 0),
-                quantity: Number(data.quantity ?? 0),
-                sellingPrice: Number(data.sellingPrice ?? 0),
-                // Fall back to the legacy sku/isbn pair for docs that predate
-                // the unified code field.
-                code: String(data.code ?? data.isbn ?? data.sku ?? ''),
-                altCode: String(data.altCode ?? '')
-              }
-            })
-            .filter((item) => item.title) // Only include items with titles
-          setInventory(items)
-        }
-      } catch (error) {
-        console.error('Failed to fetch inventory:', error)
-      } finally {
-        setLoading(false)
+      if (!inventorySnap.empty) {
+        // Filter for _live items only (same as admin dashboard)
+        const items = inventorySnap.docs
+          .filter((d) => d.data()._live === true)
+          .map((d) => {
+            const data = d.data()
+            return {
+              id: d.id,
+              title: String(data.title ?? ''),
+              category: String(data.category ?? 'Books') as InventoryCategory,
+              publisher: String(data.publisher ?? ''),
+              rrp: Number(data.rrp ?? 0),
+              discount: Number(data.discount ?? 0),
+              quantity: Number(data.quantity ?? 0),
+              sellingPrice: Number(data.sellingPrice ?? 0),
+              // Fall back to the legacy sku/isbn pair for docs that predate
+              // the unified code field.
+              code: String(data.code ?? data.isbn ?? data.sku ?? ''),
+              altCode: String(data.altCode ?? '')
+            }
+          })
+          .filter((item) => item.title) // Only include items with titles
+        setInventory(items)
       }
+    } catch (error) {
+      console.error('Failed to fetch inventory:', error)
+      setLoadError('Could not load inventory. Check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
-
-    fetchInventory()
   }, [])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push('/auth/login')
+        return
+      }
+      void fetchInventory()
+    })
+    return () => unsubscribe()
+  }, [router, fetchInventory])
+
+  // Auto-dismiss the toast.
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => setMessageText(''), 3500)
+    return () => clearTimeout(timer)
+  }, [message, messageId])
 
   const filteredInventory = useMemo(() => {
     const query = searchQuery.toLowerCase()
@@ -113,7 +143,9 @@ export default function POSPage() {
       const matchesSearch =
         item.title.toLowerCase().includes(query) ||
         item.publisher.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query)
+        item.category.toLowerCase().includes(query) ||
+        item.code.toLowerCase().includes(query) ||
+        item.altCode.toLowerCase().includes(query)
       const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter
       return matchesSearch && matchesCategory
     })
@@ -180,14 +212,13 @@ export default function POSPage() {
         (i.altCode && canon(i.altCode) === wanted)
     )
     if (exact) {
+      // Keep the scanner open for batch scanning; the toast confirms the add.
       handleAddToCart(exact.id)
-      setScannerOpen(false)
       return
     }
     const titleMatches = inventory.filter((i) => i.title.toLowerCase().includes(code))
     if (titleMatches.length === 1) {
       handleAddToCart(titleMatches[0].id)
-      setScannerOpen(false)
       return
     }
     if (titleMatches.length > 1) {
@@ -204,20 +235,28 @@ export default function POSPage() {
     const item = inventory.find((stock) => stock.id === itemId)
     if (!item) return
 
-    const quantity = Math.max(0, Math.round(nextValue))
-    const clamped = Math.min(quantity, item.quantity)
+    if (!Number.isFinite(nextValue)) return
+    // Never drop below 1 here; removing a line is only done via the remove button.
+    const quantity = Math.max(1, Math.round(nextValue))
+    const clamped = Math.max(1, Math.min(quantity, item.quantity))
 
     if (quantity > item.quantity) {
       setMessage(`Only ${item.quantity} available for ${item.title}.`)
     }
 
-    setCartItems((current) => {
-      if (clamped <= 0) {
-        return current.filter((cartItem) => cartItem.itemId !== itemId)
-      }
-      return current.map((cartItem) =>
+    setCartItems((current) =>
+      current.map((cartItem) =>
         cartItem.itemId === itemId ? { ...cartItem, quantity: clamped } : cartItem
       )
+    )
+  }
+
+  const clearQtyDraft = (itemId: string) => {
+    setQtyDrafts((current) => {
+      if (!(itemId in current)) return current
+      const next = { ...current }
+      delete next[itemId]
+      return next
     })
   }
 
@@ -226,12 +265,14 @@ export default function POSPage() {
   }
 
   const handleClearCart = () => {
+    if (!window.confirm('Clear all items from the cart?')) return
     setCartItems([])
+    setQtyDrafts({})
     setDiscount(0)
   }
 
   const handleRecordSale = async () => {
-    if (cartItems.length === 0) return
+    if (cartItems.length === 0 || isSubmittingSale) return
 
     setIsSubmittingSale(true)
     const stockMap = new Map(inventory.map((item) => [item.id, item]))
@@ -267,34 +308,51 @@ export default function POSPage() {
       }
     })
 
-    const nextInventory = inventory.map((item) => {
-      const cartItem = cartItems.find((entry) => entry.itemId === item.id)
-      if (!cartItem) return item
-      return { ...item, quantity: Math.max(0, item.quantity - cartItem.quantity) }
-    })
-
-    setInventory(nextInventory)
-    setCartItems([])
-    setDiscount(0)
-    setMessage(`Sale recorded (${salesToAdd.length} items).`)
-    setShowConfirmSale(false)
-
+    // 1) Record the sale itself. Nothing is cleared until this succeeds.
     try {
-      const batch = writeBatch(db)
+      const salesBatch = writeBatch(db)
       salesToAdd.forEach((sale) => {
-        batch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
+        salesBatch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
       })
-      nextInventory.forEach((item) => {
-        batch.update(doc(db, 'inventory', item.id), { quantity: item.quantity, _live: true })
-      })
-      await batch.commit()
+      await salesBatch.commit()
     } catch (error) {
       console.error('Record sale error:', error)
-      setMessage('Sale saved locally, but failed to sync.')
+      setMessage('Sale was NOT recorded. Check your connection and try again. The cart has been kept.')
+      setIsSubmittingSale(false)
+      return
+    }
+
+    const soldItems = cartItems
+    setInventory((current) =>
+      current.map((item) => {
+        const cartItem = soldItems.find((entry) => entry.itemId === item.id)
+        if (!cartItem) return item
+        return { ...item, quantity: Math.max(0, item.quantity - cartItem.quantity) }
+      })
+    )
+    setCartItems([])
+    setQtyDrafts({})
+    setDiscount(0)
+    setShowConfirmSale(false)
+    setMessage(`Sale recorded (${salesToAdd.length} items).`)
+
+    // 2) Decrement stock for the sold items only. increment() is atomic, so
+    //    concurrent sales on other tills don't clobber each other.
+    try {
+      const stockBatch = writeBatch(db)
+      soldItems.forEach((cartItem) => {
+        stockBatch.update(doc(db, 'inventory', cartItem.itemId), { quantity: increment(-cartItem.quantity), _live: true })
+      })
+      await stockBatch.commit()
+    } catch (error) {
+      console.error('Stock update error:', error)
+      setMessage('Sale recorded, but stock levels failed to update. Please adjust inventory.')
     } finally {
       setIsSubmittingSale(false)
     }
   }
+
+  const cartUnitCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
 
   return (
     <div className="min-h-screen text-ink bg-gradient-to-br from-purple-50 via-white to-emerald-50">
@@ -364,16 +422,27 @@ export default function POSPage() {
         )}
       </header>
 
-      <main className="mx-auto w-11/12 max-w-6xl py-8">
+      <main className="mx-auto w-11/12 max-w-6xl pt-8 pb-28 lg:pb-8">
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-4 py-20" role="status" aria-live="polite">
             <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full" />
             <p className="text-sm font-semibold text-muted">Loading inventory...</p>
           </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-20 text-center" role="alert">
+            <p className="text-sm font-semibold text-red-700">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void fetchInventory()}
+              className="min-h-11 rounded-full bg-gradient-to-r from-primary to-secondary px-6 text-sm font-bold text-white shadow-lg focus-visible:ring-2 focus-visible:ring-primary/40 outline-none transition-all"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Page Header */}
-            <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50">
+            <div className="hidden sm:block panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-xl border border-emerald-200/50">
               <div className="flex items-center gap-4">
                 <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-green-100 shadow-soft">
                   <svg className="h-7 w-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -414,11 +483,15 @@ export default function POSPage() {
                         </svg>
                       </span>
                       <input
-                        type="text"
+                        type="search"
+                        enterKeyHint="search"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search products..."
-                        aria-label="Search products by title, publisher, or category"
+                        aria-label="Search products by title, publisher, category, or code"
                         className="w-full rounded-xl border-2 border-primary/20 pl-11 pr-4 py-3 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
                       />
                     </div>
@@ -447,7 +520,7 @@ export default function POSPage() {
                 </div>
 
                 {/* Inventory List */}
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                <div className="space-y-3 lg:max-h-[500px] lg:overflow-y-auto lg:pr-2">
                   {filteredInventory.length === 0 ? (
                     <div className="flex flex-col items-center text-center py-12 animate-fadeIn">
                       <span className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10">
@@ -503,7 +576,7 @@ export default function POSPage() {
                                 onClick={() => handleAddToCart(item.id)}
                                 disabled={availableQty <= 0}
                                 aria-label={availableQty <= 0 ? `${item.title} is out of stock` : `Add ${item.title} to cart`}
-                                className="btn-shine mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-1.5 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                className="btn-shine mt-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary to-secondary min-h-11 px-4 text-xs font-bold text-white hover:shadow-lg hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/40 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                                 type="button"
                               >
                                 {availableQty <= 0 ? (
@@ -527,7 +600,7 @@ export default function POSPage() {
               </div>
 
               {/* Right Column - Cart & Checkout */}
-              <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-2xl ring-1 ring-emerald-200/60 border border-emerald-200/60 h-fit lg:sticky lg:top-24">
+              <div ref={cartRef} className="scroll-mt-20 panel-card rounded-3xl bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-2xl ring-1 ring-emerald-200/60 border border-emerald-200/60 h-fit lg:sticky lg:top-24">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-green-100">
                     <svg className="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -554,24 +627,48 @@ export default function POSPage() {
                     </div>
                   ) : (
                     cartItems.map((item) => (
-                      <div key={item.itemId} className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10 animate-fadeIn">
-                        <div className="flex-1 min-w-0 mr-3">
+                      <div key={item.itemId} className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10 animate-fadeIn">
+                        <div className="flex-1 min-w-[8rem]">
                           <p className="font-semibold text-sm truncate">{item.title}</p>
                           <p className="text-xs text-muted">${formatNumber(item.price)} each</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => { clearQtyDraft(item.itemId); handleUpdateCartQuantity(item.itemId, item.quantity - 1) }}
+                            disabled={item.quantity <= 1}
+                            aria-label={`Decrease quantity of ${item.title}`}
+                            className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-primary/20 bg-white text-lg font-bold text-primaryDark hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30 outline-none transition disabled:opacity-40"
+                            type="button"
+                          >
+                            &minus;
+                          </button>
                           <input
-                            type="number"
-                            min={0}
-                            value={item.quantity}
-                            onChange={(e) => handleUpdateCartQuantity(item.itemId, Number(e.target.value))}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={qtyDrafts[item.itemId] ?? String(item.quantity)}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/[^0-9]/g, '')
+                              setQtyDrafts((current) => ({ ...current, [item.itemId]: raw }))
+                              // Ignore an empty value until blur so clearing the field doesn't remove the line.
+                              if (raw) handleUpdateCartQuantity(item.itemId, Number(raw))
+                            }}
+                            onBlur={() => clearQtyDraft(item.itemId)}
                             aria-label={`Quantity for ${item.title}`}
-                            className="w-16 h-10 rounded-lg border-2 border-primary/20 px-2 py-1 text-sm text-center font-bold focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
+                            className="w-12 h-11 rounded-lg border-2 border-primary/20 px-1 py-1 text-sm text-center font-bold focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition"
                           />
                           <button
-                            onClick={() => handleRemoveFromCart(item.itemId)}
+                            onClick={() => { clearQtyDraft(item.itemId); handleUpdateCartQuantity(item.itemId, item.quantity + 1) }}
+                            aria-label={`Increase quantity of ${item.title}`}
+                            className="flex h-11 w-11 items-center justify-center rounded-lg border-2 border-primary/20 bg-white text-lg font-bold text-primaryDark hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30 outline-none transition"
+                            type="button"
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => { clearQtyDraft(item.itemId); handleRemoveFromCart(item.itemId) }}
                             aria-label={`Remove ${item.title} from cart`}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
+                            className="flex h-11 w-11 items-center justify-center rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
                             type="button"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -629,9 +726,9 @@ export default function POSPage() {
                       <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Discount (Optional)</p>
                       <div className="flex gap-2 mb-2">
                         <button
-                          onClick={() => setDiscountType('percentage')}
+                          onClick={() => { setDiscountType('percentage'); setDiscount((d) => Math.min(100, d)) }}
                           aria-pressed={discountType === 'percentage'}
-                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
+                          className={`flex-1 rounded-xl py-3 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
                             discountType === 'percentage'
                               ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                               : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
@@ -641,9 +738,9 @@ export default function POSPage() {
                           % Percentage
                         </button>
                         <button
-                          onClick={() => setDiscountType('amount')}
+                          onClick={() => { setDiscountType('amount'); setDiscount((d) => Math.min(cartTotal, d)) }}
                           aria-pressed={discountType === 'amount'}
-                          className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
+                          className={`flex-1 rounded-xl py-3 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
                             discountType === 'amount'
                               ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
                               : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
@@ -656,11 +753,20 @@ export default function POSPage() {
                       <div className="relative">
                         <input
                           type="number"
+                          inputMode="decimal"
                           min={0}
                           max={discountType === 'percentage' ? 100 : cartTotal}
                           step={discountType === 'percentage' ? 1 : 0.01}
                           value={discount || ''}
-                          onChange={(e) => setDiscount(Number(e.target.value))}
+                          onChange={(e) => {
+                            const next = Number(e.target.value)
+                            if (!Number.isFinite(next)) return
+                            setDiscount(
+                              discountType === 'percentage'
+                                ? Math.min(100, Math.max(0, next))
+                                : Math.min(cartTotal, Math.max(0, next))
+                            )
+                          }}
                           placeholder={discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount'}
                           aria-label={discountType === 'percentage' ? 'Discount percentage' : 'Discount amount'}
                           className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm hover:border-primary/40 focus:ring-2 focus:ring-primary/30 focus:border-primary/50 outline-none transition pr-10"
@@ -687,7 +793,7 @@ export default function POSPage() {
                       </div>
                       {discount > 0 && (
                         <div className="flex items-center justify-between text-sm text-green-600">
-                          <span>Discount ({discountType === 'percentage' ? `${discount}%` : `$${formatNumber(discount)}`})</span>
+                          <span>Discount ({discountType === 'percentage' ? `${discount}%` : `$${formatNumber(discountAmount)}`})</span>
                           <span className="font-semibold">-${formatNumber(discountAmount)}</span>
                         </div>
                       )}
@@ -729,7 +835,7 @@ export default function POSPage() {
                       <button
                         onClick={handleClearCart}
                         aria-label="Clear cart"
-                        className="w-full rounded-xl border-2 border-red-200 py-2 text-xs font-bold text-red-600 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
+                        className="w-full min-h-11 rounded-xl border-2 border-red-200 py-3 text-xs font-bold text-red-600 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-300 outline-none transition-colors"
                         type="button"
                       >
                         Clear Cart
@@ -744,12 +850,30 @@ export default function POSPage() {
         )}
       </main>
 
-      {/* Toast */}
+      {/* Mobile checkout bar */}
+      {cartItems.length > 0 && (
+        <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-primary/10 bg-white/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+            <p className="text-sm font-bold text-primaryDark">
+              {cartUnitCount} {cartUnitCount === 1 ? 'item' : 'items'} · ${formatNumber(totalWithFee)}
+            </p>
+            <button
+              type="button"
+              onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="min-h-12 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 px-6 text-sm font-bold text-white shadow-lg focus-visible:ring-2 focus-visible:ring-emerald-400/50 outline-none transition-all"
+            >
+              View cart &amp; pay
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast (above the scanner overlay so scan results are visible) */}
       {message && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-4 right-4 z-[60] max-w-xs animate-slideDown"
+          className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[95] lg:bottom-6 lg:left-auto lg:right-6 lg:max-w-xs animate-slideDown"
         >
           <div className="flex items-start gap-2 rounded-xl bg-white/95 backdrop-blur px-4 py-3 text-xs font-medium text-blue-700 shadow-2xl ring-1 ring-blue-200 border border-blue-200">
             <svg className="h-4 w-4 flex-shrink-0 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -779,7 +903,7 @@ export default function POSPage() {
             <div className="space-y-3 mb-6 p-4 rounded-xl bg-gradient-to-r from-primary/5 to-secondary/5 border border-primary/10">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Items</span>
-                <span className="font-semibold">{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                <span className="font-semibold">{cartUnitCount}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Payment</span>

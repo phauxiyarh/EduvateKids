@@ -121,6 +121,8 @@ export default function SummerLogPage() {
   const [editHoverRating, setEditHoverRating] = useState(0)
   const [editReview, setEditReview] = useState('')
   const [editDateFinished, setEditDateFinished] = useState(todayStr())
+  // Parent email for verifying an edit (the edit callable checks it like log/delete do).
+  const [editEmail, setEditEmail] = useState('')
   const [editError, setEditError] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
@@ -141,6 +143,7 @@ export default function SummerLogPage() {
     setEditHoverRating(0)
     setEditReview(b.review || '')
     setEditDateFinished(b.dateFinished || todayStr())
+    setEditEmail(parentEmailInput)
   }
 
   const cancelEdit = () => {
@@ -151,12 +154,17 @@ export default function SummerLogPage() {
   const saveEdit = async (index: number) => {
     setEditError('')
     if (!editTitle.trim() || !code) return
+    const email = editEmail.trim()
+    if (!email) {
+      setEditError('Enter the parent email used at registration to confirm.')
+      return
+    }
     setSavingEdit(true)
     try {
       const call = httpsCallable(functions, 'editSummerBook')
       const res = await call({
         code,
-        parentEmail: parentEmailInput.trim(),
+        parentEmail: email,
         index,
         title: editTitle.trim(),
         author: editAuthor.trim(),
@@ -179,8 +187,14 @@ export default function SummerLogPage() {
       )))
       setBooksCount(result.booksCount)
       setEditingIndex(null)
+      if (!parentEmailInput.trim()) setParentEmailInput(email)
     } catch (err) {
-      setEditError((err as { message?: string })?.message || 'Could not save changes. Please try again.')
+      const msg = (err as { message?: string })?.message || ''
+      setEditError(
+        /match|permission|not-?authorized/i.test(msg)
+          ? 'That email does not match the one on file for this code. Please check and try again.'
+          : (msg || 'Could not save changes. Please try again.')
+      )
     } finally {
       setSavingEdit(false)
     }
@@ -378,6 +392,10 @@ export default function SummerLogPage() {
                   value={codeInput}
                   onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
                   autoComplete="off"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="go"
                   required
                 />
               </label>
@@ -470,7 +488,7 @@ export default function SummerLogPage() {
 
                 <div className="grid gap-1.5 text-sm font-semibold">
                   <span>Rating</span>
-                  <div className="flex items-center gap-1" role="radiogroup" aria-label="Book rating out of 5 stars">
+                  <div className="flex items-center" role="radiogroup" aria-label="Book rating out of 5 stars">
                     {[1, 2, 3, 4, 5].map((s) => {
                       const active = s <= (hoverRating || rating)
                       return (
@@ -483,7 +501,7 @@ export default function SummerLogPage() {
                           onClick={() => setRating(s === rating ? 0 : s)}
                           onMouseEnter={() => setHoverRating(s)}
                           onMouseLeave={() => setHoverRating(0)}
-                          className="rounded-full p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+                          className="flex min-h-11 min-w-11 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
                         >
                           <svg className={`h-7 w-7 transition-colors ${active ? 'text-amber-400' : 'text-black/15'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                             <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.35 4.16a1 1 0 00.95.69h4.37c.97 0 1.37 1.24.59 1.81l-3.54 2.57a1 1 0 00-.36 1.12l1.35 4.16c.3.92-.75 1.68-1.54 1.11l-3.53-2.57a1 1 0 00-1.18 0l-3.53 2.57c-.79.57-1.84-.19-1.54-1.11l1.35-4.16a1 1 0 00-.36-1.12L1.44 9.6c-.78-.57-.38-1.81.59-1.81h4.37a1 1 0 00.95-.69L9.05 2.93z" />
@@ -501,11 +519,11 @@ export default function SummerLogPage() {
                 </label>
 
                 <label className="grid gap-1.5 text-sm font-semibold" htmlFor="dateFinished">Date Finished
-                  <input id="dateFinished" type="date" className={inputClass} value={dateFinished} max={todayStr()} onChange={(e) => setDateFinished(e.target.value)} />
+                  <input id="dateFinished" type="date" className={`${inputClass} appearance-none min-h-[48px] min-w-0`} value={dateFinished} max={todayStr()} onChange={(e) => setDateFinished(e.target.value)} />
                 </label>
 
                 <label className="grid gap-1.5 text-sm font-semibold" htmlFor="parentEmail">Parent email (verification)
-                  <input id="parentEmail" type="email" className={inputClass} value={parentEmailInput} placeholder="The email used when you registered" onChange={(e) => setParentEmailInput(e.target.value)} required />
+                  <input id="parentEmail" type="email" autoComplete="email" inputMode="email" autoCapitalize="none" className={inputClass} value={parentEmailInput} placeholder="The email used when you registered" onChange={(e) => setParentEmailInput(e.target.value)} required />
                   <span className="text-xs font-normal text-muted">Used to confirm this is your child&apos;s record before saving.</span>
                 </label>
 
@@ -577,7 +595,7 @@ export default function SummerLogPage() {
                               </label>
                               <div className="grid gap-1.5 text-sm font-semibold">
                                 <span>Rating</span>
-                                <div className="flex items-center gap-1" role="radiogroup" aria-label="Book rating out of 5 stars">
+                                <div className="flex items-center" role="radiogroup" aria-label="Book rating out of 5 stars">
                                   {[1, 2, 3, 4, 5].map((s) => {
                                     const active = s <= (editHoverRating || editRating)
                                     return (
@@ -590,7 +608,7 @@ export default function SummerLogPage() {
                                         onClick={() => setEditRating(s === editRating ? 0 : s)}
                                         onMouseEnter={() => setEditHoverRating(s)}
                                         onMouseLeave={() => setEditHoverRating(0)}
-                                        className="rounded-full p-1 outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
+                                        className="flex min-h-11 min-w-11 items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40"
                                       >
                                         <svg className={`h-6 w-6 transition-colors ${active ? 'text-amber-400' : 'text-black/15'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                           <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.35 4.16a1 1 0 00.95.69h4.37c.97 0 1.37 1.24.59 1.81l-3.54 2.57a1 1 0 00-.36 1.12l1.35 4.16c.3.92-.75 1.68-1.54 1.11l-3.53-2.57a1 1 0 00-1.18 0l-3.53 2.57c-.79.57-1.84-.19-1.54-1.11l1.35-4.16a1 1 0 00-.36-1.12L1.44 9.6c-.78-.57-.38-1.81.59-1.81h4.37a1 1 0 00.95-.69L9.05 2.93z" />
@@ -604,13 +622,27 @@ export default function SummerLogPage() {
                                 <textarea rows={3} maxLength={500} className={`${inputClass} resize-none`} value={editReview} onChange={(e) => setEditReview(e.target.value)} />
                               </label>
                               <label className="grid gap-1.5 text-sm font-semibold">Date Finished
-                                <input type="date" className={inputClass} value={editDateFinished} max={todayStr()} onChange={(e) => setEditDateFinished(e.target.value)} />
+                                <input type="date" className={`${inputClass} appearance-none min-h-[48px] min-w-0`} value={editDateFinished} max={todayStr()} onChange={(e) => setEditDateFinished(e.target.value)} />
+                              </label>
+                              <label className="grid gap-1.5 text-sm font-semibold">Parent email (verification)
+                                <input
+                                  type="email"
+                                  autoComplete="email"
+                                  inputMode="email"
+                                  autoCapitalize="none"
+                                  className={inputClass}
+                                  value={editEmail}
+                                  placeholder="The email used when you registered"
+                                  onChange={(e) => { setEditEmail(e.target.value); if (editError) setEditError('') }}
+                                  required
+                                />
+                                <span className="text-xs font-normal text-muted">Used to confirm this is your child&apos;s record before saving.</span>
                               </label>
                               <div className="mt-1 flex items-center gap-3">
                                 <button
                                   type="button"
                                   onClick={() => saveEdit(i)}
-                                  disabled={!editTitle.trim() || savingEdit}
+                                  disabled={!editTitle.trim() || !editEmail.trim() || savingEdit}
                                   className="btn-shine flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                                 >
                                   {savingEdit ? (
@@ -645,7 +677,7 @@ export default function SummerLogPage() {
                                 aria-label={`Edit ${b.title}`}
                                 onClick={() => startEdit(i, b)}
                                 disabled={isDeleting}
-                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
+                                className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 text-primaryDark transition hover:bg-primary/5 disabled:opacity-50"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               </button>
@@ -654,7 +686,7 @@ export default function SummerLogPage() {
                                 aria-label={`Delete ${b.title}`}
                                 onClick={() => { setDeleteError(''); setDeleteEmail(''); setConfirmDeleteIndex(i) }}
                                 disabled={isDeleting}
-                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 text-red-500 transition hover:bg-red-50 disabled:opacity-50"
+                                className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-200 text-red-500 transition hover:bg-red-50 disabled:opacity-50"
                               >
                                 {isDeleting ? (
                                   <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
@@ -677,18 +709,20 @@ export default function SummerLogPage() {
                             >
                               <input
                                 type="email"
-                                autoFocus
+                                autoComplete="email"
+                                inputMode="email"
+                                autoCapitalize="none"
                                 value={deleteEmail}
                                 onChange={(e) => { setDeleteEmail(e.target.value); if (deleteError) setDeleteError('') }}
                                 placeholder="Parent email on file"
                                 aria-label="Parent email on file"
-                                className="flex-1 rounded-xl border border-red-200 bg-white px-3.5 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-300/40"
+                                className="min-h-11 flex-1 rounded-xl border border-red-200 bg-white px-3.5 py-2 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-300/40"
                               />
                               <div className="flex items-center gap-2">
                                 <button
                                   type="submit"
                                   disabled={isDeleting || !deleteEmail.trim()}
-                                  className="flex items-center justify-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-60"
+                                  className="flex min-h-11 items-center justify-center gap-2 rounded-full bg-red-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-60"
                                 >
                                   {isDeleting ? (
                                     <><svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Deleting...</>
@@ -698,7 +732,7 @@ export default function SummerLogPage() {
                                   type="button"
                                   onClick={() => { setConfirmDeleteIndex(null); setDeleteEmail(''); setDeleteError('') }}
                                   disabled={isDeleting}
-                                  className="rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-black/5 disabled:opacity-60"
+                                  className="min-h-11 rounded-full border border-black/10 bg-white px-5 py-2 text-sm font-semibold text-ink transition hover:bg-black/5 disabled:opacity-60"
                                 >
                                   Cancel
                                 </button>

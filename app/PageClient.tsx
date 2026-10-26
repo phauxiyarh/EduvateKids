@@ -3,8 +3,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { EventNavDropdown } from './components/EventNavDropdown'
-import { HeaderCart } from './components/HeaderCart'
 import { BookPlaceholder } from './components/BookPlaceholder'
 import { ReadingMattersCard } from './components/ReadingMattersCard'
 import { OPEN_COOKIE_PREFS } from './components/CookieConsent'
@@ -12,7 +10,6 @@ import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestor
 import { db } from '../lib/firebase'
 import { normalizeReview, publicReviews, averageRating, type Review } from '../lib/reviews'
 import { Stars } from './components/StarRating'
-import logo from '../assets/logo.png'
 import catalogQR from '../assets/catalog.png'
 import learningRootsLogo from '../assets/partners/learning-roots.webp'
 import kubeLogo from '../assets/partners/kube.webp'
@@ -24,6 +21,10 @@ import design2 from '../assets/design2.png'
 import bg2 from '../assets/bg2.png'
 import bg1 from '../assets/bg1.png'
 import { SiteFooterFull } from './components/SiteFooterFull'
+import { SiteHeader } from './components/SiteChrome'
+import { PreorderModal, type PreorderBook } from './components/PreorderModal'
+import { useCart } from '../lib/cart'
+import { bookPath } from '../lib/slug'
 
 const partners = [
   {
@@ -115,6 +116,13 @@ type CatalogItem = {
   publisher: string
   showPublisher: boolean
   images: string[]
+  // Mirrored stock count from inventory; undefined means not tracked (available).
+  stock?: number
+}
+
+/** Matches the catalog: out of stock only when a tracked stock is 0 or less. */
+function isOutOfStock(item: { stock?: number }): boolean {
+  return typeof item.stock === 'number' && item.stock <= 0
 }
 
 const AGE_CATEGORIES: Record<string, { range: string; title: string }> = {
@@ -186,8 +194,9 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
   const [catalogSlider, setCatalogSlider] = useState<Record<string, number>>({})
   const [expandedItem, setExpandedItem] = useState<CatalogItem | null>(null)
   const [expandedSlider, setExpandedSlider] = useState(0)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
+  // Book a shopper is trying to pre-order from the modal because it's out of stock.
+  const [preorderBook, setPreorderBook] = useState<PreorderBook | null>(null)
+  const { addItem } = useCart()
 
   // Scroll-reveal refs for each major section
   const aboutReveal = useReveal<HTMLDivElement>()
@@ -238,14 +247,6 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
     setActiveTestimonial((i) => (i < testimonials.length ? i : 0))
   }, [testimonials.length])
 
-  // Condense the sticky header once the user scrolls past the hero top
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
   // Lock body scroll while the product modal is open
   useEffect(() => {
     document.body.style.overflow = expandedItem ? 'hidden' : ''
@@ -266,6 +267,8 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
             : typeof categoryData === 'string' && categoryData
             ? [categoryData]
             : ['Books']
+          // Stock mirrors inventory; `stock` is the current field, `quantity` legacy.
+          const rawStock = data.stock ?? data.quantity
           return {
             id: d.id,
             title: String(data.title ?? ''),
@@ -275,7 +278,8 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
             price: Number(data.price ?? 0),
             publisher: String(data.publisher ?? ''),
             showPublisher: data.showPublisher !== false,
-            images: Array.isArray(data.images) ? data.images : []
+            images: Array.isArray(data.images) ? data.images : [],
+            stock: rawStock === undefined || rawStock === null ? undefined : Number(rawStock)
           } as CatalogItem
         })
         // Shuffle and take 10 random items for homepage
@@ -287,131 +291,9 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
 
   return (
     <div className="min-h-screen text-ink">
-      <header
-        className={`sticky top-0 z-50 transition-all duration-500 ${
-          scrolled
-            ? 'border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.08)] backdrop-blur-xl'
-            : 'border-b border-transparent bg-white/60 backdrop-blur-md'
-        }`}
-      >
-        {/* gradient hairline accent */}
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div
-          className={`mx-auto flex w-11/12 max-w-6xl items-center justify-between gap-4 transition-all duration-500 ${
-            scrolled ? 'py-2' : 'py-3'
-          }`}
-        >
-          <a className="group flex items-center gap-2 sm:gap-3 min-w-0" href="#top" aria-label="Eduvate Kids home">
-            <span className="relative flex-shrink-0">
-              <span className="absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 opacity-0 blur-md transition-opacity duration-500 group-hover:opacity-100" />
-              <Image
-                src={logo}
-                alt="Eduvate Kids logo"
-                width={36}
-                height={36}
-                className={`transition-all duration-500 group-hover:rotate-[6deg] ${
-                  scrolled ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-8 w-8 sm:h-10 sm:w-10'
-                }`}
-              />
-            </span>
-            <span className="flex flex-col min-w-0 leading-tight">
-              <span className="font-display text-base sm:text-lg font-bold truncate">Eduvate Kids</span>
-              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 hidden sm:block">
-                Islamic Bookstore
-              </span>
-            </span>
-          </a>
-
-          <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
-            {[
-              { label: 'Home', href: '#top', external: false, active: true, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /> },
-              { label: 'Catalog', href: '/catalog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
-              // Books of differing heights standing on a plank: reads as a
-              // shelf at 16px, where the earlier grid of lines did not.
-              { label: 'Shelves', href: '/shelves', external: true, active: false, icon: <><path strokeLinecap="round" strokeLinejoin="round" d="M6 5v10M10 7v8M14 4v11M18 8v7" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.5 15.5h17M5 15.5v3.5m14-3.5v3.5" /></> },
-              { label: 'Blog', href: '/blog', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2zM14 4v6h6M8 13h8M8 17h5" /> },
-              { label: 'Freebies', href: '/freebies', external: true, active: false, icon: <path strokeLinecap="round" strokeLinejoin="round" d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" /> }
-            ].map((item) => {
-              const cls = `flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all duration-300 ${
-                item.active
-                  ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                  : 'bg-primary/5 text-primaryDark hover:bg-primary/10 hover:-translate-y-0.5'
-              }`
-              const inner = (
-                <>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">{item.icon}</svg>
-                  <span>{item.label}</span>
-                </>
-              )
-              return item.external ? (
-                <Link key={item.label} href={item.href} className={cls} aria-current={item.active ? 'page' : undefined}>{inner}</Link>
-              ) : (
-                <a key={item.label} href={item.href} className={cls} aria-current={item.active ? 'page' : undefined}>{inner}</a>
-              )
-            })}
-            <EventNavDropdown />
-            {[
-              { label: 'Contact', href: '/contact-us', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z" /> },
-              { label: 'FAQs', href: '/faqs', icon: <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> }
-            ].map((item) => (
-              <Link key={item.label} href={item.href} className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 hover:bg-primary/10 hover:-translate-y-0.5">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">{item.icon}</svg>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <HeaderCart />
-            {/* Mobile menu button */}
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex md:hidden h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-white/70 text-primaryDark backdrop-blur transition hover:bg-primary/5 active:scale-95"
-              aria-label="Toggle menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-              )}
-            </button>
-          </div>
-        </div>
-        {/* Mobile dropdown menu */}
-        {mobileMenuOpen && (
-          <div className="animate-slideDown md:hidden border-t border-primary/10 bg-white/95 backdrop-blur-xl shadow-lg">
-            <nav className="mx-auto w-11/12 max-w-6xl flex flex-col py-3 gap-1">
-              <a className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-bold text-white transition active:scale-[0.98]" href="#top" aria-current="page" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /></svg>
-                Home
-              </a>
-              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/catalog" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                Catalog
-              </Link>
-              <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Event</p>
-              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/summer-reads" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                Summer Reads
-              </Link>
-              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/book-event" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                Book Event
-              </Link>
-              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/contact-us" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z" /></svg>
-                Contact
-              </Link>
-              <Link className="flex items-center gap-3 rounded-2xl bg-primary/5 px-4 py-3.5 text-sm font-bold text-primaryDark transition hover:bg-primary/10 active:scale-[0.98]" href="/faqs" onClick={() => setMobileMenuOpen(false)}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                FAQs
-              </Link>
-            </nav>
-          </div>
-        )}
-      </header>
+      {/* Shared header: its nav collapses to a scrollable strip below lg, so
+          the full set of links never pushes the cart off-screen. */}
+      <SiteHeader current="/" />
 
       <main id="top">
         <section className="relative overflow-hidden pb-10 pt-24 sm:pb-16 sm:pt-40">
@@ -720,6 +602,9 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                                 key={imgIdx}
                                 src={img}
                                 alt={`${item.title} ${imgIdx + 1}`}
+                                // Below the fold: the cover loads normally, the rest only when near.
+                                loading={imgIdx === 0 ? undefined : 'lazy'}
+                                decoding="async"
                                 className={`absolute inset-0 h-full w-full object-contain p-2 transition-all duration-700 ease-out ${
                                   imgIdx === (catalogSlider[item.id] ?? 0)
                                     ? 'opacity-100 scale-100'
@@ -754,19 +639,24 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                               </button>
-                              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-2 py-1">
+                              {/* Padding gives each dot a 24px hit area; the visible dot stays small. */}
+                              <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex">
                                 {item.images.map((_, dotIdx) => (
                                   <button
                                     key={dotIdx}
                                     type="button"
                                     aria-label={`Go to image ${dotIdx + 1}`}
                                     onClick={(e) => { e.stopPropagation(); setCatalogSlider((prev) => ({ ...prev, [item.id]: dotIdx })) }}
-                                    className={`h-2 rounded-full transition-all duration-300 ${
-                                      dotIdx === (catalogSlider[item.id] ?? 0)
-                                        ? 'w-6 bg-white shadow-sm'
-                                        : 'w-2 bg-white/50 hover:bg-white/80'
-                                    }`}
-                                  />
+                                    className="group/dot flex p-2"
+                                  >
+                                    <span
+                                      className={`block h-2 rounded-full transition-all duration-300 ${
+                                        dotIdx === (catalogSlider[item.id] ?? 0)
+                                          ? 'w-6 bg-white shadow-sm'
+                                          : 'w-2 bg-white/50 group-hover/dot:bg-white/80'
+                                      }`}
+                                    />
+                                  </button>
                                 ))}
                               </div>
                             </>
@@ -1003,14 +893,17 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
               <div className="flex justify-center">
                 <div className="w-full">
                   <div className="animate-float rounded-3xl bg-white p-5 sm:p-8 shadow-soft border-2 border-secondary/10">
-                    <div className="relative min-h-[220px] sm:min-h-[240px] overflow-hidden">
+                    {/* Slides share one grid cell, so the card grows to the longest
+                        quote instead of clipping it on narrow screens. */}
+                    <div className="grid overflow-hidden">
                       {testimonials.map((testimonial, index) => (
                         <div
                           key={testimonial.name}
-                          className={`absolute inset-0 transition-all duration-500 ${
+                          aria-hidden={index !== activeTestimonial}
+                          className={`col-start-1 row-start-1 transition-all duration-500 ${
                             index === activeTestimonial
                               ? 'translate-x-0 opacity-100'
-                              : 'translate-x-6 opacity-0'
+                              : 'pointer-events-none translate-x-6 opacity-0'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -1033,22 +926,26 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                       ))}
                     </div>
                     <div className="mt-8 flex items-center justify-between border-t border-black/5 pt-6">
-                      <div className="flex gap-2">
+                      <div className="-ml-2 flex flex-wrap">
                         {testimonials.map((_, index) => (
                           <button
                             key={`dot-${index}`}
-                            className={`h-2 w-2 rounded-full transition ${
-                              index === activeTestimonial ? 'bg-primary w-6' : 'bg-primary/20'
-                            }`}
+                            className="flex p-2"
                             onClick={() => setActiveTestimonial(index)}
                             type="button"
                             aria-label={`Go to testimonial ${index + 1}`}
-                          />
+                          >
+                            <span
+                              className={`block h-2 w-2 rounded-full transition ${
+                                index === activeTestimonial ? 'bg-primary w-6' : 'bg-primary/20'
+                              }`}
+                            />
+                          </button>
                         ))}
                       </div>
-                      <div className="flex gap-2 text-xs font-semibold">
+                      <div className="flex gap-2 text-sm font-semibold">
                         <button
-                          className="rounded-full border border-primary/30 bg-primary/5 px-4 py-2 text-primaryDark transition hover:bg-primary/10"
+                          className="min-h-[40px] rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-primaryDark transition hover:bg-primary/10"
                           onClick={() =>
                             setActiveTestimonial(
                               (activeTestimonial - 1 + testimonials.length) % testimonials.length
@@ -1059,7 +956,7 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                           Prev
                         </button>
                         <button
-                          className="rounded-full border border-primary/30 bg-primary/5 px-4 py-2 text-primaryDark transition hover:bg-primary/10"
+                          className="min-h-[40px] rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-primaryDark transition hover:bg-primary/10"
                           onClick={() =>
                             setActiveTestimonial((activeTestimonial + 1) % testimonials.length)
                           }
@@ -1155,17 +1052,21 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
           onClick={() => setExpandedItem(null)}
         >
           <div
-            className="relative w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl"
+            className="relative w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[90dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
-            <button
-              aria-label="Close"
-              onClick={() => setExpandedItem(null)}
-              className="absolute right-3 top-3 sm:right-4 sm:top-4 z-10 flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/90 shadow-md hover:bg-white transition-colors"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            {/* Close button: sticky in a zero-height row so it stays reachable
+                while the sheet scrolls, without pushing the image down. */}
+            <div className="sticky top-0 z-10 flex h-0 justify-end">
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setExpandedItem(null)}
+                className="mr-3 mt-3 sm:mr-4 sm:mt-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/90 shadow-md hover:bg-white transition-colors"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
 
             {/* Image area */}
             <div className="relative aspect-square sm:aspect-[16/9] bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 overflow-hidden rounded-t-3xl">
@@ -1177,6 +1078,8 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                         key={imgIdx}
                         src={img}
                         alt={`${expandedItem.title} ${imgIdx + 1}`}
+                        loading={imgIdx === 0 ? undefined : 'lazy'}
+                        decoding="async"
                         className={`absolute inset-0 h-full w-full object-contain transition-all duration-700 ease-out ${
                           imgIdx === expandedSlider
                             ? 'opacity-100 scale-100'
@@ -1203,19 +1106,23 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                       >
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                       </button>
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex">
                         {expandedItem.images.map((_, dotIdx) => (
                           <button
                             key={dotIdx}
                             type="button"
                             aria-label={`Go to image ${dotIdx + 1}`}
                             onClick={() => setExpandedSlider(dotIdx)}
-                            className={`h-2 rounded-full transition-all duration-300 ${
-                              dotIdx === expandedSlider
-                                ? 'w-6 bg-white shadow-sm'
-                                : 'w-2 bg-white/50 hover:bg-white/80'
-                            }`}
-                          />
+                            className="group/dot flex p-2"
+                          >
+                            <span
+                              className={`block h-2 rounded-full transition-all duration-300 ${
+                                dotIdx === expandedSlider
+                                  ? 'w-6 bg-white shadow-sm'
+                                  : 'w-2 bg-white/50 group-hover/dot:bg-white/80'
+                              }`}
+                            />
+                          </button>
                         ))}
                       </div>
                     </>
@@ -1256,9 +1163,43 @@ export default function HomePage({ reviews = [] }: { reviews?: Review[] }) {
                   ${expandedItem.price.toFixed(2)}
                 </span>
               </div>
+              {/* Ways to buy, mirroring the catalog card: out-of-stock books open
+                  the reserve prompt instead of adding to the cart. */}
+              <div className="mt-5 flex flex-col gap-2 pb-[env(safe-area-inset-bottom)] sm:flex-row">
+                {expandedItem.price > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const item = expandedItem
+                      setExpandedItem(null)
+                      if (isOutOfStock(item)) {
+                        setPreorderBook({ id: item.id, title: item.title, image: item.images[0] })
+                      } else {
+                        addItem({ id: item.id, title: item.title, price: item.price, image: item.images[0] })
+                      }
+                    }}
+                    className="btn-shine flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    {isOutOfStock(expandedItem) ? 'Reserve a copy' : 'Add to Cart'}
+                  </button>
+                )}
+                <Link
+                  href={bookPath(expandedItem.title)}
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-6 py-3 text-sm font-semibold text-primaryDark transition hover:bg-primary/10"
+                >
+                  View details
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Out-of-stock pre-order / reservation modal */}
+      {preorderBook && (
+        <PreorderModal book={preorderBook} onClose={() => setPreorderBook(null)} />
       )}
     </div>
   )

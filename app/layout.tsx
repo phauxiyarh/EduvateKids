@@ -1,9 +1,18 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ClientShell } from './components/ClientShell'
 import { AnalyticsTracker } from './components/AnalyticsTracker'
 
 const SITE_URL = 'https://eduvatekids.com'
+
+// viewport-fit=cover lets env(safe-area-inset-*) report the notch and home
+// indicator, which the fixed bottom bars (POS checkout, product buy bar) pad by.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#7c3aed'
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

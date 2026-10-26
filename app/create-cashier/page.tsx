@@ -220,7 +220,7 @@ export default function CreateCashierPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 p-4 sm:p-6">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -239,8 +239,16 @@ export default function CreateCashierPage() {
           <p className="text-muted">Add a new cashier user with POS-only access</p>
         </div>
 
+        {/* createUserWithEmailAndPassword signs the browser in as the new user. */}
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4" role="note">
+          <WarningTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+          <p className="text-sm text-amber-800">
+            <strong>Heads up:</strong> creating a cashier signs you out of your admin account on this device (you&apos;ll be signed in as the new cashier). Copy the credentials, then sign back in as admin.
+          </p>
+        </div>
+
         {/* Form Card */}
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-primary/10">
+        <div className="bg-white rounded-3xl shadow-xl p-5 sm:p-8 border border-primary/10">
           <form onSubmit={handleCreateCashier} className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -248,6 +256,9 @@ export default function CreateCashierPage() {
               </label>
               <input
                 type="email"
+                autoComplete="off"
+                inputMode="email"
+                autoCapitalize="none"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="cashier@eduvatekids.com"
@@ -262,6 +273,10 @@ export default function CreateCashierPage() {
               </label>
               <input
                 type="text"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 6 characters"

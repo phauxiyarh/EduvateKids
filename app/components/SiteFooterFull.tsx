@@ -176,21 +176,21 @@ export function SiteFooterFull({ anchors = false }: { anchors?: boolean }) {
         <div className="mt-12 border-t border-white/10 pt-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/50">
             <p>&copy; 2026 Eduvate Kids. All rights reserved.</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-              <Link href="/policies" className="transition-colors duration-200 hover:text-white">Privacy Policy</Link>
-              <Link href="/policies" className="transition-colors duration-200 hover:text-white">Terms of Service</Link>
-              <Link href="/faqs" className="transition-colors duration-200 hover:text-white">Help Center</Link>
-              <Link href="/accessibility" className="transition-colors duration-200 hover:text-white">Accessibility</Link>
+            <div className="flex flex-wrap items-center justify-center gap-x-6">
+              <Link href="/policies" className="inline-block py-2 transition-colors duration-200 hover:text-white">Privacy Policy</Link>
+              <Link href="/policies" className="inline-block py-2 transition-colors duration-200 hover:text-white">Terms of Service</Link>
+              <Link href="/faqs" className="inline-block py-2 transition-colors duration-200 hover:text-white">Help Center</Link>
+              <Link href="/accessibility" className="inline-block py-2 transition-colors duration-200 hover:text-white">Accessibility</Link>
               <button
                 type="button"
                 onClick={() => {
                   if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_COOKIE_PREFS))
                 }}
-                className="transition-colors duration-200 hover:text-white"
+                className="inline-block py-2 transition-colors duration-200 hover:text-white"
               >
                 Cookie Preferences
               </button>
-              <Link href="/auth/login" className="transition-colors duration-200 hover:text-white">Staff Login</Link>
+              <Link href="/auth/login" className="inline-block py-2 transition-colors duration-200 hover:text-white">Staff Login</Link>
             </div>
           </div>
         </div>

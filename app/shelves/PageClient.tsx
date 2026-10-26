@@ -42,8 +42,10 @@ function ShelfBook({
   return (
     <Link
       href={`/book/${book.slug}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      // Mouse only: on touch the emulated enter would stick after a tap and
+      // start the cover cycle on a book the user is navigating away from.
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHovered(true) }}
+      onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHovered(false) }}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
       title={book.title}
@@ -82,8 +84,14 @@ function ShelfBook({
         )}
       </div>
 
-      {/* Title on hover, positioned above the book so it clears the shelf. */}
-      <span className="pointer-events-none absolute -top-9 left-1/2 z-20 w-36 -translate-x-1/2 rounded-lg bg-primaryDark px-2 py-1 text-center text-[10px] font-semibold leading-tight text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover/book:opacity-100">
+      {/* Title on hover, positioned above the book so it clears the shelf.
+          Hover-capable devices only; touch gets the caption below instead. */}
+      <span className="pointer-events-none absolute -top-9 left-1/2 z-20 w-36 -translate-x-1/2 rounded-lg bg-primaryDark px-2 py-1 text-center text-[10px] font-semibold leading-tight text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover/book:opacity-100 [@media(hover:none)]:hidden">
+        {book.title}
+      </span>
+      {/* Touch screens can't hover, so show the title under the cover. Fixed
+          two-line height keeps the covers level on the shelf. */}
+      <span className="mt-1.5 h-[2.5em] w-[92px] text-center text-[11px] font-semibold leading-tight text-white/90 line-clamp-2 sm:w-[114px] [@media(hover:hover)]:hidden">
         {book.title}
       </span>
     </Link>
@@ -186,7 +194,7 @@ export default function ShelvesPageClient({ shelves }: { shelves: ShelfWithBooks
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm sm:text-base text-muted">
             Hand-picked collections, grouped the way we would arrange them in a real shop.
-            Hover a book to take a closer look, then click through to read more.
+            Hover over a book for a closer look, or tap it to read more.
           </p>
         </div>
 

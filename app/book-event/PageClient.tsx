@@ -178,11 +178,11 @@ export default function BookEventPage() {
   }
 
   const inputClass =
-    'rounded-xl border border-black/10 bg-white px-4 py-3 font-normal outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
+    'w-full rounded-xl border border-black/10 bg-white px-4 py-3 font-normal outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30'
 
   return (
     <div className="min-h-screen text-ink">
-      <SiteHeader />
+      <SiteHeader current="/book-event" />
 
       <main>
         <section className="relative overflow-hidden pb-10 sm:pb-16 pt-20 sm:pt-28">
@@ -285,22 +285,22 @@ export default function BookEventPage() {
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2 font-semibold text-sm">
                       Organization Name *
-                      <input className={inputClass} type="text" name="organizationName" value={formData.organizationName} onChange={handleChange} placeholder="Your School/Masjid/Organization" required />
+                      <input className={inputClass} type="text" name="organizationName" autoComplete="organization" value={formData.organizationName} onChange={handleChange} placeholder="Your School/Masjid/Organization" required />
                     </label>
                     <label className="grid gap-2 font-semibold text-sm">
                       Contact Name *
-                      <input className={inputClass} type="text" name="contactName" value={formData.contactName} onChange={handleChange} placeholder="Your Full Name" required />
+                      <input className={inputClass} type="text" name="contactName" autoComplete="name" value={formData.contactName} onChange={handleChange} placeholder="Your Full Name" required />
                     </label>
                   </div>
 
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2 font-semibold text-sm">
                       Email Address *
-                      <input className={inputClass} type="email" name="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" required />
+                      <input className={inputClass} type="email" name="email" autoComplete="email" value={formData.email} onChange={handleChange} placeholder="email@example.com" required />
                     </label>
                     <label className="grid gap-2 font-semibold text-sm">
                       Phone Number *
-                      <input className={inputClass} type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="(555) 123-4567" required />
+                      <input className={inputClass} type="tel" name="phone" autoComplete="tel" value={formData.phone} onChange={handleChange} placeholder="(555) 123-4567" required />
                     </label>
                   </div>
 
@@ -318,14 +318,14 @@ export default function BookEventPage() {
                     </label>
                     <label className="grid gap-2 font-semibold text-sm">
                       Preferred Event Date *
-                      <input className={inputClass} type="date" name="eventDate" value={formData.eventDate} onChange={handleChange} required />
+                      <input className={`${inputClass} min-h-[3rem] appearance-none`} type="date" name="eventDate" value={formData.eventDate} onChange={handleChange} required />
                     </label>
                   </div>
 
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2 font-semibold text-sm">
                       Expected Attendees *
-                      <input className={inputClass} type="number" name="expectedAttendees" value={formData.expectedAttendees} onChange={handleChange} placeholder="e.g., 200" required />
+                      <input className={inputClass} type="number" inputMode="numeric" name="expectedAttendees" value={formData.expectedAttendees} onChange={handleChange} placeholder="e.g., 200" required />
                     </label>
                     <label className="grid gap-2 font-semibold text-sm">
                       Location (City, State) *

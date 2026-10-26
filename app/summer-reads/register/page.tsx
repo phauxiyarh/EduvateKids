@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../../../lib/firebase'
-import { EventNavDropdown } from '../../components/EventNavDropdown'
-import { HeaderCart } from '../../components/HeaderCart'
+import { SiteHeader } from '../../components/SiteChrome'
 import { OPEN_COOKIE_PREFS } from '../../components/CookieConsent'
 import logo from '../../../assets/logo.png'
 import { COUNTRIES, US_STATES, US_COUNTRY } from '../../../lib/geo'
@@ -74,38 +73,7 @@ export default function SummerRegisterPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50/60 via-white to-emerald-50/60 text-ink">
-      <header className="sticky top-0 z-50 border-b border-primary/10 bg-white/80 shadow-[0_8px_30px_rgba(124,58,237,0.06)]">
-        <div className="pointer-events-none absolute inset-0 -z-10 backdrop-blur-xl" aria-hidden="true" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="mx-auto flex w-11/12 max-w-6xl items-center justify-between py-3">
-          <Link href="/summer-reads" className="flex items-center gap-2">
-            <Image src={logo} alt="Eduvate Kids logo" width={36} height={36} className="h-8 w-8 sm:h-9 sm:w-9" />
-            <span className="font-display text-base sm:text-lg font-bold">Summer Reads</span>
-          </Link>
-          <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
-            <Link href="/" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10" /></svg>
-              <span>Home</span>
-            </Link>
-            <Link href="/catalog" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              <span>Catalog</span>
-            </Link>
-            <EventNavDropdown active />
-            <Link href="/contact-us" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 3v-3z" /></svg>
-              <span>Contact</span>
-            </Link>
-            <Link href="/faqs" className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-primaryDark bg-primary/5 transition-all duration-300 ease-out hover:bg-primary/10 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(124,58,237,0.14)]">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span>FAQs</span>
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <HeaderCart />
-          </div>
-        </div>
-      </header>
+      <SiteHeader current="/summer-reads" />
 
       <main className="mx-auto w-11/12 max-w-lg py-10 sm:py-14">
         {code ? (
@@ -178,17 +146,17 @@ export default function SummerRegisterPage() {
                   <input className={inputClass} value={form.childName} onChange={(e) => setForm({ ...form, childName: e.target.value })} required />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Date of Birth *
-                  <input type="date" className={inputClass} value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required max={new Date().toISOString().split('T')[0]} />
+                  <input type="date" className={`${inputClass} min-h-[3rem] appearance-none`} value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required max={new Date().toISOString().split('T')[0]} />
                   {childAge !== null && <span className="text-xs font-normal text-primaryDark">Age: {childAge} years</span>}
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Parent/Guardian Name *
-                  <input className={inputClass} value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} required />
+                  <input className={inputClass} autoComplete="name" value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} required />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Parent Email *
-                  <input type="email" className={inputClass} value={form.parentEmail} onChange={(e) => setForm({ ...form, parentEmail: e.target.value })} required />
+                  <input type="email" autoComplete="email" className={inputClass} value={form.parentEmail} onChange={(e) => setForm({ ...form, parentEmail: e.target.value })} required />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Parent Phone
-                  <input type="tel" className={inputClass} value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} />
+                  <input type="tel" autoComplete="tel" className={inputClass} value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} />
                 </label>
                 <label className="grid gap-1.5 text-sm font-semibold">Country *
                   <select
@@ -232,7 +200,7 @@ export default function SummerRegisterPage() {
                   </div>
                 )}
                 <label className="flex items-start gap-2.5 text-sm text-muted">
-                  <input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5 h-4 w-4 rounded border-black/20 text-primary focus:ring-primary/30" required />
+                  <input type="checkbox" checked={form.consent} onChange={(e) => setForm({ ...form, consent: e.target.checked })} className="mt-0.5 h-5 w-5 flex-shrink-0 rounded border-black/20 text-primary focus:ring-primary/30" required />
                   <span>I consent to registering my child for the Summer Reads program and confirm the information is accurate.</span>
                 </label>
                 <button type="submit" disabled={!canSubmit || submitting} className="btn-shine mt-2 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-semibold text-white shadow-md transition-all duration-300 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0">

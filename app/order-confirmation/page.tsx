@@ -15,24 +15,36 @@ import logo from '../../assets/logo.png'
  * friendly confirmation - it reads the redirect status if present.
  */
 export default function OrderConfirmationPage() {
-  const [status, setStatus] = useState<'success' | 'processing' | 'failed'>('success')
+  // 'pending' until the query string is read; 'none' is a direct visit or
+  // bookmark with no payment behind it.
+  const [status, setStatus] = useState<'pending' | 'success' | 'processing' | 'failed' | 'none'>('pending')
   const { clear } = useCart()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const redirect = params.get('redirect_status')
-    if (redirect === 'failed') setStatus('failed')
-    else if (redirect === 'processing') setStatus('processing')
-    else setStatus('success')
+    const pi = params.get('payment_intent')
 
-    // Clear the cart on any non-failed arrival (covers the 3DS redirect path,
-    // where confirmPayment redirected before the checkout page could clear it).
-    if (redirect !== 'failed') clear()
+    // Checkout sends redirect_status=succeeded|processing for inline payments;
+    // Stripe's own redirect (3DS/bank) appends payment_intent + redirect_status.
+    // Only those arrivals count as a payment. Any other redirect_status
+    // (failed, requires_payment_method, ...) is a failure, and no params at
+    // all means nobody just paid, so the cart must be left alone.
+    let next: 'success' | 'processing' | 'failed' | 'none'
+    if (redirect === 'succeeded') next = 'success'
+    else if (redirect === 'processing') next = 'processing'
+    else if (redirect) next = 'failed'
+    else if (pi) next = 'success'
+    else next = 'none'
+    setStatus(next)
+
+    // Clear the cart on a real payment (covers the 3DS redirect path, where
+    // confirmPayment redirected before the checkout page could clear it).
+    if (next === 'success' || next === 'processing') clear()
 
     // Backstop: if Stripe redirected here (3DS/bank), it appends payment_intent.
     // Record the order now - idempotent server-side (no-op if webhook already ran).
-    const pi = params.get('payment_intent')
-    if (pi && redirect !== 'failed') {
+    if (pi && next !== 'failed') {
       httpsCallable(functions, 'finalizeStripeOrder')({ paymentIntentId: pi }).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,15 +173,26 @@ export default function OrderConfirmationPage() {
             <p className="mt-3 text-muted">No charge was made. You can try again with a different payment method.</p>
           </div>
         )}
+        {status === 'none' && (
+          <div className="animate-fadeIn">
+            <h1 className="font-display text-3xl">No recent order here</h1>
+            <p className="mt-3 text-muted">
+              This page confirms an order straight after checkout. If you&apos;ve just paid, check your email for
+              the confirmation, or <Link href="/contact-us" className="font-semibold text-primaryDark underline underline-offset-2">contact us</Link>.
+            </p>
+          </div>
+        )}
 
-        <div className={`mt-8 flex flex-wrap justify-center gap-3 ${status === 'success' ? 'ek-rise' : ''}`} style={status === 'success' ? { animationDelay: '0.65s' } : undefined}>
-          <Link href="/catalog" className="btn-shine rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5">
-            {status === 'failed' ? 'Back to Products' : 'Continue Shopping'}
-          </Link>
-          <Link href="/" className="rounded-full border border-primary/25 bg-white px-6 py-3 text-sm font-semibold text-primaryDark transition hover:-translate-y-0.5 hover:border-primary/40">
-            Return Home
-          </Link>
-        </div>
+        {status !== 'pending' && (
+          <div className={`mt-8 flex flex-wrap justify-center gap-3 ${status === 'success' ? 'ek-rise' : ''}`} style={status === 'success' ? { animationDelay: '0.65s' } : undefined}>
+            <Link href="/catalog" className="btn-shine rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5">
+              {status === 'failed' ? 'Back to Products' : 'Continue Shopping'}
+            </Link>
+            <Link href="/" className="rounded-full border border-primary/25 bg-white px-6 py-3 text-sm font-semibold text-primaryDark transition hover:-translate-y-0.5 hover:border-primary/40">
+              Return Home
+            </Link>
+          </div>
+        )}
       </main>
     </div>
   )

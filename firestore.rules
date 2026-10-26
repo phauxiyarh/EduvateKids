@@ -63,6 +63,11 @@ service cloud.firestore {
     match /inventory/{document=**} {
       allow read: if isStaff();
       allow write: if isAdmin();
+      // A cashier's sale has to take the sold copies off the shelf. Without
+      // this the POS saved the sale but the stock decrement was denied, so
+      // every cashier sale left the count too high. Only the count may change.
+      allow update: if isStaff()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', '_live']);
     }
     match /events/{document=**} {
       allow read: if isStaff();
@@ -84,6 +89,10 @@ service cloud.firestore {
     match /catalog/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
+      // The POS mirrors a sale's new count onto the storefront listing, so a
+      // cashier may change the stock figure and nothing else.
+      allow update: if isStaff()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']);
     }
 
     // ── Shelves: public read, admin write ───────────────────────────────────

@@ -42,9 +42,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow create, delete: if isAdmin();
+      // posEventId (which book fair a cashier's POS is locked to) is the
+      // admin's call, like role: a cashier can't move themselves off it.
       allow update: if isAdmin()
                     || (request.auth.uid == userId
-                        && !('role' in request.resource.data.diff(resource.data).affectedKeys()));
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'posEventId']));
     }
 
     // ── Public config (read by anyone signed in; writes admin-only) ─────────
@@ -71,7 +73,10 @@ service cloud.firestore {
     }
     match /events/{document=**} {
       allow read: if isStaff();
-      allow write: if isStaff();
+      // Cashiers record sales (and book fair stock counts) on an event, but
+      // only an admin creates or deletes one, since deleting erases its orders.
+      allow update: if isStaff();
+      allow create, delete: if isAdmin();
     }
     match /generalSales/{document=**} {
       allow read: if isStaff();

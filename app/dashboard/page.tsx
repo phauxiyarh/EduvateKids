@@ -15,10 +15,18 @@ import {
   getDoc,
   onSnapshot,
   serverTimestamp,
-  increment
+  increment,
+  arrayUnion,
+  runTransaction,
+  FieldPath,
+  deleteField,
+  query,
+  where
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { ImageSlider } from '../components/ImageSlider'
+import { BookFairStockModal } from '../components/BookFairStockModal'
+import { CashierSourcesPanel } from '../components/CashierSourcesPanel'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   blogSlug,
@@ -155,6 +163,10 @@ type Order = {
   total: number
   timestamp: string
   eventId: string
+  /** Set when the copies came out of an event's own stock (a book fair) rather
+   *  than main inventory; deleting the order puts them back there. Kept apart
+   *  from eventId because Move can re-file the order under another event. */
+  stockEventId?: string
 }
 
 type CartItem = {
@@ -401,7 +413,41 @@ type EventRecord = {
   sales: Sale[]
   orders: Order[]
   expenses: Expense[]
+  /** Book fair stock: inventory id -> copies on hand at the event. Present
+   *  only once the admin has moved stock to the event; from then on the POS
+   *  sells there from this map instead of main inventory. */
+  stock?: Record<string, number>
+  /** Orders/sales deleted or moved out. A phone's stale localStorage backup
+   *  must not resurrect them during load-time recovery. */
+  removedOrderIds?: string[]
+  removedSaleIds?: string[]
 }
+
+const byNewestTimestamp = <T extends { timestamp: string }>(a: T, b: T) =>
+  String(b.timestamp).localeCompare(String(a.timestamp))
+
+/** Firestore map -> clean { inventoryId: whole number } (negatives kept: they
+ *  mean two tills oversold and the count needs a look). */
+const normalizeStockMap = (raw: unknown): Record<string, number> => {
+  const out: Record<string, number> = {}
+  for (const [id, qty] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    const n = Math.round(Number(qty))
+    if (Number.isFinite(n)) out[id] = n
+  }
+  return out
+}
+
+/** Apply [inventoryId, delta] pairs to a fair's stock map (local mirror of
+ *  the increment() writes). */
+const adjustStock = (stock: Record<string, number>, deltas: [string, number][]) => {
+  const next = { ...stock }
+  for (const [id, delta] of deltas) next[id] = (next[id] ?? 0) + delta
+  return next
+}
+
+/** True once an event carries its own stock (a book fair). */
+const hasEventStock = (event?: EventRecord | null): event is EventRecord & { stock: Record<string, number> } =>
+  !!event && !!event.stock
 
 type AgeCategory = '0+' | '3+' | '6+' | '10+' | 'Adult'
 
@@ -707,6 +753,32 @@ const normalizeSale = (data: Partial<Sale>): Sale | null => {
   }
 }
 
+/** One events/{id} doc -> EventRecord. Shared by the first load and the live
+ *  listener so both read the same shape. */
+const normalizeEventDoc = (id: string, data: Partial<EventRecord>): EventRecord => {
+  const sales = Array.isArray(data.sales)
+    ? (data.sales as Partial<Sale>[]).map((sale) => normalizeSale(sale)).filter((sale): sale is Sale => Boolean(sale))
+    : []
+  return {
+    id,
+    name: String(data.name ?? ''),
+    cost: Number(data.cost ?? 0),
+    startDate: String(data.startDate ?? ''),
+    endDate: String(data.endDate ?? ''),
+    location: String(data.location ?? ''),
+    type: (data.type ?? 'Bazaar') as EventRecord['type'],
+    status: (data.status ?? 'closed') as EventStatus,
+    // Sales are appended with arrayUnion, so stored order is oldest-first;
+    // the UI reads newest-first.
+    sales: sales.sort(byNewestTimestamp),
+    orders: Array.isArray(data.orders) ? [...(data.orders as Order[])].sort(byNewestTimestamp) : [],
+    expenses: Array.isArray(data.expenses) ? (data.expenses as Expense[]) : [],
+    ...(data.stock && typeof data.stock === 'object' ? { stock: normalizeStockMap(data.stock) } : {}),
+    removedOrderIds: Array.isArray(data.removedOrderIds) ? data.removedOrderIds.map(String) : [],
+    removedSaleIds: Array.isArray(data.removedSaleIds) ? data.removedSaleIds.map(String) : []
+  }
+}
+
 const normalizeHeader = (value: string) =>
   value
     .toLowerCase()
@@ -987,6 +1059,15 @@ export default function DashboardPage() {
   const [eventDateStart, setEventDateStart] = useState('')
   const [eventDateEnd, setEventDateEnd] = useState('')
   const [selectedEventId, setSelectedEventId] = useState('general')
+  // This user's POS stock source, set by an admin on users/{uid}.posEventId.
+  // '' = main inventory at any active event; an event id locks a cashier's
+  // POS to that book fair and sells from its own stock.
+  const [posAssignment, setPosAssignment] = useState('')
+  // Admin: cashier accounts and their assignments, for the Book Fair panel.
+  const [cashiers, setCashiers] = useState<{ uid: string; email: string; name: string; posEventId: string }[]>([])
+  const [cashiersLoading, setCashiersLoading] = useState(false)
+  // Event whose book fair stock is being managed (admin).
+  const [fairStockEventId, setFairStockEventId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [addQuantity, setAddQuantity] = useState(1)
@@ -1187,65 +1268,66 @@ export default function DashboardPage() {
 
             const loadedEvents = eventsSnap.docs
               .filter((snap) => snap.data()._live === true)
-              .map((snap) => {
-                const data = snap.data() as Partial<EventRecord>
-                const sales = Array.isArray(data.sales)
-                  ? (data.sales as Partial<Sale>[])
-                      .map((sale) => normalizeSale(sale))
-                      .filter((sale): sale is Sale => Boolean(sale))
-                  : []
+              .map((snap) => normalizeEventDoc(snap.id, snap.data() as Partial<EventRecord>))
 
-                return {
-                  id: snap.id,
-                  name: String(data.name ?? ''),
-                  cost: Number(data.cost ?? 0),
-                  startDate: String(data.startDate ?? ''),
-                  endDate: String(data.endDate ?? ''),
-                  location: String(data.location ?? ''),
-                  type: (data.type ?? 'Bazaar') as EventRecord['type'],
-                  status: (data.status ?? 'closed') as EventStatus,
-                  sales,
-                  orders: Array.isArray(data.orders) ? data.orders as Order[] : [],
-                  expenses: Array.isArray(data.expenses) ? data.expenses as Expense[] : []
-                }
-              })
-
-            // ── Recover missing orders/sales from localStorage backup ──
+            // ── Recover orders/sales this phone saved but the cloud lacks ──
+            // Several phones sell at once (a book fair beside other events), so
+            // recovery may only ADD what is missing, by id, never replace the
+            // cloud list with this phone's copy: that wiped every order another
+            // phone had taken since. Deleted or moved orders are skipped too.
+            // Only the last week: recovery exists for a sale that failed to sync
+            // at an event, and an older backup may still hold orders that were
+            // deleted before deletions were recorded in removedOrderIds.
+            const recoverSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
             const recoveredEvents: EventRecord[] = []
-            const eventsToResync: EventRecord[] = []
+            const toResync: { event: EventRecord; orders: Order[]; sales: Sale[] }[] = []
             for (const event of loadedEvents) {
               try {
-                const backupOrdersRaw = localStorage.getItem(`eduvate-orders-${event.id}`)
-                const backupSalesRaw = localStorage.getItem(`eduvate-sales-${event.id}`)
-                if (backupOrdersRaw) {
-                  const backupOrders = JSON.parse(backupOrdersRaw) as Order[]
-                  const backupSales = backupSalesRaw ? JSON.parse(backupSalesRaw) as Sale[] : null
-                  if (backupOrders.length > event.orders.length) {
-                    console.warn(`[Recovery] Event "${event.name}": Firebase has ${event.orders.length} orders, localStorage has ${backupOrders.length}. Restoring.`)
-                    const restored = {
-                      ...event,
-                      orders: backupOrders,
-                      sales: backupSales && backupSales.length > event.sales.length ? backupSales : event.sales
-                    }
-                    recoveredEvents.push(restored)
-                    eventsToResync.push(restored)
-                    continue
+                const backupOrders = (JSON.parse(localStorage.getItem(`eduvate-orders-${event.id}`) || '[]') as Order[])
+                  .filter((o) => String(o?.timestamp ?? '') >= recoverSince)
+                const backupSales = (JSON.parse(localStorage.getItem(`eduvate-sales-${event.id}`) || '[]') as Sale[])
+                  .filter((s) => String(s?.timestamp ?? '') >= recoverSince)
+                const haveOrders = new Set(event.orders.map((o) => o.id))
+                const haveSales = new Set(event.sales.map((s) => s.id))
+                const goneOrders = new Set(event.removedOrderIds ?? [])
+                const goneSales = new Set(event.removedSaleIds ?? [])
+                const missingOrders = backupOrders.filter((o) => o?.id && !haveOrders.has(o.id) && !goneOrders.has(o.id))
+                const missingSales = backupSales.filter((s) => s?.id && !haveSales.has(s.id) && !goneSales.has(s.id))
+                if (missingOrders.length || missingSales.length) {
+                  console.warn(`[Recovery] Event "${event.name}": restoring ${missingOrders.length} order(s) and ${missingSales.length} sale(s) from this device.`)
+                  const merged = {
+                    ...event,
+                    orders: [...event.orders, ...missingOrders].sort(byNewestTimestamp),
+                    sales: [...event.sales, ...missingSales].sort(byNewestTimestamp)
                   }
+                  recoveredEvents.push(merged)
+                  toResync.push({ event: merged, orders: missingOrders, sales: missingSales })
+                  continue
                 }
               } catch { /* ignore */ }
               recoveredEvents.push(event)
             }
             setEvents(recoveredEvents)
 
-            // Re-push recovered data back to Firebase so it persists
-            for (const event of eventsToResync) {
+            // Push only the recovered entries; arrayUnion leaves everything
+            // other phones wrote untouched.
+            for (const { event, orders, sales } of toResync) {
               try {
-                await updateDoc(doc(db, 'events', event.id), {
-                  orders: event.orders,
-                  sales: event.sales,
-                  _live: true
-                })
-                console.log(`[Recovery] Re-synced "${event.name}" to Firebase (${event.orders.length} orders, ${event.sales.length} sales).`)
+                const fields: unknown[] = ['_live', true]
+                if (orders.length) fields.push('orders', arrayUnion(...orders))
+                if (sales.length) fields.push('sales', arrayUnion(...sales))
+                // The lost write carried the fair's stock decrement too (one
+                // atomic batch), so a recovered fair order must re-apply it or
+                // the fair's count stays too high.
+                // Summed per title: one update may not name the same field twice.
+                const soldFromFair = new Map<string, number>()
+                for (const o of orders) {
+                  if (o.stockEventId !== event.id || !hasEventStock(event)) continue
+                  for (const it of o.items) soldFromFair.set(it.itemId, (soldFromFair.get(it.itemId) ?? 0) + it.quantity)
+                }
+                soldFromFair.forEach((q, id) => fields.push(new FieldPath('stock', id), increment(-q)))
+                await updateDoc(doc(db, 'events', event.id), fields[0] as string, fields[1], ...fields.slice(2))
+                console.log(`[Recovery] Re-synced "${event.name}" (${orders.length} orders, ${sales.length} sales).`)
               } catch (err) {
                 console.error(`[Recovery] Failed to re-sync "${event.name}":`, err)
               }
@@ -1387,16 +1469,118 @@ export default function DashboardPage() {
     }
   }, [events, selectedEventId])
 
+  // ── POS stock source ──
+  // Follow this user's assignment live, so an admin moving a cashier to or
+  // from a book fair takes effect on their phone without a reload.
+  useEffect(() => {
+    if (!user || demoMode) return
+    return onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => setPosAssignment(String(snap.data()?.posEventId ?? '')),
+      (error) => console.error('POS assignment listener error:', error)
+    )
+  }, [user, demoMode])
+
+  // Events stay live. With a book fair running beside other events, a phone
+  // must see the admin stocking, closing or deleting a fair, and the other
+  // tills' sales and counts, without a reload; a one-off read left phones
+  // selling against stale stock. Pending local writes are included, so an
+  // optimistic sale on this phone is never flickered away.
+  useEffect(() => {
+    if (!user || demoMode) return
+    return onSnapshot(
+      collection(db, 'events'),
+      (snap) => {
+        setEvents(
+          snap.docs
+            .filter((d) => d.data()._live === true)
+            .map((d) => normalizeEventDoc(d.id, d.data() as Partial<EventRecord>))
+        )
+      },
+      (error) => console.error('Events listener error:', error)
+    )
+  }, [user, demoMode])
+
+  // Admin: load cashier accounts when the Events view (where they're assigned) opens.
+  useEffect(() => {
+    if (userRole !== 'admin' || activeView !== 'events' || demoMode) return
+    let cancelled = false
+    setCashiersLoading(true)
+    getDocs(query(collection(db, 'users'), where('role', '==', 'cashier')))
+      .then((snap) => {
+        if (cancelled) return
+        setCashiers(
+          snap.docs
+            .map((d) => ({
+              uid: d.id,
+              email: String(d.data().email ?? ''),
+              name: String(d.data().displayName ?? d.data().name ?? ''),
+              posEventId: String(d.data().posEventId ?? '')
+            }))
+            .sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email))
+        )
+      })
+      .catch((error) => console.error('Load cashiers error:', error))
+      .finally(() => { if (!cancelled) setCashiersLoading(false) })
+    return () => { cancelled = true }
+  }, [userRole, activeView, demoMode])
+
+  const setCashierSource = async (uid: string, posEventId: string): Promise<string | null> => {
+    try {
+      await updateDoc(doc(db, 'users', uid), { posEventId })
+      setCashiers((current) => current.map((c) => (c.uid === uid ? { ...c, posEventId } : c)))
+      return null
+    } catch (error) {
+      console.error('Set cashier source error:', error)
+      return 'Could not save that change. Check the connection and try again.'
+    }
+  }
+
+  // A cashier the admin assigned to a book fair is locked to it while it runs.
+  const lockedPosEvent = userRole === 'cashier' && posAssignment
+    ? events.find((e) => e.id === posAssignment && e.status === 'active') ?? null
+    : null
+  useEffect(() => {
+    if (lockedPosEvent && selectedEventId !== lockedPosEvent.id) setSelectedEventId(lockedPosEvent.id)
+  }, [lockedPosEvent, selectedEventId])
+
+  // Selling at an event with its own stock draws from that stock, so the POS
+  // lists only the fair's books, at the fair's counts. Everywhere else it is
+  // main inventory, exactly as before.
+  const posFair = useMemo(() => {
+    const event = events.find((e) => e.id === selectedEventId)
+    return hasEventStock(event) ? event : null
+  }, [events, selectedEventId])
+  const posInventory = useMemo(() => {
+    if (!posFair) return inventory
+    return inventory
+      .filter((item) => item.id in posFair.stock)
+      .map((item) => ({ ...item, quantity: Math.max(0, posFair.stock[item.id] ?? 0) }))
+  }, [inventory, posFair])
+
+  // Counts differ between sources, so a cart built against one source must
+  // not be checked out against another.
+  const posSourceKey = posFair ? `fair:${posFair.id}` : 'main'
+  const prevPosSourceKey = useRef(posSourceKey)
+  useEffect(() => {
+    if (prevPosSourceKey.current === posSourceKey) return
+    prevPosSourceKey.current = posSourceKey
+    if (!cartItems.length) return
+    setCartItems([])
+    setEventMessage(posFair ? `Cart cleared: ${posFair.name} sells from its own book fair stock.` : 'Cart cleared: now selling from main inventory.')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posSourceKey])
+
   const filteredInventory = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    if (!query) return inventory
-    return inventory.filter((item) =>
+    if (!query) return posInventory
+    return posInventory.filter((item) =>
       // code/altCode so a cashier can type the ISBN off a book whose barcode won't scan
       [item.title, item.publisher, item.category, item.code, item.altCode].some((field) =>
         (field || '').toLowerCase().includes(query)
       )
     )
-  }, [inventory, searchQuery])
+  }, [posInventory, searchQuery])
 
   // Where the POS will record the next sale. A sale rung up against the wrong
   // group is the most common correction, so the checkout states it and warns
@@ -2166,6 +2350,7 @@ export default function DashboardPage() {
     }
 
     const nextStatus: EventStatus = 'closed'
+    if (!(await offerReturnBeforeClosing(targetEvent, 'close the event'))) return
 
     setEvents((current) =>
       current.map((event) =>
@@ -2185,6 +2370,8 @@ export default function DashboardPage() {
     const targetEvent = events.find((e) => e.id === eventId)
     if (!targetEvent) return
     if (!confirm(`Delete event "${targetEvent.name}"? This will remove all its sales and orders. This cannot be undone.`)) return
+    // Deleting the doc would destroy the fair's stock count outright.
+    if (!(await offerReturnBeforeClosing(targetEvent, 'delete the event'))) return
     setEvents((current) => current.filter((e) => e.id !== eventId))
     try {
       await deleteDoc(doc(db, 'events', eventId))
@@ -2227,6 +2414,9 @@ export default function DashboardPage() {
       type: editEventType,
       status: editEventStatus
     }
+    const liveEvent = events.find((ev) => ev.id === editingEvent.id)
+    if (editEventStatus === 'closed' && liveEvent?.status === 'active' &&
+        !(await offerReturnBeforeClosing(liveEvent, 'close the event'))) return
 
     setEvents((current) =>
       current.map((ev) =>
@@ -3762,7 +3952,7 @@ export default function DashboardPage() {
   }, [inventory, catalogItems])
 
   const handleAddToCart = (itemId: string, qtyOverride?: number) => {
-    const item = inventory.find((stock) => stock.id === itemId)
+    const item = posInventory.find((stock) => stock.id === itemId)
     if (!item) return
 
     const quantity = Math.max(1, Math.round(qtyOverride ?? addQuantity))
@@ -3806,9 +3996,12 @@ export default function DashboardPage() {
   const handlePosScan = (raw: string) => {
     const code = raw.trim().toLowerCase()
     if (!code) return
-    const match = inventory.find((i) => itemMatchesCode(i, raw))
+    const match = posInventory.find((i) => itemMatchesCode(i, raw))
     if (!match) {
-      setEventMessage(`No bound book matches "${raw.trim()}". Bind it to an item in Inventory first.`)
+      const elsewhere = posFair && inventory.find((i) => itemMatchesCode(i, raw))
+      setEventMessage(elsewhere
+        ? `${elsewhere.title} is not in ${posFair.name}'s book fair stock.`
+        : `No bound book matches "${raw.trim()}". Bind it to an item in Inventory first.`)
       return
     }
     setPosScannerOpen(false)
@@ -3824,7 +4017,7 @@ export default function DashboardPage() {
   }
 
   const handleUpdateCartQuantity = (itemId: string, nextValue: number) => {
-    const item = inventory.find((stock) => stock.id === itemId)
+    const item = posInventory.find((stock) => stock.id === itemId)
     if (!item) return
 
     const quantity = Math.max(0, Math.round(nextValue))
@@ -3868,7 +4061,10 @@ export default function DashboardPage() {
     if (!isGeneralSale && eventRecord?.status !== 'active') return
 
     setIsSubmittingSale(true)
-    const stockMap = new Map(inventory.map((item) => [item.id, item]))
+    // Checked against the source the sale draws from: the fair's own stock at
+    // a book fair, main inventory everywhere else.
+    const fair = posFair && posFair.id === eventRecord?.id ? posFair : null
+    const stockMap = new Map(posInventory.map((item) => [item.id, item]))
 
     for (const cartItem of cartItems) {
       const stockItem = stockMap.get(cartItem.itemId)
@@ -3894,7 +4090,9 @@ export default function DashboardPage() {
       const inventoryItem = inventory.find((item) => item.id === cartItem.itemId)
       
       return {
-        id: `sale-${Date.now()}-${cartItem.itemId}`,
+        // Random suffix, as for orders: two tills can sell the same book in
+        // the same millisecond.
+        id: `sale-${Date.now()}-${cartItem.itemId}-${Math.random().toString(36).slice(2, 7)}`,
         itemId: cartItem.itemId,
         title: cartItem.title,
         quantity: cartItem.quantity,
@@ -3908,7 +4106,8 @@ export default function DashboardPage() {
 
     // Create Order record for this transaction
     const orderRecord: Order = {
-      id: `order-${Date.now()}`,
+      // Random suffix: several tills can check out in the same millisecond.
+      id: `order-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       items: cartItems.map((cartItem) => ({
         itemId: cartItem.itemId,
         title: cartItem.title,
@@ -3924,12 +4123,15 @@ export default function DashboardPage() {
       paymentType,
       total: totalWithFee,
       timestamp,
-      eventId: selectedEventId
+      eventId: selectedEventId,
+      ...(fair ? { stockEventId: fair.id } : {})
     }
 
     const updatedSales = eventRecord ? [...salesToAdd, ...eventRecord.sales] : salesToAdd
     const updatedOrders = eventRecord ? [orderRecord, ...eventRecord.orders] : [orderRecord]
-    const nextInventory = inventory.map((item) => {
+    // A book fair sale leaves main inventory alone: those copies already left
+    // it when the admin moved them to the fair.
+    const nextInventory = fair ? inventory : inventory.map((item) => {
       const cartItem = cartItems.find((entry) => entry.itemId === item.id)
       if (!cartItem) return item
       return {
@@ -3947,7 +4149,14 @@ export default function DashboardPage() {
     if (eventRecord) {
       setEvents((current) =>
         current.map((event) =>
-          event.id === eventRecord.id ? { ...event, sales: updatedSales, orders: updatedOrders } : event
+          event.id === eventRecord.id
+            ? {
+                ...event,
+                sales: updatedSales,
+                orders: updatedOrders,
+                ...(fair ? { stock: adjustStock(event.stock ?? {}, cartItems.map((c) => [c.itemId, -c.quantity])) } : {})
+              }
+            : event
         )
       )
     } else {
@@ -3982,7 +4191,16 @@ export default function DashboardPage() {
           // Batch 1: Save orders/sales
           const orderBatch = writeBatch(db)
           if (eventRecord) {
-            orderBatch.update(doc(db, 'events', eventRecord.id), { sales: updatedSales, orders: updatedOrders, _live: true })
+            // Append, never rewrite: other phones may be selling at this event
+            // at the same moment, and writing back this phone's whole list
+            // wiped whatever they had saved since it last loaded.
+            const fields: unknown[] = ['sales', arrayUnion(...salesToAdd), 'orders', arrayUnion(orderRecord), '_live', true]
+            if (fair) {
+              // FieldPath, not a dotted string: an inventory id is not
+              // guaranteed to be a safe single path segment.
+              cartItems.forEach((c) => fields.push(new FieldPath('stock', c.itemId), increment(-c.quantity)))
+            }
+            orderBatch.update(doc(db, 'events', eventRecord.id), fields[0] as string, fields[1], ...fields.slice(2))
           } else {
             salesToAdd.forEach((sale) => {
               orderBatch.set(doc(db, 'generalSales', sale.id), { ...sale, _live: true })
@@ -4033,8 +4251,7 @@ export default function DashboardPage() {
           if (eventRecord) {
             const verifySnap = await getDoc(doc(db, 'events', eventRecord.id))
             const verifyData = verifySnap.data()
-            const savedOrderCount = (verifyData?.orders as Order[] | undefined)?.length ?? 0
-            verified = savedOrderCount >= updatedOrders.length
+            verified = ((verifyData?.orders as Order[] | undefined) ?? []).some((o) => o.id === orderRecord.id)
           } else {
             const verifySnap = await getDoc(doc(db, 'generalOrders', orderRecord.id))
             verified = verifySnap.exists()
@@ -4055,30 +4272,210 @@ export default function DashboardPage() {
     })()
   }
 
-  const handleDeleteOrder = async (order: Order) => {
-    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? This will restore inventory and remove all related sales records. Continue?`)) return
+  // ── Event order lists: read-modify-write in a transaction ──
+  // Admin edits (delete, edit, move) used to write back the admin's whole local
+  // copy of an event's orders, wiping any sale another phone had saved since
+  // the dashboard loaded. These read the current cloud copy instead and change
+  // only the targeted entries; Firestore retries if a sale lands mid-edit.
+  type EventLists = {
+    orders: Order[]
+    sales: Sale[]
+    stock?: Record<string, number>
+    removedOrderIds: string[]
+    removedSaleIds: string[]
+  }
+  const updateEventInCloud = (
+    eventId: string,
+    change: (current: EventLists) => Partial<EventLists>,
+    alsoWrite?: (tx: Parameters<Parameters<typeof runTransaction>[1]>[0]) => void
+  ): Promise<EventLists> => {
+    // Demo events aren't in Firestore; apply the change to local state only.
+    if (demoMode) {
+      const e = events.find((ev) => ev.id === eventId)
+      const current: EventLists = {
+        orders: e?.orders ?? [],
+        sales: e?.sales ?? [],
+        ...(e?.stock ? { stock: e.stock } : {}),
+        removedOrderIds: e?.removedOrderIds ?? [],
+        removedSaleIds: e?.removedSaleIds ?? []
+      }
+      return Promise.resolve({ ...current, ...change(current) })
+    }
+    return runTransaction(db, async (tx) => {
+      const ref = doc(db, 'events', eventId)
+      const snap = await tx.get(ref)
+      const data = snap.data() ?? {}
+      const current: EventLists = {
+        orders: Array.isArray(data.orders) ? (data.orders as Order[]) : [],
+        sales: Array.isArray(data.sales) ? (data.sales as Sale[]) : [],
+        ...(data.stock ? { stock: normalizeStockMap(data.stock) } : {}),
+        removedOrderIds: Array.isArray(data.removedOrderIds) ? data.removedOrderIds.map(String) : [],
+        removedSaleIds: Array.isArray(data.removedSaleIds) ? data.removedSaleIds.map(String) : []
+      }
+      const next = change(current)
+      alsoWrite?.(tx)
+      tx.update(ref, { ...next, _live: true })
+      return { ...current, ...next }
+    })
+  }
 
-    // Restore inventory quantities from the deleted order. Build a per-item
-    // add-back delta so the cloud write can use atomic increment().
+  // Bring local state, open modals and this phone's backup in line with what
+  // the cloud now holds for an event (which may include other phones' sales).
+  const applyEventLists = (eventId: string, lists: EventLists) => {
+    const orders = [...lists.orders].sort(byNewestTimestamp)
+    const sales = lists.sales
+      .map((s) => normalizeSale(s as Partial<Sale>))
+      .filter((s): s is Sale => Boolean(s))
+      .sort(byNewestTimestamp)
+    const patch = {
+      orders,
+      sales,
+      removedOrderIds: lists.removedOrderIds,
+      removedSaleIds: lists.removedSaleIds,
+      ...(lists.stock ? { stock: lists.stock } : {})
+    }
+    setEvents((current) => current.map((e) => (e.id === eventId ? { ...e, ...patch } : e)))
+    setViewingOrderHistory((v) => (v && v.id === eventId ? { ...v, ...patch } : v))
+    setViewingEventTransactions((v) => (v && v.id === eventId ? { ...v, ...patch } : v))
+    saveOrderBackupToLocal(eventId, orders, sales)
+  }
+
+  // ── Book fair stock transfers ──
+  // delta > 0 moves copies from main inventory to the fair; delta < 0 returns
+  // them. Both counts are read inside the transaction, so a sale another phone
+  // makes meanwhile can't push either side negative or double-count a return.
+  // Resolves to an error message, or null on success.
+  const transferFairStock = async (eventId: string, itemId: string, delta: number): Promise<string | null> => {
+    const qty = Math.round(delta)
+    if (!qty) return null
+    const item = inventory.find((i) => i.id === itemId)
+    if (!item) return 'That item is no longer in inventory.'
+    try {
+      const result = await runTransaction(db, async (tx) => {
+        const invRef = doc(db, 'inventory', itemId)
+        const eventRef = doc(db, 'events', eventId)
+        const [invSnap, eventSnap] = await Promise.all([tx.get(invRef), tx.get(eventRef)])
+        if (!invSnap.exists() || !eventSnap.exists()) throw new Error('missing')
+        const mainQty = Number(invSnap.data().quantity ?? 0)
+        const fairQty = Number(normalizeStockMap(eventSnap.data().stock)[itemId] ?? 0)
+        if (qty > 0 && qty > mainQty) return { error: `Only ${mainQty} of ${item.title} left in main inventory.` }
+        if (qty < 0 && -qty > fairQty) return { error: `Only ${Math.max(0, fairQty)} of ${item.title} at the fair to return.` }
+        tx.update(invRef, { quantity: increment(-qty), _live: true })
+        tx.update(eventRef, new FieldPath('stock', itemId), increment(qty), '_live', true)
+        return { mainQty: mainQty - qty, fairQty: fairQty + qty }
+      })
+      if ('error' in result) return result.error ?? 'Transfer refused.'
+      setInventory((current) => current.map((i) => (i.id === itemId ? { ...i, quantity: result.mainQty } : i)))
+      setEvents((current) => current.map((e) => (e.id === eventId ? { ...e, stock: { ...(e.stock ?? {}), [itemId]: result.fairQty } } : e)))
+      void mirrorStockToCatalog(item, result.mainQty)
+      return null
+    } catch (error) {
+      console.error('Book fair transfer error:', error)
+      return 'Could not move the stock. Check the connection and try again.'
+    }
+  }
+
+  // Send every unsold copy at a fair back to main inventory. One transaction
+  // (max 500 writes): a fair of up to ~240 titles, far beyond a real one.
+  // endFair also removes the stock map, so the event stops being a book fair
+  // (used when it closes): otherwise reopening it later would leave its POS
+  // listing only the fair's titles, all at 0.
+  const returnAllFairStock = async (eventId: string, endFair = false): Promise<string | null> => {
+    try {
+      const returned = await runTransaction(db, async (tx) => {
+        const eventRef = doc(db, 'events', eventId)
+        const eventSnap = await tx.get(eventRef)
+        const stock = normalizeStockMap(eventSnap.data()?.stock)
+        const back = Object.entries(stock).filter(([id, q]) => q > 0 && inventory.some((i) => i.id === id))
+        if (back.length > 240) throw new Error('too many titles for one transaction')
+        // Read the true main counts (all reads before any write) so the local
+        // copy and the storefront mirror reflect other tills' sales too.
+        const mainSnaps = await Promise.all(back.map(([id]) => tx.get(doc(db, 'inventory', id))))
+        back.forEach(([id, q]) => tx.update(doc(db, 'inventory', id), { quantity: increment(q), _live: true }))
+        const cleared = { ...stock }
+        back.forEach(([id]) => { cleared[id] = 0 })
+        tx.update(eventRef, { stock: endFair ? deleteField() : cleared, _live: true })
+        const newMain = new Map(back.map(([id, q], i) => [id, Number(mainSnaps[i].data()?.quantity ?? 0) + q]))
+        return { newMain, cleared }
+      })
+      const nextInventory = inventory.map((i) => (returned.newMain.has(i.id) ? { ...i, quantity: returned.newMain.get(i.id) as number } : i))
+      setInventory(nextInventory)
+      setEvents((current) => current.map((e) => {
+        if (e.id !== eventId) return e
+        if (!endFair) return { ...e, stock: returned.cleared }
+        const { stock: _ended, ...rest } = e
+        void _ended
+        return rest
+      }))
+      nextInventory.filter((i) => returned.newMain.has(i.id)).forEach((i) => void mirrorStockToCatalog(i, i.quantity))
+      return null
+    } catch (error) {
+      console.error('Book fair return-all error:', error)
+      return 'Could not return the stock. Check the connection and try again.'
+    }
+  }
+
+  const fairCopiesOnHand = (event?: EventRecord | null) =>
+    hasEventStock(event) ? Object.values(event.stock).reduce((sum, q) => sum + Math.max(0, q), 0) : 0
+
+  // Closing or deleting a fair with copies still there offers to bring them
+  // home first, so they don't sit stranded outside main inventory. Resolves
+  // false when the admin cancels.
+  const offerReturnBeforeClosing = async (event: EventRecord, action: string): Promise<boolean> => {
+    if (!hasEventStock(event) || demoMode) return true
+    const onHand = fairCopiesOnHand(event)
+    // Nothing left to bring home: just end the fair so a reopened event sells
+    // from main inventory again.
+    if (!onHand) return (await returnAllFairStock(event.id, true)) === null
+    if (confirm(`${event.name} still holds ${onHand} unsold cop${onHand === 1 ? 'y' : 'ies'} of book fair stock.\n\nOK: return them to main inventory, then ${action}.\nCancel: stop and decide later.`)) {
+      const error = await returnAllFairStock(event.id, true)
+      if (error) {
+        setEventMessage(`⚠️ ${error}`)
+        return false
+      }
+      return true
+    }
+    return false
+  }
+
+  const handleDeleteOrder = async (order: Order) => {
+    // Copies sold from a book fair's own stock go back to that fair, not to
+    // main inventory, as long as the fair still exists.
+    // Once the fair has closed (and so ended), the copies come home to main.
+    const fairEvent = order.stockEventId
+      ? events.find((e) => e.id === order.stockEventId && hasEventStock(e) && e.status === 'active')
+      : undefined
+    const restoreTo = fairEvent ? `${fairEvent.name}'s book fair stock` : 'inventory'
+    if (!confirm(`Delete this order from ${new Date(order.timestamp).toLocaleString()}? Its copies go back into ${restoreTo} and its sales records are removed. Continue?`)) return
+
+    // Per-item add-back delta so the cloud write can use atomic increment().
     const restoreDeltas = new Map<string, number>() // inventoryId -> qty to add back
     for (const oi of order.items) {
-      if (inventory.some((i) => i.id === oi.itemId)) {
+      if (fairEvent || inventory.some((i) => i.id === oi.itemId)) {
         restoreDeltas.set(oi.itemId, (restoreDeltas.get(oi.itemId) ?? 0) + oi.quantity)
       }
     }
-    const restoredInventory = inventory.map((item) =>
-      restoreDeltas.has(item.id) ? { ...item, quantity: item.quantity + (restoreDeltas.get(item.id) as number) } : item
-    )
-    setInventory(restoredInventory)
-    // Mirror the restored counts onto the storefront catalog.
-    void Promise.all(
-      restoredInventory
-        .filter((it) => restoreDeltas.has(it.id))
-        .map((it) => mirrorStockToCatalog(it, it.quantity))
-    )
+    const fairDeltas: [string, number][] = fairEvent ? Array.from(restoreDeltas.entries()) : []
+    const restoreMainInventory = () => {
+      if (fairEvent) return
+      const restoredInventory = inventory.map((item) =>
+        restoreDeltas.has(item.id) ? { ...item, quantity: item.quantity + (restoreDeltas.get(item.id) as number) } : item
+      )
+      setInventory(restoredInventory)
+      // Mirror the restored counts onto the storefront catalog.
+      void Promise.all(
+        restoredInventory
+          .filter((it) => restoreDeltas.has(it.id))
+          .map((it) => mirrorStockToCatalog(it, it.quantity))
+      )
+    }
 
     const isGeneralOrder = order.eventId === 'general'
     if (isGeneralOrder) {
+      restoreMainInventory()
+      if (fairEvent) {
+        setEvents((current) => current.map((e) => (e.id === fairEvent.id ? { ...e, stock: adjustStock(e.stock ?? {}, fairDeltas) } : e)))
+      }
       // Remove order
       const updatedGeneralOrders = generalOrders.filter((o) => o.id !== order.id)
       setGeneralOrders(updatedGeneralOrders)
@@ -4093,41 +4490,51 @@ export default function DashboardPage() {
         salesToRemove.forEach((sale) => {
           batch.delete(doc(db, 'generalSales', sale.id))
         })
-        restoreDeltas.forEach((qty, id) => {
-          batch.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true })
-        })
+        if (fairEvent) {
+          fairDeltas.forEach(([id, qty]) => batch.update(doc(db, 'events', fairEvent.id), new FieldPath('stock', id), increment(qty)))
+        } else {
+          restoreDeltas.forEach((qty, id) => {
+            batch.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true })
+          })
+        }
         await batch.commit()
       } catch (error) {
         console.error('Delete order error:', error)
       }
     } else {
-      const eventRecord = events.find((e) => e.id === order.eventId)
-      if (!eventRecord) return
-      const updatedOrders = eventRecord.orders.filter((o) => o.id !== order.id)
-      // Remove matching sales (same timestamp)
-      const updatedSales = eventRecord.sales.filter((s) => s.timestamp !== order.timestamp)
-      setEvents((current) =>
-        current.map((e) =>
-          e.id === eventRecord.id ? { ...e, orders: updatedOrders, sales: updatedSales } : e
-        )
-      )
-      if (viewingOrderHistory) {
-        setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
-      }
-      if (viewingEventTransactions) {
-        setViewingEventTransactions({ ...viewingEventTransactions, sales: updatedSales })
-      }
-      // Update localStorage backup
-      saveOrderBackupToLocal(eventRecord.id, updatedOrders, updatedSales)
+      if (!events.some((e) => e.id === order.eventId)) return
+      const fairIsThisEvent = fairEvent?.id === order.eventId
       try {
-        const batch = writeBatch(db)
-        batch.update(doc(db, 'events', eventRecord.id), { orders: updatedOrders, sales: updatedSales, _live: true })
-        restoreDeltas.forEach((qty, id) => {
-          batch.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true })
-        })
-        await batch.commit()
+        const lists = await updateEventInCloud(
+          order.eventId,
+          (cur) => {
+            // Sales link to their order by timestamp, as everywhere else.
+            const goneSales = cur.sales.filter((s) => s.timestamp === order.timestamp)
+            return {
+              orders: cur.orders.filter((o) => o.id !== order.id),
+              sales: cur.sales.filter((s) => s.timestamp !== order.timestamp),
+              removedOrderIds: Array.from(new Set([...cur.removedOrderIds, order.id])),
+              removedSaleIds: Array.from(new Set([...cur.removedSaleIds, ...goneSales.map((s) => s.id)])),
+              ...(fairIsThisEvent && cur.stock ? { stock: adjustStock(cur.stock, fairDeltas) } : {})
+            }
+          },
+          (tx) => {
+            if (fairEvent && !fairIsThisEvent) {
+              // Order was moved here from the fair: its copies go back there.
+              fairDeltas.forEach(([id, qty]) => tx.update(doc(db, 'events', fairEvent.id), new FieldPath('stock', id), increment(qty)))
+            } else if (!fairEvent) {
+              restoreDeltas.forEach((qty, id) => tx.update(doc(db, 'inventory', id), { quantity: increment(qty), _live: true }))
+            }
+          }
+        )
+        applyEventLists(order.eventId, lists)
+        restoreMainInventory()
+        if (fairEvent && !fairIsThisEvent) {
+          setEvents((current) => current.map((e) => (e.id === fairEvent.id ? { ...e, stock: adjustStock(e.stock ?? {}, fairDeltas) } : e)))
+        }
       } catch (error) {
         console.error('Delete order error:', error)
+        setEventMessage('⚠️ Could not delete the order. Nothing was changed. Check the connection and try again.')
       }
     }
   }
@@ -4162,70 +4569,77 @@ export default function DashboardPage() {
       void _live
       return { ...rest, eventId: toId }
     })
-    const byNewest = <T extends { timestamp: string }>(a: T, b: T) => b.timestamp.localeCompare(a.timestamp)
-
     const remainingOrders = sourceOrders.filter((o) => !movingOrderIds.has(o.id))
     const remainingSales = sourceSales.filter((s) => !movingSaleIds.has(s.id))
-    const targetOrders = [...movedOrders, ...(target ? target.orders : generalOrders)].sort(byNewest)
-    const targetSales = [...movingSales, ...(target ? target.sales : generalSales)].sort(byNewest)
+    const targetOrders = [...movedOrders, ...(target ? target.orders : generalOrders)].sort(byNewestTimestamp)
+    const targetSales = [...movingSales, ...(target ? target.sales : generalSales)].sort(byNewestTimestamp)
 
-    // Writes to the destination go first, so a failure part-way through a large
-    // move leaves a duplicate to delete rather than a sale lost from both.
-    type BatchOp = (batch: ReturnType<typeof writeBatch>) => void
-    const ops: BatchOp[] = []
-    if (target) {
-      ops.push((b) => b.update(doc(db, 'events', target.id), { orders: targetOrders, sales: targetSales, _live: true }))
-    } else {
-      movedOrders.forEach((o) => ops.push((b) => b.set(doc(db, 'generalOrders', o.id), { ...o, _live: true })))
-      movingSales.forEach((s) => ops.push((b) => b.set(doc(db, 'generalSales', s.id), { ...s, _live: true })))
-    }
-    if (source) {
-      ops.push((b) => b.update(doc(db, 'events', source.id), { orders: remainingOrders, sales: remainingSales, _live: true }))
-    } else {
-      ordersToMove.forEach((o) => ops.push((b) => b.delete(doc(db, 'generalOrders', o.id))))
-      movingSales.forEach((s) => ops.push((b) => b.delete(doc(db, 'generalSales', s.id))))
-    }
+    // The destination is written first, so a failure part-way leaves a
+    // duplicate to delete rather than a sale missing from both groups. Event
+    // lists change inside transactions against the cloud copy, so sales other
+    // phones are taking at either event right now are kept.
+    let targetLists: EventLists | null = null
+    let sourceLists: EventLists | null = null
     try {
-      for (let i = 0; i < ops.length; i += 450) {
-        const batch = writeBatch(db)
-        ops.slice(i, i + 450).forEach((op) => op(batch))
-        await batch.commit()
+      if (target) {
+        targetLists = await updateEventInCloud(target.id, (cur) => {
+          const haveOrders = new Set(cur.orders.map((o) => o.id))
+          const haveSales = new Set(cur.sales.map((s) => s.id))
+          return {
+            orders: [...cur.orders, ...movedOrders.filter((o) => !haveOrders.has(o.id))],
+            sales: [...cur.sales, ...movingSales.filter((s) => !haveSales.has(s.id))]
+          }
+        })
+      } else {
+        const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = []
+        movedOrders.forEach((o) => ops.push((b) => b.set(doc(db, 'generalOrders', o.id), { ...o, _live: true })))
+        movingSales.forEach((s) => ops.push((b) => b.set(doc(db, 'generalSales', s.id), { ...s, _live: true })))
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db)
+          ops.slice(i, i + 450).forEach((op) => op(batch))
+          await batch.commit()
+        }
+      }
+      if (source) {
+        sourceLists = await updateEventInCloud(source.id, (cur) => ({
+          orders: cur.orders.filter((o) => !movingOrderIds.has(o.id)),
+          sales: cur.sales.filter((s) => !movingSaleIds.has(s.id)),
+          // Recorded so a phone's stale backup can't put them back here.
+          removedOrderIds: Array.from(new Set([...cur.removedOrderIds, ...movingOrderIds])),
+          removedSaleIds: Array.from(new Set([...cur.removedSaleIds, ...movingSaleIds]))
+        }))
+      } else {
+        const ops: ((b: ReturnType<typeof writeBatch>) => void)[] = []
+        ordersToMove.forEach((o) => ops.push((b) => b.delete(doc(db, 'generalOrders', o.id))))
+        movingSales.forEach((s) => ops.push((b) => b.delete(doc(db, 'generalSales', s.id))))
+        for (let i = 0; i < ops.length; i += 450) {
+          const batch = writeBatch(db)
+          ops.slice(i, i + 450).forEach((op) => op(batch))
+          await batch.commit()
+        }
       }
     } catch (error) {
       console.error('Move order error:', error)
-      setEventMessage('⚠️ Move failed. Nothing was changed on this screen; reload and check both groups before retrying.')
+      setEventMessage('⚠️ Move failed part-way. Reload and check both groups before retrying.')
       return false
     }
 
-    // Local state and backups only change once the cloud has the move. The
-    // backups matter: load-time recovery restores an event from localStorage
-    // whenever the backup holds more orders, which would resurrect the move.
-    if (source) {
-      saveOrderBackupToLocal(source.id, remainingOrders, remainingSales)
+    // Local state and backups only change once the cloud has the move.
+    if (sourceLists && source) {
+      applyEventLists(source.id, sourceLists)
     } else {
       setGeneralOrders(remainingOrders)
       setGeneralSales(remainingSales)
       saveOrderBackupToLocal('general', remainingOrders)
+      setViewingOrderHistory((v) => (v && v.id === 'general' ? { ...v, orders: remainingOrders, sales: remainingSales } : v))
+      setViewingEventTransactions((v) => (v && v.id === 'general' ? { ...v, orders: remainingOrders, sales: remainingSales } : v))
     }
-    if (target) {
-      saveOrderBackupToLocal(target.id, targetOrders, targetSales)
+    if (targetLists && target) {
+      applyEventLists(target.id, targetLists)
     } else {
       setGeneralOrders(targetOrders)
       setGeneralSales(targetSales)
       saveOrderBackupToLocal('general', targetOrders)
-    }
-    setEvents((current) =>
-      current.map((e) => {
-        if (source && e.id === source.id) return { ...e, orders: remainingOrders, sales: remainingSales }
-        if (target && e.id === target.id) return { ...e, orders: targetOrders, sales: targetSales }
-        return e
-      })
-    )
-    if (viewingOrderHistory?.id === fromId) {
-      setViewingOrderHistory({ ...viewingOrderHistory, orders: remainingOrders, sales: remainingSales })
-    }
-    if (viewingEventTransactions?.id === fromId) {
-      setViewingEventTransactions({ ...viewingEventTransactions, orders: remainingOrders, sales: remainingSales })
     }
     const targetName = target?.name ?? 'General Sales'
     const movedTotal = ordersToMove.reduce((sum, o) => sum + o.total, 0)
@@ -4308,23 +4722,16 @@ export default function DashboardPage() {
         console.error('Edit order error:', error)
       }
     } else {
-      const eventRecord = events.find((e) => e.id === updatedOrder.eventId)
-      if (!eventRecord) return
-      const updatedOrders = eventRecord.orders.map((o) => o.id === updatedOrder.id ? updatedOrder : o)
-      setEvents((current) =>
-        current.map((e) =>
-          e.id === eventRecord.id ? { ...e, orders: updatedOrders } : e
-        )
-      )
-      if (viewingOrderHistory) {
-        setViewingOrderHistory({ ...viewingOrderHistory, orders: updatedOrders })
-      }
-      // Update localStorage backup
-      saveOrderBackupToLocal(eventRecord.id, updatedOrders, eventRecord.sales)
+      if (!events.some((e) => e.id === updatedOrder.eventId)) return
       try {
-        await updateDoc(doc(db, 'events', eventRecord.id), { orders: updatedOrders, _live: true })
+        const lists = await updateEventInCloud(updatedOrder.eventId, (cur) => ({
+          orders: cur.orders.map((o) => (o.id === updatedOrder.id ? updatedOrder : o))
+        }))
+        applyEventLists(updatedOrder.eventId, lists)
       } catch (error) {
         console.error('Edit order error:', error)
+        setEventMessage('⚠️ Could not save the order edit. Check the connection and try again.')
+        return
       }
     }
     setEditingOrder(null)
@@ -7264,6 +7671,7 @@ export default function DashboardPage() {
               <select
                 id="pos-event"
                 value={selectedEventId}
+                disabled={!!lockedPosEvent}
                 onChange={(event) => setSelectedEventId(event.target.value)}
                 className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
               >
@@ -7273,12 +7681,25 @@ export default function DashboardPage() {
                   .filter((event) => event.status === 'active')
                   .map((event) => (
                     <option key={event.id} value={event.id}>
-                      🎪 {event.name}
+                      🎪 {event.name}{hasEventStock(event) ? ' (book fair stock)' : ''}
                     </option>
                   ))}
               </select>
             </div>
           </div>
+          {/* Which stock this sale comes out of, so nobody wonders why the
+              list changed: a book fair sells only what was moved to it. */}
+          <p className={`mb-2 rounded-xl border px-3 py-2 text-xs font-semibold ${posFair ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-primary/10 bg-primary/5 text-primaryDark'}`}>
+            {posFair
+              ? `Selling from ${posFair.name}'s book fair stock (${fairCopiesOnHand(posFair)} copies left).`
+              : 'Selling from main inventory.'}
+            {lockedPosEvent && ' Set by your admin.'}
+          </p>
+          {userRole === 'cashier' && posAssignment && !lockedPosEvent && (
+            <p className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              The book fair you were assigned to is closed, so you are selling from main inventory. Ask your admin if that is wrong.
+            </p>
+          )}
           {posGeneralWhileEventActive && (
             <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
               {activePosEvents.map((e) => e.name).join(', ')} {activePosEvents.length === 1 ? 'is' : 'are'} running, but sales are going to General Sales. Pick the event above if you are selling there.
@@ -7702,6 +8123,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {userRole === 'admin' && (
+        <CashierSourcesPanel
+          cashiers={cashiers}
+          loading={cashiersLoading}
+          fairs={events.filter(hasEventStock).map((e) => ({ id: e.id, name: e.name, active: e.status === 'active' }))}
+          onChange={setCashierSource}
+        />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
           <div className="flex items-center justify-between mb-6">
@@ -7743,7 +8173,7 @@ export default function DashboardPage() {
               />
             </div>
           </div>
-          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+          <div className="space-y-4 lg:max-h-[600px] lg:overflow-y-auto lg:pr-2">
             {filteredEvents.map((event) => {
               const totalSales = event.sales.reduce((sum, sale) => sum + sale.total, 0)
               return (
@@ -7757,6 +8187,11 @@ export default function DashboardPage() {
                         >
                           {event.type}
                         </span>
+                        {hasEventStock(event) && (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
+                            Fair stock: {fairCopiesOnHand(event)}
+                          </span>
+                        )}
                         <button
                           onClick={() => handleToggleEventStatus(event.id)}
                           className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${
@@ -7809,6 +8244,16 @@ export default function DashboardPage() {
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                           Expenses{event.expenses.length > 0 ? ` (${event.expenses.length})` : ''}
                         </button>
+                        {userRole === 'admin' && !demoMode && (event.status === 'active' || hasEventStock(event)) && (
+                          <button
+                            onClick={() => setFairStockEventId(event.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border border-emerald-200 transition-all hover:scale-105"
+                            type="button"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                            Book fair stock
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
@@ -11049,6 +11494,28 @@ export default function DashboardPage() {
       })()}
 
       {/* Global Modals - rendered outside page views */}
+      {fairStockEventId && (() => {
+        const fairEvent = events.find((e) => e.id === fairStockEventId)
+        if (!fairEvent) return null
+        const soldHere: Record<string, number> = {}
+        for (const order of [...events.flatMap((e) => e.orders), ...generalOrders]) {
+          if (order.stockEventId !== fairEvent.id) continue
+          for (const it of order.items) soldHere[it.itemId] = (soldHere[it.itemId] ?? 0) + it.quantity
+        }
+        return (
+          <BookFairStockModal
+            eventName={fairEvent.name}
+            eventActive={fairEvent.status === 'active'}
+            stock={fairEvent.stock ?? {}}
+            inventory={inventory}
+            soldHere={soldHere}
+            onTransfer={(itemId, delta) => transferFairStock(fairEvent.id, itemId, delta)}
+            onReturnAll={() => returnAllFairStock(fairEvent.id)}
+            onClose={() => setFairStockEventId(null)}
+          />
+        )
+      })()}
+
       {/* Order history, edit and move are reachable from the POS view as well as
           Events, so they live here rather than inside renderEvents(). */}
       {/* Order History Modal */}

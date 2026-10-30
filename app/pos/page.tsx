@@ -886,8 +886,8 @@ export default function POSPage() {
 
       {/* Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn" role="dialog" aria-modal="true" aria-label="Confirm sale">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-[0_25px_80px_rgba(124,58,237,0.25)] ring-1 ring-primary/10 border-2 border-primary/20 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" role="dialog" aria-modal="true" aria-label="Confirm sale">
+          <div className="w-full sm:max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white p-6 sm:p-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-[0_25px_80px_rgba(124,58,237,0.25)] ring-1 ring-primary/10 border-2 border-primary/20 animate-fadeIn">
             <div className="text-center mb-6">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-emerald-100 to-green-100 mb-4">
                 <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

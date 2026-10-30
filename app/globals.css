@@ -595,3 +595,34 @@ textarea:focus-visible,
   .article-body { font-size: 1.125rem; }
   .article-body > p:first-of-type { font-size: 1.25rem; }
 }
+
+/* Barcode label printing: printLabel() copies the label to #label-print-root,
+   a direct child of body, and while it prints everything else is taken out of
+   the layout. Hiding the dashboard any softer (visibility) still left its full
+   height in place, which printed as dozens of pages each repeating the label. */
+#label-print-root { display: none; }
+@media print {
+  html.label-printing body > *:not(#label-print-root) { display: none !important; }
+  /* Width comes from printLabel(), sized to the barcode (about 37mm for an
+     ISBN), so the label suits small items. */
+  html.label-printing #label-print-root {
+    display: block !important;
+    text-align: center;
+    font-family: system-ui, sans-serif;
+    color: #000;
+  }
+  /* One short line for the title, so it never pushes the label taller. */
+  html.label-printing #label-print-root p {
+    margin: 0;
+    font-size: 6.5pt;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #000;
+  }
+  /* The popup's size hint is for the screen only. */
+  html.label-printing #label-print-root p + img ~ p { display: none; }
+  html.label-printing #label-print-root img { display: block; height: auto; margin: 0 auto; }
+}

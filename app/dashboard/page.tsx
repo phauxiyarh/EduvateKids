@@ -27,6 +27,7 @@ import * as XLSX from 'xlsx'
 import { ImageSlider } from '../components/ImageSlider'
 import { BookFairStockModal } from '../components/BookFairStockModal'
 import { CashierSourcesPanel } from '../components/CashierSourcesPanel'
+import { MySalesCard, emptyTotals, type SellerSales } from '../components/MySalesCard'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   blogSlug,
@@ -62,7 +63,7 @@ import {
   AreaChart, Area, CartesianGrid
 } from 'recharts'
 import { httpsCallable } from 'firebase/functions'
-import QRCode from 'qrcode'
+import { barcodeSvgDataUrl, barcodePngDataUrl, barcodePrintSizeMm, makeStoreCode, LABEL_MAX_MM } from '../../lib/barcodeLabel'
 import { auth, db, functions } from '../../lib/firebase'
 import { isAdminHostAllowed } from '../../lib/adminAccess'
 import { uploadCatalogImage } from '../../lib/uploadImage'
@@ -167,6 +168,10 @@ type Order = {
    *  than main inventory; deleting the order puts them back there. Kept apart
    *  from eventId because Move can re-file the order under another event. */
   stockEventId?: string
+  /** Account that rang the sale up, so each cashier's takings can be totalled.
+   *  Orders from before this field existed have none. */
+  soldBy?: string
+  soldByName?: string
 }
 
 type CartItem = {
@@ -327,6 +332,7 @@ const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[
   { id: 'home', label: 'Home', title: 'Admin Home', subtitle: 'Monitor restock needs, best sellers, and event performance at a glance.' },
   { id: 'inventory', label: 'Inventory', title: 'Inventory Management', subtitle: 'Upload, update, and manage your complete inventory with ease.' },
   { id: 'events', label: 'Events', title: 'Event Management', subtitle: 'Create events, manage dates and fees, and review event performance summaries.' },
+  { id: 'cashiers', label: 'Cashiers', title: 'Cashiers', subtitle: 'Choose whether each cashier sells from main inventory or a book fair, and see what each one has sold.' },
   { id: 'pos', label: 'POS', title: 'Point of Sale', subtitle: 'Record sales for events or general transactions. Search products, manage cart, and process payments.' },
   { id: 'catalog', label: 'Catalog', title: 'Catalog Management', subtitle: 'Create, manage, and showcase your product catalog with images and details.' },
   { id: 'orders', label: 'Orders', title: 'Online Orders', subtitle: 'Online store orders paid via Stripe. Review details and mark items as shipped.' },
@@ -886,7 +892,7 @@ export default function DashboardPage() {
     }
     return true
   })
-  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'pos' | 'catalog' | 'orders' | 'summer' | 'bookRequests' | 'website'>(
+  const [activeView, setActiveView] = useState<'home' | 'inventory' | 'events' | 'cashiers' | 'pos' | 'catalog' | 'orders' | 'summer' | 'bookRequests' | 'website'>(
     'home'
   )
   const [websiteTab, setWebsiteTab] = useState<WebsiteTab>('shelves')
@@ -1097,6 +1103,7 @@ export default function DashboardPage() {
   const [editEventType, setEditEventType] = useState<EventRecord['type']>('Bazaar')
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('active')
   const [viewingOrderHistory, setViewingOrderHistory] = useState<EventRecord | null>(null)
+  const [historyOpenOrderId, setHistoryOpenOrderId] = useState<string | null>(null)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   // Re-filing POS orders saved under the wrong group. byDate picks up every
   // order (and stray sale) the source recorded on moveDate, local time.
@@ -1123,8 +1130,8 @@ export default function DashboardPage() {
   const [inventoryScannerOpen, setInventoryScannerOpen] = useState(false)
   // QR bind + label workflow (inventory)
   const [bindTargetItem, setBindTargetItem] = useState<InventoryItem | null>(null)
-  const [qrModalItem, setQrModalItem] = useState<InventoryItem | null>(null)
-  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [labelItem, setLabelItem] = useState<InventoryItem | null>(null)
+  const [labelSvg, setLabelSvg] = useState('')
   const [invEditTitle, setInvEditTitle] = useState('')
   const [invEditCategory, setInvEditCategory] = useState<InventoryCategory>('Books')
   const [invEditPublisher, setInvEditPublisher] = useState('')
@@ -1207,9 +1214,13 @@ export default function DashboardPage() {
           if (userDoc.exists()) {
             const role = userDoc.data().role || 'admin'
             setUserRole(role)
-            // Redirect cashiers to POS view
+            // Redirect cashiers to POS view. Demo mode defaults on for a new
+            // browser, which on a cashier's phone would ring sales up against
+            // sample data and never save them, so cashiers are always live.
             if (role === 'cashier') {
               setActiveView('pos')
+              setDemoMode(false)
+              try { localStorage.setItem('eduvate-demo-mode', 'false') } catch { /* ignore */ }
             }
           }
         } catch (error) {
@@ -1503,7 +1514,7 @@ export default function DashboardPage() {
 
   // Admin: load cashier accounts when the Events view (where they're assigned) opens.
   useEffect(() => {
-    if (userRole !== 'admin' || activeView !== 'events' || demoMode) return
+    if (userRole !== 'admin' || (activeView !== 'events' && activeView !== 'cashiers') || demoMode) return
     let cancelled = false
     setCashiersLoading(true)
     getDocs(query(collection(db, 'users'), where('role', '==', 'cashier')))
@@ -1540,9 +1551,23 @@ export default function DashboardPage() {
   const lockedPosEvent = userRole === 'cashier' && posAssignment
     ? events.find((e) => e.id === posAssignment && e.status === 'active') ?? null
     : null
+  // A book fair's stock is the admin's to hand out, so a cashier sells there
+  // only when assigned to it. One left on a fair after being moved back to main
+  // inventory is taken off it, rather than carrying on selling fair stock.
+  const posEventAllowed = (event: EventRecord) =>
+    userRole !== 'cashier' || !hasEventStock(event) || event.id === lockedPosEvent?.id
   useEffect(() => {
-    if (lockedPosEvent && selectedEventId !== lockedPosEvent.id) setSelectedEventId(lockedPosEvent.id)
-  }, [lockedPosEvent, selectedEventId])
+    if (lockedPosEvent && selectedEventId !== lockedPosEvent.id) {
+      setSelectedEventId(lockedPosEvent.id)
+      return
+    }
+    const selected = events.find((e) => e.id === selectedEventId)
+    if (selected && !posEventAllowed(selected)) {
+      setSelectedEventId('')
+      setEventMessage(`You now sell from main inventory, so ${selected.name} was unselected. Pick the event you are selling at.`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedPosEvent, selectedEventId, events, userRole])
 
   // Selling at an event with its own stock draws from that stock, so the POS
   // lists only the fair's books, at the fair's counts. Everywhere else it is
@@ -1585,7 +1610,7 @@ export default function DashboardPage() {
   // Where the POS will record the next sale. A sale rung up against the wrong
   // group is the most common correction, so the checkout states it and warns
   // when General Sales is picked while an event is running.
-  const activePosEvents = useMemo(() => events.filter((e) => e.status === 'active'), [events])
+  const activePosEvents = events.filter((e) => e.status === 'active' && posEventAllowed(e))
   const posGroupName = selectedEventId === 'general'
     ? 'General Sales'
     : events.find((e) => e.id === selectedEventId)?.name ?? 'No event selected'
@@ -1855,6 +1880,30 @@ export default function DashboardPage() {
     () => [...events.flatMap((e) => e.orders ?? []), ...generalOrders],
     [events, generalOrders]
   )
+
+  // Takings per seller account, today and overall. Only orders that carry
+  // soldBy count; older ones are reported as unattributed.
+  const salesBySeller = useMemo(() => {
+    const d = new Date()
+    const today = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    const isToday = (iso: string) => {
+      const t = new Date(iso)
+      return `${t.getFullYear()}-${t.getMonth()}-${t.getDate()}` === today
+    }
+    const out: Record<string, SellerSales> = {}
+    for (const o of allPosOrders) {
+      const key = o.soldBy || ''
+      const entry = (out[key] ??= { today: emptyTotals(), all: emptyTotals() })
+      const copies = (o.items ?? []).reduce((sum, i) => sum + (i.quantity || 0), 0)
+      for (const bucket of isToday(o.timestamp) ? [entry.today, entry.all] : [entry.all]) {
+        bucket.orders += 1
+        bucket.copies += copies
+        bucket.total += o.total || 0
+        bucket.byPayment[o.paymentType] = (bucket.byPayment[o.paymentType] ?? 0) + (o.total || 0)
+      }
+    }
+    return out
+  }, [allPosOrders])
 
   // Reliable revenue breakdown. "Product revenue (net)" is what we actually earned
   // selling items (sellingPrice×qty minus discounts) and EXCLUDES passthroughs
@@ -4124,7 +4173,8 @@ export default function DashboardPage() {
       total: totalWithFee,
       timestamp,
       eventId: selectedEventId,
-      ...(fair ? { stockEventId: fair.id } : {})
+      ...(fair ? { stockEventId: fair.id } : {}),
+      ...(user?.uid ? { soldBy: user.uid, soldByName: user.email ?? '' } : {})
     }
 
     const updatedSales = eventRecord ? [...salesToAdd, ...eventRecord.sales] : salesToAdd
@@ -5939,7 +5989,7 @@ export default function DashboardPage() {
     if (!confirm(`Unbind the code from "${item.title}"? You can re-bind a new QR/barcode afterwards.`)) return
     const updatedItem: InventoryItem = { ...item, code: '', altCode: '', sku: '', isbn: '' }
     setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
-    setQrModalItem((cur) => (cur && cur.id === updatedItem.id ? updatedItem : cur))
+    setLabelItem((cur) => (cur && cur.id === updatedItem.id ? updatedItem : cur))
     setUploadMessage(`Unbound the code from "${item.title}".`)
     try {
       await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
@@ -5949,17 +5999,76 @@ export default function DashboardPage() {
     }
   }
 
-  // Generate a QR image for an item's code (or id if it has none) and open the label modal.
-  const openQrLabel = async (item: InventoryItem) => {
-    const value = (item.code || item.id).trim()
-    setQrModalItem(item)
-    setQrDataUrl('')
-    try {
-      const url = await QRCode.toDataURL(value, { width: 320, margin: 2 })
-      setQrDataUrl(url)
-    } catch (error) {
-      console.error('QR generation error:', error)
+  // Draw a barcode for an item's code (or id if it has none) and open the label
+  // modal. Same value the old QR labels held, so the scanner matches it the same way.
+  const openBarcodeLabel = (item: InventoryItem) => {
+    setLabelItem(item)
+    setLabelSvg(barcodeSvgDataUrl((item.code || item.id).trim()))
+  }
+
+  // Print only the label, not the dashboard behind it (see #label-print-root in globals.css).
+  const printLabel = () => {
+    const label = document.getElementById('print-label')
+    if (!label) return
+    document.getElementById('label-print-root')?.remove()
+    const copy = document.createElement('div')
+    copy.id = 'label-print-root'
+    copy.innerHTML = label.innerHTML
+    // True size, not screen size: a small label for small items.
+    const size = barcodePrintSizeMm(labelSvg)
+    if (size) {
+      copy.style.width = `${size.width}mm`
+      const img = copy.querySelector('img')
+      if (img) img.style.width = `${size.width}mm`
     }
+    document.body.appendChild(copy)
+    const root = document.documentElement
+    root.classList.add('label-printing')
+    const done = () => {
+      root.classList.remove('label-printing')
+      copy.remove()
+      window.removeEventListener('afterprint', done)
+    }
+    window.addEventListener('afterprint', done)
+    window.print()
+  }
+
+  // Swap a long code (a title-based EK- code, or the item id) for a short
+  // in-store barcode so the label fits a small item. The old code stays on as
+  // altCode, so anything already labelled with it still scans.
+  const [assigningStoreCode, setAssigningStoreCode] = useState(false)
+  const assignStoreCode = async (item: InventoryItem) => {
+    if (assigningStoreCode) return
+    const taken = new Set(inventory.flatMap((i) => [i.code, i.altCode].map((c) => (c || '').trim())).filter(Boolean))
+    const code = makeStoreCode(taken)
+    const priorCode = (item.code || '').trim()
+    // sku and isbn are left as they were: online orders and the catalog stock
+    // mirror find the item through them, so changing them could unlink the
+    // website listing. The scanner matches code, altCode, sku and isbn alike.
+    const updatedItem: InventoryItem = { ...item, code, altCode: priorCode || item.altCode }
+    setAssigningStoreCode(true)
+    try {
+      await setDoc(doc(db, 'inventory', updatedItem.id), { ...updatedItem, _live: true })
+      setInventory((current) => current.map((i) => (i.id === updatedItem.id ? updatedItem : i)))
+      setLabelItem(updatedItem)
+      setLabelSvg(barcodeSvgDataUrl(code))
+      setUploadMessage(`"${item.title}" now has store code ${code}${priorCode ? `; its old code ${priorCode} still scans` : ''}.`)
+    } catch (error) {
+      console.error('Assign store code error:', error)
+      alert('Could not save the new code. Check the connection and try again.')
+    } finally {
+      setAssigningStoreCode(false)
+    }
+  }
+
+  const saveLabelImage = (item: InventoryItem) => {
+    const value = (item.code || item.id).trim()
+    const url = barcodePngDataUrl(value)
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `barcode-${value.replace(/[^\w-]+/g, '_')}.png`
+    a.click()
   }
 
   const handleClearInventory = async () => {
@@ -7420,7 +7529,7 @@ export default function DashboardPage() {
                   ) : (
                     <button type="button" onClick={() => setBindTargetItem(item)} className="min-h-[40px] rounded-xl bg-purple-50 text-xs font-bold text-primaryDark border border-primary/30">Bind</button>
                   )}
-                  <button type="button" onClick={() => openQrLabel(item)} className="min-h-[40px] rounded-xl bg-pink-50 text-xs font-bold text-secondary border border-secondary/30" aria-label={`Print QR label for ${item.title}`}>QR</button>
+                  <button type="button" onClick={() => openBarcodeLabel(item)} className="min-h-[40px] rounded-xl bg-pink-50 text-xs font-bold text-secondary border border-secondary/30" aria-label={`Print barcode label for ${item.title}`}>Label</button>
                   <button type="button" onClick={() => handleDeleteInventoryItem(item)} className="min-h-[40px] rounded-xl bg-red-50 text-xs font-bold text-red-700 border border-red-200" aria-label={`Delete ${item.title}`}>Delete</button>
                 </div>
               )}
@@ -7593,14 +7702,14 @@ export default function DashboardPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => openQrLabel(item)}
+                            onClick={() => openBarcodeLabel(item)}
                             className="inline-flex items-center justify-center rounded-full p-1.5 bg-pink-50 text-secondary border border-secondary/30 hover:bg-pink-100 transition-colors"
                             type="button"
-                            title="Print QR label"
-                            aria-label={`Print QR label for ${item.title}`}
+                            title="Print barcode label"
+                            aria-label={`Print barcode label for ${item.title}`}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v3" />
+                              <path strokeLinecap="round" d="M4 5v14M7 5v14M10 5v14M14 5v14M16 5v14M20 5v14" />
                             </svg>
                           </button>
                         </div>
@@ -7678,7 +7787,7 @@ export default function DashboardPage() {
                 <option value="">Choose an event...</option>
                 <option value="general">💰 General Sales (No Event)</option>
                 {events
-                  .filter((event) => event.status === 'active')
+                  .filter((event) => event.status === 'active' && posEventAllowed(event))
                   .map((event) => (
                     <option key={event.id} value={event.id}>
                       🎪 {event.name}{hasEventStock(event) ? ' (book fair stock)' : ''}
@@ -7719,6 +7828,24 @@ export default function DashboardPage() {
             </button>
           )}
         </div>
+
+        {!demoMode && user?.uid && (
+          <MySalesCard
+            sales={salesBySeller[user.uid] ?? { today: emptyTotals(), all: emptyTotals() }}
+            recent={allPosOrders
+              .filter((o) => o.soldBy === user.uid)
+              .sort(byNewestTimestamp)
+              .slice(0, 8)
+              .map((o) => ({
+                id: o.id,
+                timestamp: o.timestamp,
+                total: o.total || 0,
+                copies: (o.items ?? []).reduce((sum, i) => sum + (i.quantity || 0), 0),
+                paymentType: o.paymentType,
+                group: o.eventId === 'general' ? 'General Sales' : events.find((e) => e.id === o.eventId)?.name ?? 'Event'
+              }))}
+          />
+        )}
 
         {/* Search & Catalog Card */}
         <div className="panel-card rounded-3xl bg-white p-6 shadow-xl border border-primary/10">
@@ -8045,8 +8172,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Status toast. It used to sit at the foot of the cart, out of sight on a
-          phone and missing entirely while the cart was empty. */}
-      {eventMessage && (
+          phone and missing entirely while the cart was empty. Hidden while the
+          confirm sheet is up, where it would cover the Confirm button. */}
+      {eventMessage && !showConfirmSale && (
         <div
           role="status"
           className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[70] flex items-start gap-2 rounded-2xl border border-blue-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur lg:inset-x-auto lg:bottom-6 lg:right-6 lg:max-w-sm"
@@ -8100,6 +8228,26 @@ export default function DashboardPage() {
     </div>
   )
 
+  const renderCashiers = () => {
+    const unattributed = salesBySeller['']
+    return (
+      <div className="space-y-6">
+        <CashierSourcesPanel
+          sales={salesBySeller}
+          cashiers={cashiers}
+          loading={cashiersLoading}
+          fairs={events.filter(hasEventStock).map((e) => ({ id: e.id, name: e.name, active: e.status === 'active' }))}
+          onChange={setCashierSource}
+        />
+        <p className="text-xs text-muted">
+          A book fair only appears in the list once it holds stock: open Events, then Book fair stock, to move books to it.
+          {unattributed && unattributed.all.orders > 0 &&
+            ` ${unattributed.all.orders} older sale${unattributed.all.orders === 1 ? '' : 's'} were recorded before sales were tagged with a cashier, so they aren't counted against anyone.`}
+        </p>
+      </div>
+    )
+  }
+
   const renderEvents = () => (
     <div className="fade-up space-y-6">
       <div className="panel-card rounded-3xl bg-gradient-to-br from-white to-blue-50/50 p-5 sm:p-6 shadow-xl border border-blue-200/50">
@@ -8125,6 +8273,7 @@ export default function DashboardPage() {
 
       {userRole === 'admin' && (
         <CashierSourcesPanel
+          sales={salesBySeller}
           cashiers={cashiers}
           loading={cashiersLoading}
           fairs={events.filter(hasEventStock).map((e) => ({ id: e.id, name: e.name, active: e.status === 'active' }))}
@@ -8361,11 +8510,11 @@ export default function DashboardPage() {
       </div>
 
       {showCreateEvent && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">Create New Event</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">Create New Event</h4>
                 <p className="mt-2 text-sm text-muted">
                   Add dates, vendor fee, and keep the event active.
                 </p>
@@ -8468,11 +8617,11 @@ export default function DashboardPage() {
       )}
 
       {editingEvent && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">Edit Event</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">Edit Event</h4>
                 <p className="mt-2 text-sm text-muted">
                   Update event details. Changes sync to Firebase.
                 </p>
@@ -8589,11 +8738,11 @@ export default function DashboardPage() {
       )}
 
       {viewingEventTransactions && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-5xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">{viewingEventTransactions.name} - Sales Record</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">{viewingEventTransactions.name} - Sales Record</h4>
                 <p className="mt-2 text-sm text-muted">
                   {viewingEventTransactions.sales.length} total sales · ${formatNumber(viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0))} total revenue
                 </p>
@@ -8616,7 +8765,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted mt-2">Sales will appear here once the event goes live</p>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+              <ul className="divide-y divide-primary/10 rounded-2xl border border-primary/10">
                 {(() => {
                   // Group sales by itemId
                   const groupedSales = viewingEventTransactions.sales.reduce((acc, sale) => {
@@ -8647,63 +8796,43 @@ export default function DashboardPage() {
                     firstTimestamp: string;
                   }>);
 
-                  return Object.values(groupedSales).map((item, index) => (
-                    <div key={item.itemId || item.title} className="rounded-2xl border-2 border-primary/10 p-5 bg-gradient-to-br from-white to-primary/5 hover:border-primary/30 transition-all">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
-                            Item #{Object.values(groupedSales).length - index}
-                          </p>
-                          <p className="font-bold text-lg text-primaryDark mb-2">{item.title}</p>
-                          <div className="flex flex-wrap gap-2 items-center">
-                            {Array.from(item.paymentTypes).map((paymentType) => (
-                              <span key={paymentType} className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                                paymentType === 'Cash' 
-                                  ? 'bg-green-100 text-green-700 border border-green-200'
-                                  : paymentType === 'Card'
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                  : 'bg-purple-100 text-purple-700 border border-purple-200'
-                              }`}>
-                                {paymentType === 'Cash' ? '💵' : paymentType === 'Card' ? '💳' : '🏦'} {paymentType}
-                              </span>
-                            ))}
-                            <span className="text-xs text-muted">
-                              {item.transactions} transaction{item.transactions > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right ml-4">
-                          <p className="text-2xl font-bold gradient-text">${formatNumber(item.totalAmount)}</p>
-                          <p className="text-xs text-muted mt-1">{item.totalQuantity} × item{item.totalQuantity > 1 ? 's' : ''}</p>
-                        </div>
+                  // Best sellers first: on a phone that is what gets looked for.
+                  return Object.values(groupedSales).sort((a, b) => b.totalAmount - a.totalAmount).map((item) => (
+                    <li key={item.itemId || item.title} className="flex items-start gap-3 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-semibold text-gray-800">{item.title}</p>
+                        <p className="text-xs text-muted">
+                          {item.totalQuantity} cop{item.totalQuantity === 1 ? 'y' : 'ies'} · {Array.from(item.paymentTypes).join(', ')} · {item.transactions} sale{item.transactions === 1 ? '' : 's'}
+                        </p>
                       </div>
-                    </div>
+                      <span className="shrink-0 text-sm font-bold text-primaryDark">${formatNumber(item.totalAmount)}</span>
+                    </li>
                   ));
                 })()}
-              </div>
+              </ul>
             )}
 
-            <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="mt-4 p-2 sm:p-4 rounded-xl bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
+              <div className="grid grid-cols-4 gap-1 sm:gap-4 text-center">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Sales</p>
-                  <p className="text-2xl font-bold gradient-text">{viewingEventTransactions.sales.length}</p>
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Sales</p>
+                  <p className="truncate text-sm sm:text-2xl font-bold gradient-text">{viewingEventTransactions.sales.length}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
-                  <p className="text-2xl font-bold gradient-text">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
+                  <p className="truncate text-sm sm:text-2xl font-bold gradient-text">
                     ${formatNumber(viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0))}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
-                  <p className="text-2xl font-bold gradient-text">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
+                  <p className="truncate text-sm sm:text-2xl font-bold gradient-text">
                     {viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.quantity, 0)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Sale</p>
-                  <p className="text-2xl font-bold gradient-text">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Sale</p>
+                  <p className="truncate text-sm sm:text-2xl font-bold gradient-text">
                     ${formatNumber(viewingEventTransactions.sales.length > 0 
                       ? viewingEventTransactions.sales.reduce((sum, sale) => sum + sale.total, 0) / viewingEventTransactions.sales.length 
                       : 0
@@ -8718,11 +8847,11 @@ export default function DashboardPage() {
 
       {/* Expenses Modal */}
       {viewingExpenses && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-3xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-teal-200/50 animate-fadeIn my-auto">
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-3xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-teal-200/50 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="font-display text-xl sm:text-2xl gradient-text break-words">{viewingExpenses.name} - Expenses</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">{viewingExpenses.name} - Expenses</h4>
                 <p className="mt-2 text-sm text-muted">
                   {viewingExpenses.expenses.length} expense{viewingExpenses.expenses.length !== 1 ? 's' : ''} · ${formatNumber(viewingExpenses.expenses.reduce((sum, e) => sum + e.amount, 0))} total
                 </p>
@@ -9050,10 +9179,10 @@ export default function DashboardPage() {
 
   const renderCatalogFormModal = (isEdit: boolean) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn">
-      <div className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
-        <div className="flex items-start justify-between mb-6">
+      <div className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-white px-5 sm:px-8 pb-5 sm:pb-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+        <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
           <div>
-            <h4 className="font-display text-2xl gradient-text">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
+            <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">{isEdit ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
             <p className="mt-2 text-sm text-muted">
               {isEdit ? 'Update item details and images.' : 'Add a new item to your catalog.'}
             </p>
@@ -11480,6 +11609,7 @@ export default function DashboardPage() {
               {activeView === 'home' && renderHome()}
               {activeView === 'inventory' && renderInventory()}
               {activeView === 'events' && renderEvents()}
+              {activeView === 'cashiers' && userRole === 'admin' && renderCashiers()}
               {activeView === 'catalog' && renderCatalog()}
               {activeView === 'pos' && renderPOS()}
               {activeView === 'orders' && renderOrders()}
@@ -11519,190 +11649,157 @@ export default function DashboardPage() {
       {/* Order history, edit and move are reachable from the POS view as well as
           Events, so they live here rather than inside renderEvents(). */}
       {/* Order History Modal */}
-      {viewingOrderHistory && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-5xl rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h4 className="font-display text-2xl gradient-text">{viewingOrderHistory.name} - Order History</h4>
-                <p className="mt-2 text-sm text-muted">
-                  {viewingOrderHistory.orders.length} order{viewingOrderHistory.orders.length !== 1 ? 's' : ''} · ${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))} total
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {userRole === 'admin' && viewingOrderHistory.orders.length > 0 && (
+      {viewingOrderHistory && (() => {
+        const h = viewingOrderHistory
+        const revenue = h.orders.reduce((sum, o) => sum + o.total, 0)
+        const copies = h.orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setViewingOrderHistory(null)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${h.name} order history`}
+              className="w-full max-w-3xl max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Kept short and pinned: on a phone the list is the point. */}
+              <div className="sticky top-0 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-4 sm:pt-6 pb-3 mb-3 bg-white border-b border-black/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Order history</p>
+                    <h4 className="font-display text-lg sm:text-2xl text-primaryDark leading-tight break-words">{h.name}</h4>
+                  </div>
                   <button
-                    onClick={() => openMoveOrders(viewingOrderHistory.id, viewingOrderHistory.orders, true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 transition-colors"
+                    onClick={() => setViewingOrderHistory(null)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
                     type="button"
+                    aria-label="Close"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                    Move by date
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
-                )}
-                {viewingOrderHistory.orders.length > 0 && (
-                  <button
-                    onClick={() => downloadEventTxt(viewingOrderHistory.name, viewingOrderHistory.orders)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-green-200 bg-green-50 px-4 py-2 text-sm font-bold text-green-700 hover:bg-green-100 transition-colors"
-                    type="button"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download TXT
-                  </button>
-                )}
-                <button
-                  onClick={() => setViewingOrderHistory(null)}
-                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-primary/20 px-4 py-2 text-sm font-bold text-primaryDark hover:bg-primary/5 transition-colors"
-                  type="button"
-                  aria-label="Close"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  <span>Close</span>
-                </button>
-              </div>
-            </div>
-
-            {viewingOrderHistory.orders.length === 0 ? (
-              <div className="text-center py-16 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl flex flex-col items-center">
-                <svg className="h-14 w-14 mb-4 text-amber-500/50" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                <p className="text-lg font-semibold text-gray-700">No orders yet</p>
-                <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
-              </div>
-            ) : (
-              <div className="space-y-4 sm:max-h-[600px] sm:overflow-y-auto sm:pr-2">
-                {viewingOrderHistory.orders.map((order, idx) => (
-                  <div key={order.id} className="rounded-2xl border-2 border-amber-100 p-4 sm:p-5 bg-gradient-to-br from-white to-amber-50/50 hover:border-amber-200 transition-all">
-                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">
-                          Order #{viewingOrderHistory.orders.length - idx}
-                        </p>
-                        <p className="text-xs text-muted inline-flex items-center gap-1.5">
-                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                          {new Date(order.timestamp).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                          order.paymentType === 'Cash'
-                            ? 'bg-green-100 text-green-700 border border-green-200'
-                            : order.paymentType === 'Card'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-purple-100 text-purple-700 border border-purple-200'
-                        }`}>
-                          {order.paymentType === 'Cash' ? '💵' : order.paymentType === 'Card' ? '💳' : '🏦'} {order.paymentType}
-                        </span>
-                        {userRole === 'admin' && (
-                          <>
-                            <button
-                              onClick={() => openEditOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Edit order"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openMoveOrders(viewingOrderHistory.id, [order], false)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Move order to another event"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                              Move
-                            </button>
-                            <button
-                              onClick={() => handleDeleteOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:scale-105 transition-all"
-                              type="button"
-                              aria-label="Delete order"
-                            >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                              Delete
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 mb-3">
-                      {order.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-primary/5 text-sm">
-                          <div>
-                            <span className="font-semibold">{item.quantity}× </span>
-                            <span>{item.title}</span>
-                          </div>
-                          <span className="font-bold text-primaryDark">${formatNumber(item.lineTotal)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1 px-3 py-2 rounded-xl bg-gradient-to-r from-gray-50 to-amber-50/50 border border-primary/5 text-sm">
-                      <div className="flex justify-between text-muted">
-                        <span>Subtotal</span>
-                        <span>${formatNumber(order.subtotal)}</span>
-                      </div>
-                      {order.discount > 0 && (
-                        <div className="flex justify-between text-red-600">
-                          <span>Discount ({order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})</span>
-                          <span>-${formatNumber(order.discount)}</span>
-                        </div>
-                      )}
-                      {order.convenienceFee > 0 && (
-                        <div className="flex justify-between text-amber-600">
-                          <span>Card fee (3%)</span>
-                          <span>+${formatNumber(order.convenienceFee)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-bold text-lg pt-1 border-t border-primary/10">
-                        <span className="gradient-text">Total</span>
-                        <span className="gradient-text">${formatNumber(order.total)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {viewingOrderHistory.orders.length > 0 && (
-              <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Orders</p>
-                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.length}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Total Revenue</p>
-                    <p className="text-2xl font-bold gradient-text">${formatNumber(viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0))}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Items Sold</p>
-                    <p className="text-2xl font-bold gradient-text">{viewingOrderHistory.orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted mb-1">Avg. Order</p>
-                    <p className="text-2xl font-bold gradient-text">
-                      ${formatNumber(viewingOrderHistory.orders.length > 0
-                        ? viewingOrderHistory.orders.reduce((sum, o) => sum + o.total, 0) / viewingOrderHistory.orders.length
-                        : 0
-                      )}
-                    </p>
-                  </div>
                 </div>
+                {h.orders.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => openMoveOrders(h.id, h.orders, true)}
+                        className="min-h-[36px] rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700"
+                        type="button"
+                      >
+                        Move by date
+                      </button>
+                    )}
+                    <button
+                      onClick={() => downloadEventTxt(h.name, h.orders)}
+                      className="min-h-[36px] rounded-full border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-700"
+                      type="button"
+                    >
+                      Download TXT
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+
+              {h.orders.length === 0 ? (
+                <div className="text-center py-12 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl">
+                  <p className="text-lg font-semibold text-gray-700">No orders yet</p>
+                  <p className="text-sm text-muted mt-2">Orders will appear here once sales are confirmed</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 grid grid-cols-4 gap-1.5 text-center">
+                    {[
+                      { label: 'Orders', value: String(h.orders.length) },
+                      { label: 'Revenue', value: `$${formatNumber(revenue)}` },
+                      { label: 'Books', value: String(copies) },
+                      { label: 'Avg.', value: `$${formatNumber(revenue / h.orders.length)}` }
+                    ].map((s) => (
+                      <div key={s.label} className="min-w-0 rounded-xl bg-amber-50 border border-amber-100 px-1 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{s.label}</p>
+                        <p className="truncate text-sm sm:text-lg font-bold text-primaryDark">{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* One line per order; tap to see the items and the admin actions. */}
+                  <ul className="divide-y divide-amber-100 rounded-2xl border border-amber-100">
+                    {h.orders.map((order, idx) => {
+                      const open = historyOpenOrderId === order.id
+                      return (
+                        <li key={order.id}>
+                          <button
+                            type="button"
+                            onClick={() => setHistoryOpenOrderId(open ? null : order.id)}
+                            aria-expanded={open}
+                            className="flex w-full items-start gap-3 px-3 py-2.5 text-left"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-muted">
+                                <span className="font-bold text-gray-700">#{h.orders.length - idx}</span>
+                                {' · '}{new Date(order.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                {' · '}{order.paymentType}
+                                {order.soldByName ? ` · ${order.soldByName}` : ''}
+                              </p>
+                              <p className={`text-sm text-gray-800 ${open ? '' : 'truncate'}`}>
+                                {order.items.map((i) => `${i.quantity}× ${i.title}`).join(', ')}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-sm font-bold text-primaryDark">${formatNumber(order.total)}</span>
+                          </button>
+                          {open && (
+                            <div className="px-3 pb-3">
+                              <div className="space-y-1 rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                                {order.items.map((item, i) => (
+                                  <div key={i} className="flex justify-between gap-3">
+                                    <span className="min-w-0">{item.quantity}× {item.title}</span>
+                                    <span className="shrink-0 font-semibold">${formatNumber(item.lineTotal)}</span>
+                                  </div>
+                                ))}
+                                <div className="flex justify-between border-t border-black/5 pt-1 text-muted">
+                                  <span>Subtotal</span><span>${formatNumber(order.subtotal)}</span>
+                                </div>
+                                {order.discount > 0 && (
+                                  <div className="flex justify-between text-red-600">
+                                    <span>Discount ({order.discountType === 'percentage' ? `${order.discountValue}%` : `$${order.discountValue}`})</span>
+                                    <span>-${formatNumber(order.discount)}</span>
+                                  </div>
+                                )}
+                                {order.convenienceFee > 0 && (
+                                  <div className="flex justify-between text-amber-600">
+                                    <span>Card fee (3%)</span><span>+${formatNumber(order.convenienceFee)}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between font-bold">
+                                  <span>Total</span><span>${formatNumber(order.total)}</span>
+                                </div>
+                              </div>
+                              {userRole === 'admin' && (
+                                <div className="mt-2 grid grid-cols-3 gap-2">
+                                  <button onClick={() => openEditOrder(order)} type="button" className="min-h-[40px] rounded-xl border border-blue-200 bg-blue-50 text-xs font-bold text-blue-700">Edit</button>
+                                  <button onClick={() => openMoveOrders(h.id, [order], false)} type="button" className="min-h-[40px] rounded-xl border border-amber-200 bg-amber-50 text-xs font-bold text-amber-700">Move</button>
+                                  <button onClick={() => handleDeleteOrder(order)} type="button" className="min-h-[40px] rounded-xl border border-red-200 bg-red-50 text-xs font-bold text-red-700">Delete</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Edit Order Modal (Admin Only) */}
       {editingOrder && (
-        <div className="fixed inset-0 z-[60] flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-blue-200/50 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-blue-200/50 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">Edit Order</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">Edit Order</h4>
                 <p className="mt-2 text-sm text-muted">
                   {new Date(editingOrder.timestamp).toLocaleString()}
                 </p>
@@ -11855,11 +11952,11 @@ export default function DashboardPage() {
             }))
         ]
         return (
-          <div className="fixed inset-0 z-[60] flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-            <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn my-auto">
-              <div className="flex items-start justify-between mb-6">
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+            <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-amber-200/50 animate-fadeIn">
+              <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
                 <div>
-                  <h4 className="font-display text-2xl gradient-text">
+                  <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">
                     {moveRequest.byDate ? 'Move Sales by Date' : 'Move Order'}
                   </h4>
                   <p className="mt-2 text-sm text-muted">
@@ -12108,42 +12205,83 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* QR label modal: generate + print a QR for an item's SKU (or id) */}
-      {qrModalItem && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn print:static print:bg-white print:p-0" onClick={() => { setQrModalItem(null); setQrDataUrl('') }}>
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border-2 border-primary/20 print:border-0 print:shadow-none" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4 print:hidden">
+      {/* Barcode label modal: draw + print a barcode for an item's code (or id) */}
+      {labelItem && (
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => { setLabelItem(null); setLabelSvg('') }}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Barcode label for ${labelItem.title}`}
+            className="w-full sm:max-w-sm max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl border-2 border-primary/20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
               <div>
-                <h4 className="font-display text-xl gradient-text">QR Label</h4>
-                <p className="mt-1 text-xs text-muted">Print or screenshot to attach to the book.</p>
+                <h4 className="font-display text-xl gradient-text">Barcode Label</h4>
+                <p className="mt-1 text-xs text-muted">Print it, or save the image for a label printer app.</p>
               </div>
               <button
-                onClick={() => { setQrModalItem(null); setQrDataUrl('') }}
-                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
+                onClick={() => { setLabelItem(null); setLabelSvg('') }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 text-primaryDark hover:bg-primary/5 transition-colors"
                 type="button"
                 aria-label="Close"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="flex flex-col items-center text-center">
-              {qrDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={qrDataUrl} alt={`QR code for ${qrModalItem.title}`} className="h-56 w-56 rounded-xl border border-black/5" />
+            {/* The only part printed: title over the barcode, its digits underneath. */}
+            <div id="print-label" className="flex flex-col items-center text-center">
+              <p className="mb-2 line-clamp-2 font-display text-sm font-bold text-primaryDark">{labelItem.title}</p>
+              {labelSvg ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={labelSvg} alt={`Barcode ${labelItem.code || labelItem.id}`} className="h-auto w-full max-w-[280px]" />
+                  {(() => {
+                    const size = barcodePrintSizeMm(labelSvg)
+                    if (!size) return null
+                    return (
+                      <>
+                        <p className="mt-2 text-xs text-muted">Prints about {Math.round(size.width)} × {Math.round(size.height) + 3} mm</p>
+                        {size.width > LABEL_MAX_MM + 1 && !demoMode && (
+                          <div className="mt-3 w-full rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800">
+                            <p className="font-semibold">This code is long, so the label is too wide for a small item.</p>
+                            <button
+                              type="button"
+                              onClick={() => assignStoreCode(labelItem)}
+                              disabled={assigningStoreCode}
+                              className="mt-2 min-h-[40px] w-full rounded-full bg-amber-500 px-3 text-xs font-bold text-white disabled:opacity-50"
+                            >
+                              {assigningStoreCode ? 'Saving…' : 'Use a short store code'}
+                            </button>
+                            <p className="mt-1">Labels already printed with the old code keep working.</p>
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
+                </>
               ) : (
-                <div className="flex h-56 w-56 items-center justify-center rounded-xl border border-dashed border-primary/30 text-sm text-muted">Generating…</div>
+                <p className="rounded-xl border border-dashed border-red-300 px-4 py-6 text-sm text-red-700">This code can&apos;t be drawn as a barcode. Edit the item&apos;s code and try again.</p>
               )}
-              <p className="mt-4 font-display text-base font-bold text-primaryDark">{qrModalItem.title}</p>
-              <p className="mt-1 font-mono text-xs text-muted">{qrModalItem.code || qrModalItem.id}</p>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 print:hidden"
-              type="button"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-12 0v4h12v-4m-12 0h12" /></svg>
-              Print QR
-            </button>
+            {labelSvg && (
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  onClick={printLabel}
+                  className="min-h-[48px] rounded-full bg-gradient-to-r from-primary to-secondary px-4 text-sm font-semibold text-white shadow-md"
+                  type="button"
+                >
+                  Print
+                </button>
+                <button
+                  onClick={() => saveLabelImage(labelItem)}
+                  className="min-h-[48px] rounded-full border-2 border-primary/25 px-4 text-sm font-semibold text-primaryDark"
+                  type="button"
+                >
+                  Save image
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -12151,10 +12289,10 @@ export default function DashboardPage() {
       {/* Inventory Edit/Add Modal */}
       {(editingInventoryItem || showAddInventoryItem) && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:px-4 animate-fadeIn">
-          <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-8 rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
-            <div className="flex items-start justify-between mb-6">
+          <div className="w-full sm:max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-8 rounded-t-3xl sm:rounded-3xl bg-white px-5 sm:px-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">
                   {editingInventoryItem ? 'Edit Inventory Item' : 'Add New Item'}
                 </h4>
                 <p className="mt-2 text-sm text-muted">
@@ -12336,11 +12474,11 @@ export default function DashboardPage() {
 
       {/* POS Confirm Sale Modal */}
       {showConfirmSale && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm px-4 animate-fadeIn overflow-y-auto overscroll-contain py-6">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-5 sm:p-8 shadow-2xl border-2 border-primary/20 animate-fadeIn my-auto">
-            <div className="flex items-start justify-between mb-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4 animate-fadeIn">
+          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-8 shadow-2xl border-2 border-primary/20 animate-fadeIn">
+            <div className="sticky top-0 z-10 -mx-5 sm:-mx-8 px-5 sm:px-8 pt-5 sm:pt-8 pb-3 mb-4 bg-white border-b border-black/5 flex items-start justify-between">
               <div>
-                <h4 className="font-display text-2xl gradient-text">Confirm Sale</h4>
+                <h4 className="font-display text-lg sm:text-2xl leading-tight gradient-text break-words">Confirm Sale</h4>
                 <p className="mt-2 text-sm text-muted">
                   Recording to{' '}
                   <span className="font-bold text-primaryDark">{posGroupName}</span>
@@ -12535,7 +12673,7 @@ export default function DashboardPage() {
       {expandedOrder && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedOrder(null)}>
           <div className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0 rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+            <div className="sticky top-0 z-10 bg-white flex items-center justify-between border-b border-black/10 px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">Order Details</h3>
                 <p className="font-mono text-xs text-muted">{expandedOrder.id}</p>
@@ -12733,7 +12871,7 @@ export default function DashboardPage() {
       {expandedReader && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4 animate-fadeIn" onClick={() => setExpandedReader(null)}>
           <div className="relative w-full sm:max-w-lg max-h-[92dvh] overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0 rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
+            <div className="sticky top-0 z-10 bg-white flex items-center justify-between border-b border-black/10 px-5 py-4">
               <div>
                 <h3 className="font-display text-lg font-bold text-primaryDark">{expandedReader.childName}</h3>
                 <p className="font-mono text-xs text-muted">{expandedReader.code}</p>

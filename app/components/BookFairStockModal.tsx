@@ -24,6 +24,8 @@ type Props = {
   /** delta > 0 moves copies to the fair, < 0 returns them. Resolves to an error or null. */
   onTransfer: (itemId: string, delta: number) => Promise<string | null>
   onReturnAll: () => Promise<string | null>
+  /** Saves the fair's stock list as an .xlsx file. */
+  onDownload: () => void
   onClose: () => void
 }
 
@@ -34,7 +36,7 @@ const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 
  * event. Moving them lowers the main count straight away, so the website and
  * other events can't sell copies that are physically at the fair.
  */
-export function BookFairStockModal({ eventName, eventActive, stock, inventory, soldHere, onTransfer, onReturnAll, onClose }: Props) {
+export function BookFairStockModal({ eventName, eventActive, stock, inventory, soldHere, onTransfer, onReturnAll, onDownload, onClose }: Props) {
   const [search, setSearch] = useState('')
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
@@ -218,16 +220,27 @@ export function BookFairStockModal({ eventName, eventActive, stock, inventory, s
           <section className="mt-6">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h5 className="text-xs font-bold uppercase tracking-wider text-muted">At the fair ({atFair.length} titles)</h5>
-              {copiesAtFair > 0 && (
-                <button
-                  type="button"
-                  onClick={returnAll}
-                  disabled={busy !== null}
-                  className="min-h-[40px] rounded-full border-2 border-amber-300 bg-amber-50 px-4 text-xs font-bold text-amber-800 disabled:opacity-40"
-                >
-                  {busy === 'all' ? 'Returning…' : 'Return all unsold'}
-                </button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {atFair.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={onDownload}
+                    className="min-h-[40px] rounded-full border-2 border-green-200 bg-green-50 px-4 text-xs font-bold text-green-700"
+                  >
+                    Download .xlsx
+                  </button>
+                )}
+                {copiesAtFair > 0 && (
+                  <button
+                    type="button"
+                    onClick={returnAll}
+                    disabled={busy !== null}
+                    className="min-h-[40px] rounded-full border-2 border-amber-300 bg-amber-50 px-4 text-xs font-bold text-amber-800 disabled:opacity-40"
+                  >
+                    {busy === 'all' ? 'Returning…' : 'Return all unsold'}
+                  </button>
+                )}
+              </div>
             </div>
             {atFair.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-primary/20 px-4 py-6 text-center text-sm text-muted">

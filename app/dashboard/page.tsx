@@ -2101,6 +2101,37 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url)
   }
 
+  // A book fair's own stock as a spreadsheet: what went to the fair, what sold
+  // there and what is left, for counting the boxes or reporting afterwards.
+  const handleExportFairStock = (event: EventRecord, soldHere: Record<string, number>) => {
+    const byId = new Map(inventory.map((item) => [item.id, item]))
+    const lines = Object.entries(event.stock ?? {})
+      .map(([id, qty]) => ({ item: byId.get(id), qty: Math.max(0, qty) }))
+      .filter((row): row is { item: InventoryItem; qty: number } => Boolean(row.item))
+      .sort((a, b) => a.item.title.localeCompare(b.item.title))
+    if (lines.length === 0) return
+    const header = ['Title', 'Code', 'Category', 'Publisher', 'Selling Price', 'At Fair', 'Sold at Fair', 'Value at Fair', 'In Main Inventory']
+    const rows = lines.map(({ item, qty }) => [
+      item.title, item.code || '', item.category, item.publisher, item.sellingPrice,
+      qty, soldHere[item.id] ?? 0, Number((qty * item.sellingPrice).toFixed(2)), item.quantity
+    ])
+    const sum = (col: number) => rows.reduce((total, r) => total + Number(r[col] || 0), 0)
+    const totals = ['Total', '', '', '', '', sum(5), sum(6), Number(sum(7).toFixed(2)), sum(8)]
+    const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows, [], totals])
+    worksheet['!cols'] = [{ wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 13 }, { wch: 17 }]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Book Fair Stock')
+    const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const slug = event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'book-fair'
+    link.download = `${slug}-stock-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleInventoryUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -11641,6 +11672,7 @@ export default function DashboardPage() {
             soldHere={soldHere}
             onTransfer={(itemId, delta) => transferFairStock(fairEvent.id, itemId, delta)}
             onReturnAll={() => returnAllFairStock(fairEvent.id)}
+            onDownload={() => handleExportFairStock(fairEvent, soldHere)}
             onClose={() => setFairStockEventId(null)}
           />
         )

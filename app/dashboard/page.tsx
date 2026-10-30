@@ -332,7 +332,7 @@ const NAV_ITEMS: { id: string; label: string; title: string; subtitle: string }[
   { id: 'home', label: 'Home', title: 'Admin Home', subtitle: 'Monitor restock needs, best sellers, and event performance at a glance.' },
   { id: 'inventory', label: 'Inventory', title: 'Inventory Management', subtitle: 'Upload, update, and manage your complete inventory with ease.' },
   { id: 'events', label: 'Events', title: 'Event Management', subtitle: 'Create events, manage dates and fees, and review event performance summaries.' },
-  { id: 'cashiers', label: 'Cashiers', title: 'Cashiers', subtitle: 'Choose whether each cashier sells from main inventory or a book fair, and see what each one has sold.' },
+  { id: 'cashiers', label: 'Cashiers', title: 'Cashiers', subtitle: 'Choose the event each cashier sells at, and see what each one has sold.' },
   { id: 'pos', label: 'POS', title: 'Point of Sale', subtitle: 'Record sales for events or general transactions. Search products, manage cart, and process payments.' },
   { id: 'catalog', label: 'Catalog', title: 'Catalog Management', subtitle: 'Create, manage, and showcase your product catalog with images and details.' },
   { id: 'orders', label: 'Orders', title: 'Online Orders', subtitle: 'Online store orders paid via Stripe. Review details and mark items as shipped.' },
@@ -1069,6 +1069,7 @@ export default function DashboardPage() {
   // '' = main inventory at any active event; an event id locks a cashier's
   // POS to that book fair and sells from its own stock.
   const [posAssignment, setPosAssignment] = useState('')
+  const [posAssignmentLoaded, setPosAssignmentLoaded] = useState(false)
   // Admin: cashier accounts and their assignments, for the Book Fair panel.
   const [cashiers, setCashiers] = useState<{ uid: string; email: string; name: string; posEventId: string }[]>([])
   const [cashiersLoading, setCashiersLoading] = useState(false)
@@ -1474,11 +1475,12 @@ export default function DashboardPage() {
   }, [user, demoMode])
 
   useEffect(() => {
+    if (userRole === 'cashier') return
     const activeEvent = events.find((event) => event.status === 'active')
     if (activeEvent && !selectedEventId) {
       setSelectedEventId(activeEvent.id)
     }
-  }, [events, selectedEventId])
+  }, [events, selectedEventId, userRole])
 
   // ── POS stock source ──
   // Follow this user's assignment live, so an admin moving a cashier to or
@@ -1487,7 +1489,10 @@ export default function DashboardPage() {
     if (!user || demoMode) return
     return onSnapshot(
       doc(db, 'users', user.uid),
-      (snap) => setPosAssignment(String(snap.data()?.posEventId ?? '')),
+      (snap) => {
+        setPosAssignment(String(snap.data()?.posEventId ?? ''))
+        setPosAssignmentLoaded(true)
+      },
       (error) => console.error('POS assignment listener error:', error)
     )
   }, [user, demoMode])
@@ -1547,27 +1552,23 @@ export default function DashboardPage() {
     }
   }
 
-  // A cashier the admin assigned to a book fair is locked to it while it runs.
-  const lockedPosEvent = userRole === 'cashier' && posAssignment
-    ? events.find((e) => e.id === posAssignment && e.status === 'active') ?? null
-    : null
-  // A book fair's stock is the admin's to hand out, so a cashier sells there
-  // only when assigned to it. One left on a fair after being moved back to main
-  // inventory is taken off it, rather than carrying on selling fair stock.
-  const posEventAllowed = (event: EventRecord) =>
-    userRole !== 'cashier' || !hasEventStock(event) || event.id === lockedPosEvent?.id
+  // Cashiers don't choose where a sale is recorded. The admin assigns each one
+  // an event (or General Sales) on the Cashiers page, and it holds until the
+  // admin changes it. If that event closes or is deleted, the POS stops rather
+  // than falling back to General Sales: picking the wrong group, or being left
+  // on General Sales, is how event sales used to end up in the wrong place.
+  const isCashier = userRole === 'cashier'
+  const cashierReady = posAssignmentLoaded && !dataLoading
+  const cashierEvent = isCashier && posAssignment ? events.find((e) => e.id === posAssignment) ?? null : null
+  const cashierBlocked = isCashier && cashierReady && Boolean(posAssignment) && cashierEvent?.status !== 'active'
+  // Where this cashier's sales go: an event id, 'general', or '' while it
+  // can't sell (still loading, or its event closed). null for admins.
+  const cashierTarget = !isCashier ? null : !cashierReady || cashierBlocked ? '' : posAssignment || 'general'
+  const lockedPosEvent = cashierEvent && !cashierBlocked ? cashierEvent : null
+  const posEventAllowed = (event: EventRecord) => !isCashier || event.id === cashierTarget
   useEffect(() => {
-    if (lockedPosEvent && selectedEventId !== lockedPosEvent.id) {
-      setSelectedEventId(lockedPosEvent.id)
-      return
-    }
-    const selected = events.find((e) => e.id === selectedEventId)
-    if (selected && !posEventAllowed(selected)) {
-      setSelectedEventId('')
-      setEventMessage(`You now sell from main inventory, so ${selected.name} was unselected. Pick the event you are selling at.`)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lockedPosEvent, selectedEventId, events, userRole])
+    if (cashierTarget !== null && selectedEventId !== cashierTarget) setSelectedEventId(cashierTarget)
+  }, [cashierTarget, selectedEventId])
 
   // Selling at an event with its own stock draws from that stock, so the POS
   // lists only the fair's books, at the fair's counts. Everywhere else it is
@@ -1637,9 +1638,10 @@ export default function DashboardPage() {
   }, [activeView, eventMessage])
   useEffect(() => {
     // Once events have loaded, drop a remembered event that has since closed.
-    if (!events.length || selectedEventId === 'general' || selectedEventId === '') return
+    // Never for a cashier: their event is the admin's call, not a fallback.
+    if (isCashier || !events.length || selectedEventId === 'general' || selectedEventId === '') return
     if (!activePosEvents.some((e) => e.id === selectedEventId)) setSelectedEventId('general')
-  }, [events.length, activePosEvents, selectedEventId])
+  }, [events.length, activePosEvents, selectedEventId, isCashier])
 
   const cartTotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -2101,35 +2103,40 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url)
   }
 
-  // A book fair's own stock as a spreadsheet: what went to the fair, what sold
-  // there and what is left, for counting the boxes or reporting afterwards.
-  const handleExportFairStock = (event: EventRecord, soldHere: Record<string, number>) => {
+  // A book fair's own stock as a formatted spreadsheet, for counting the boxes
+  // at the fair. The builder (and ExcelJS) loads only when it's asked for.
+  const handleExportFairStock = async (event: EventRecord) => {
     const byId = new Map(inventory.map((item) => [item.id, item]))
-    const lines = Object.entries(event.stock ?? {})
+    const rows = Object.entries(event.stock ?? {})
       .map(([id, qty]) => ({ item: byId.get(id), qty: Math.max(0, qty) }))
       .filter((row): row is { item: InventoryItem; qty: number } => Boolean(row.item))
-      .sort((a, b) => a.item.title.localeCompare(b.item.title))
-    if (lines.length === 0) return
-    const header = ['Title', 'Code', 'Category', 'Publisher', 'Selling Price', 'At Fair', 'Sold at Fair', 'Value at Fair', 'In Main Inventory']
-    const rows = lines.map(({ item, qty }) => [
-      item.title, item.code || '', item.category, item.publisher, item.sellingPrice,
-      qty, soldHere[item.id] ?? 0, Number((qty * item.sellingPrice).toFixed(2)), item.quantity
-    ])
-    const sum = (col: number) => rows.reduce((total, r) => total + Number(r[col] || 0), 0)
-    const totals = ['Total', '', '', '', '', sum(5), sum(6), Number(sum(7).toFixed(2)), sum(8)]
-    const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows, [], totals])
-    worksheet['!cols'] = [{ wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 13 }, { wch: 17 }]
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Book Fair Stock')
-    const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const slug = event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'book-fair'
-    link.download = `${slug}-stock-${new Date().toISOString().slice(0, 10)}.xlsx`
-    link.click()
-    URL.revokeObjectURL(url)
+      .sort((x, y) => x.item.title.localeCompare(y.item.title))
+      .map(({ item, qty }) => ({
+        title: item.title,
+        code: item.code || '',
+        category: String(item.category ?? ''),
+        publisher: item.publisher || '',
+        sellingPrice: item.sellingPrice,
+        atFair: qty
+      }))
+    if (rows.length === 0) return
+    try {
+      const { buildFairStockWorkbook } = await import('../../lib/fairStockSheet')
+      const blob = await buildFairStockWorkbook(
+        { eventName: event.name, location: event.location, startDate: event.startDate, endDate: event.endDate },
+        rows
+      )
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const slug = event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'book-fair'
+      link.download = `${slug}-stock-${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      console.error('Fair stock export error:', error)
+      alert('Could not create the spreadsheet. Please try again.')
+    }
   }
 
   const handleInventoryUpload = async (
@@ -4135,6 +4142,7 @@ export default function DashboardPage() {
   }
 
   const handleRecordSale = async () => {
+    if (cashierTarget !== null && (!cashierTarget || selectedEventId !== cashierTarget)) return
     const isGeneralSale = selectedEventId === 'general'
     const eventRecord = events.find((event) => event.id === selectedEventId)
     if ((!eventRecord && !isGeneralSale) || cartItems.length === 0) return
@@ -7806,12 +7814,20 @@ export default function DashboardPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 text-primaryDark">
               <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5a4 4 0 100 8 4 4 0 000-8zm0 3a1 1 0 100 2 1 1 0 000-2z" /></svg>
             </div>
+            {isCashier ? (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-700">Selling at</p>
+                <p id="pos-event" tabIndex={-1} className="truncate font-display text-lg text-primaryDark">
+                  {!cashierReady ? 'Loading…' : cashierBlocked ? 'No open event' : posGroupName}
+                </p>
+                <p className="text-xs text-muted">Set by your admin</p>
+              </div>
+            ) : (
             <div className="flex-1">
               <label htmlFor="pos-event" className="block text-sm font-bold text-gray-700 mb-1">Select Event</label>
               <select
                 id="pos-event"
                 value={selectedEventId}
-                disabled={!!lockedPosEvent}
                 onChange={(event) => setSelectedEventId(event.target.value)}
                 className="w-full rounded-xl border-2 border-primary/20 px-4 py-2.5 text-sm font-medium hover:border-primary/40 focus:border-primary focus:outline-none transition-colors"
               >
@@ -7826,21 +7842,23 @@ export default function DashboardPage() {
                   ))}
               </select>
             </div>
+            )}
           </div>
           {/* Which stock this sale comes out of, so nobody wonders why the
               list changed: a book fair sells only what was moved to it. */}
-          <p className={`mb-2 rounded-xl border px-3 py-2 text-xs font-semibold ${posFair ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-primary/10 bg-primary/5 text-primaryDark'}`}>
-            {posFair
-              ? `Selling from ${posFair.name}'s book fair stock (${fairCopiesOnHand(posFair)} copies left).`
-              : 'Selling from main inventory.'}
-            {lockedPosEvent && ' Set by your admin.'}
-          </p>
-          {userRole === 'cashier' && posAssignment && !lockedPosEvent && (
-            <p className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-              The book fair you were assigned to is closed, so you are selling from main inventory. Ask your admin if that is wrong.
+          {cashierBlocked ? (
+            <p role="alert" className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              {cashierEvent ? `${cashierEvent.name} is closed` : 'Your event was removed'}, so sales can&apos;t be recorded.
+              Ask your admin to assign you to an open event.
+            </p>
+          ) : (
+            <p className={`mb-2 rounded-xl border px-3 py-2 text-xs font-semibold ${posFair ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-primary/10 bg-primary/5 text-primaryDark'}`}>
+              {posFair
+                ? `Selling from ${posFair.name}'s book fair stock (${fairCopiesOnHand(posFair)} copies left).`
+                : 'Selling from main inventory.'}
             </p>
           )}
-          {posGeneralWhileEventActive && (
+          {posGeneralWhileEventActive && !isCashier && (
             <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
               {activePosEvents.map((e) => e.name).join(', ')} {activePosEvents.length === 1 ? 'is' : 'are'} running, but sales are going to General Sales. Pick the event above if you are selling there.
             </p>
@@ -8267,11 +8285,13 @@ export default function DashboardPage() {
           sales={salesBySeller}
           cashiers={cashiers}
           loading={cashiersLoading}
-          fairs={events.filter(hasEventStock).map((e) => ({ id: e.id, name: e.name, active: e.status === 'active' }))}
+          events={[...events]
+            .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || a.name.localeCompare(b.name))
+            .map((e) => ({ id: e.id, name: e.name, active: e.status === 'active', bookFair: hasEventStock(e) }))}
           onChange={setCashierSource}
         />
         <p className="text-xs text-muted">
-          A book fair only appears in the list once it holds stock: open Events, then Book fair stock, to move books to it.
+          Only open events can be picked. To have a cashier sell only a book fair&apos;s books, stock the fair first in Events, then Book fair stock.
           {unattributed && unattributed.all.orders > 0 &&
             ` ${unattributed.all.orders} older sale${unattributed.all.orders === 1 ? '' : 's'} were recorded before sales were tagged with a cashier, so they aren't counted against anyone.`}
         </p>
@@ -8307,7 +8327,9 @@ export default function DashboardPage() {
           sales={salesBySeller}
           cashiers={cashiers}
           loading={cashiersLoading}
-          fairs={events.filter(hasEventStock).map((e) => ({ id: e.id, name: e.name, active: e.status === 'active' }))}
+          events={[...events]
+            .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || a.name.localeCompare(b.name))
+            .map((e) => ({ id: e.id, name: e.name, active: e.status === 'active', bookFair: hasEventStock(e) }))}
           onChange={setCashierSource}
         />
       )}
@@ -11672,7 +11694,7 @@ export default function DashboardPage() {
             soldHere={soldHere}
             onTransfer={(itemId, delta) => transferFairStock(fairEvent.id, itemId, delta)}
             onReturnAll={() => returnAllFairStock(fairEvent.id)}
-            onDownload={() => handleExportFairStock(fairEvent, soldHere)}
+            onDownload={() => handleExportFairStock(fairEvent)}
             onClose={() => setFairStockEventId(null)}
           />
         )

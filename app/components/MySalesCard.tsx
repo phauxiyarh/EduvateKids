@@ -55,8 +55,8 @@ export function MySalesCard({ sales, recent }: Props) {
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         {[
-          { label: 'Taken', value: money(t.total) },
-          { label: 'Sales', value: String(t.orders) },
+          { label: 'Total sold', value: money(t.total) },
+          { label: 'Orders', value: String(t.orders) },
           { label: 'Books', value: String(t.copies) }
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border border-primary/10 bg-primary/5 px-3 py-2.5 min-w-0">

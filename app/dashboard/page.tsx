@@ -28,6 +28,8 @@ import { ImageSlider } from '../components/ImageSlider'
 import { BookFairStockModal } from '../components/BookFairStockModal'
 import { CashierSourcesPanel } from '../components/CashierSourcesPanel'
 import { MySalesCard, emptyTotals, type SellerSales } from '../components/MySalesCard'
+import { BookCreditModal } from '../components/BookCreditModal'
+import { computeBookCredit, DEFAULT_CREDIT_RATES, type CreditRates } from '../../lib/bookCredit'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   blogSlug,
@@ -427,6 +429,9 @@ type EventRecord = {
    *  must not resurrect them during load-time recovery. */
   removedOrderIds?: string[]
   removedSaleIds?: string[]
+  /** Book credit rates (percent of sales) the school gets at this book fair:
+   *  one for Learning Roots books, one for everything else. */
+  creditRates?: CreditRates
 }
 
 const byNewestTimestamp = <T extends { timestamp: string }>(a: T, b: T) =>
@@ -781,9 +786,16 @@ const normalizeEventDoc = (id: string, data: Partial<EventRecord>): EventRecord 
     expenses: Array.isArray(data.expenses) ? (data.expenses as Expense[]) : [],
     ...(data.stock && typeof data.stock === 'object' ? { stock: normalizeStockMap(data.stock) } : {}),
     removedOrderIds: Array.isArray(data.removedOrderIds) ? data.removedOrderIds.map(String) : [],
-    removedSaleIds: Array.isArray(data.removedSaleIds) ? data.removedSaleIds.map(String) : []
+    removedSaleIds: Array.isArray(data.removedSaleIds) ? data.removedSaleIds.map(String) : [],
+    ...(data.creditRates && Number.isFinite(Number(data.creditRates.lr)) && Number.isFinite(Number(data.creditRates.other))
+      ? { creditRates: { lr: Number(data.creditRates.lr), other: Number(data.creditRates.other) } }
+      : {})
   }
 }
+
+// A book fair: typed as one, or it has held or sold its own stock.
+const isBookFairEvent = (event: EventRecord) =>
+  event.type === 'Bookfair' || hasEventStock(event) || event.orders.some((o) => o.stockEventId === event.id)
 
 const normalizeHeader = (value: string) =>
   value
@@ -1105,6 +1117,7 @@ export default function DashboardPage() {
   const [editEventStatus, setEditEventStatus] = useState<EventStatus>('active')
   const [viewingOrderHistory, setViewingOrderHistory] = useState<EventRecord | null>(null)
   const [historyOpenOrderId, setHistoryOpenOrderId] = useState<string | null>(null)
+  const [creditEventId, setCreditEventId] = useState<string | null>(null)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   // Re-filing POS orders saved under the wrong group. byDate picks up every
   // order (and stray sale) the source recorded on moveDate, local time.
@@ -2101,6 +2114,18 @@ export default function DashboardPage() {
     link.download = `eduvate-stock-export-${date}.xlsx`
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const saveCreditRates = async (eventId: string, rates: CreditRates): Promise<string | null> => {
+    setEvents((current) => current.map((e) => (e.id === eventId ? { ...e, creditRates: rates } : e)))
+    if (demoMode) return null
+    try {
+      await updateDoc(doc(db, 'events', eventId), { creditRates: rates, _live: true })
+      return null
+    } catch (error) {
+      console.error('Save credit rates error:', error)
+      return 'Could not save the rates. Check the connection and try again.'
+    }
   }
 
   // A book fair's own stock as a formatted spreadsheet, for counting the boxes
@@ -8456,6 +8481,16 @@ export default function DashboardPage() {
                             Book fair stock
                           </button>
                         )}
+                        {userRole === 'admin' && isBookFairEvent(event) && (
+                          <button
+                            onClick={() => setCreditEventId(event.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold bg-gradient-to-r from-lime-50 to-emerald-50 text-emerald-800 border border-emerald-300 transition-all hover:scale-105"
+                            type="button"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" /></svg>
+                            Book credit
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
@@ -11677,6 +11712,29 @@ export default function DashboardPage() {
       })()}
 
       {/* Global Modals - rendered outside page views */}
+      {creditEventId && (() => {
+        const creditEvent = events.find((e) => e.id === creditEventId)
+        if (!creditEvent) return null
+        const byId = new Map(inventory.map((i) => [i.id, i]))
+        const byTitle = new Map(inventory.map((i) => [i.title.trim().toLowerCase(), i]))
+        const credit = computeBookCredit(
+          creditEvent.orders,
+          // By id, then by title for an item re-created under a new id;
+          // undefined when it's gone, so the popup can say so.
+          (line) => (byId.get(line.itemId) ?? byTitle.get(String(line.title || '').trim().toLowerCase()))?.publisher,
+          creditEvent.creditRates ?? DEFAULT_CREDIT_RATES
+        )
+        return (
+          <BookCreditModal
+            key={creditEvent.id}
+            eventName={creditEvent.name}
+            credit={credit}
+            canEditRates={userRole === 'admin'}
+            onSaveRates={(rates) => saveCreditRates(creditEvent.id, rates)}
+            onClose={() => setCreditEventId(null)}
+          />
+        )
+      })()}
       {fairStockEventId && (() => {
         const fairEvent = events.find((e) => e.id === fairStockEventId)
         if (!fairEvent) return null

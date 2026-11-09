@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   POS_PAYMENT_OPTIONS,
   paymentOption,
-  type PosPaymentMethod
+  type PosPaymentMethod,
+  type PosPaymentOption
 } from '../../lib/posPayment'
 
 const money = (n: number) =>
@@ -87,6 +88,44 @@ type QrProps = {
   amount: number
 }
 
+type Brand = { accent: string; soft: string; ring: string }
+
+/** Who the money goes to: name and number (or cashtag), for customers who
+ *  type the details in rather than scan. */
+function PayeeCard({ payee, brand, large = false }: { payee: NonNullable<PosPaymentOption['payee']>; brand: Brand; large?: boolean }) {
+  const initials = (payee.name ?? payee.handle.replace(/^\$/, ''))
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+  return (
+    <div
+      className={`mx-auto flex w-full items-center gap-3 rounded-2xl bg-white text-left shadow-sm ${large ? 'mt-6 max-w-md px-5 py-4' : 'mt-3 max-w-[280px] px-3 py-2.5'}`}
+      style={{ boxShadow: `0 0 0 1.5px ${brand.ring}` }}
+      data-testid="payee-card"
+    >
+      <span
+        aria-hidden="true"
+        className={`flex flex-shrink-0 items-center justify-center rounded-full font-display font-bold text-white ${large ? 'h-14 w-14 text-xl' : 'h-10 w-10 text-sm'}`}
+        style={{ background: brand.accent }}
+      >
+        {initials}
+      </span>
+      <span className="min-w-0">
+        <span className={`block font-bold uppercase tracking-wider text-muted ${large ? 'text-xs' : 'text-[10px]'}`}>Pay to</span>
+        {payee.name && (
+          <span className={`block font-display font-bold leading-tight text-gray-900 ${large ? 'text-2xl sm:text-3xl' : 'text-base'}`}>{payee.name}</span>
+        )}
+        <span className={`block leading-tight ${large ? 'mt-1 text-lg sm:text-xl' : 'text-sm'}`}>
+          <span className="text-muted">{payee.handleLabel} </span>
+          <span className="font-bold tabular-nums" style={{ color: brand.accent }}>{payee.handle}</span>
+        </span>
+      </span>
+    </div>
+  )
+}
+
 /**
  * The QR code for a Zelle or Cash App payment, with a full-screen view the
  * cashier can turn toward the customer. Renders nothing for Cash or Card.
@@ -132,6 +171,7 @@ export function PaymentQrPanel({ method, amount }: QrProps) {
           height={220}
           className="mx-auto mt-3 h-[200px] w-[200px] rounded-xl bg-white p-2 shadow-sm sm:h-[220px] sm:w-[220px]"
         />
+        {option.payee && <PayeeCard payee={option.payee} brand={brand} />}
         <p className="mt-3 text-sm text-gray-700">
           Amount due <span className="font-display text-lg font-bold" style={{ color: brand.accent }}>{money(amount)}</span>
         </p>
@@ -166,10 +206,11 @@ export function PaymentQrPanel({ method, amount }: QrProps) {
           <img
             src={option.qr}
             alt={`${option.label} payment QR code`}
-            className="mt-6 aspect-square w-[min(82vw,62vh)] rounded-3xl bg-white p-3 shadow-[0_20px_60px_rgba(0,0,0,0.12)]"
+            className="mt-6 aspect-square w-[min(82vw,50vh)] rounded-3xl bg-white p-3 shadow-[0_20px_60px_rgba(0,0,0,0.12)]"
             style={{ boxShadow: `0 0 0 6px ${brand.ring}, 0 20px 60px rgba(0,0,0,0.12)` }}
           />
-          <p className="mt-6 text-xl text-gray-700 sm:text-2xl">
+          {option.payee && <PayeeCard payee={option.payee} brand={brand} large />}
+          <p className="mt-5 text-xl text-gray-700 sm:text-2xl">
             Amount <span className="font-display text-3xl font-bold sm:text-4xl" style={{ color: brand.accent }}>{money(amount)}</span>
           </p>
           <p className="mt-2 text-sm text-muted">Eduvate Kids · Tap anywhere to close</p>

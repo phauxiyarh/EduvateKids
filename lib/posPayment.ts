@@ -21,12 +21,21 @@ export type PosPaymentOption = {
   paymentType: PosPaymentType
   /** Public path of the QR code the customer scans, for app transfers. */
   qr?: string
+  /** Who the transfer goes to, shown beside the QR code so a customer can
+   *  type it in if their app cannot scan. */
+  payee?: { name?: string; handle: string; handleLabel: string }
 }
 
 export const POS_PAYMENT_OPTIONS: PosPaymentOption[] = [
   { id: 'Cash', label: 'Cash', hint: 'Paid at the till', paymentType: 'Cash' },
-  { id: 'Zelle', label: 'Zelle', hint: 'QR code', paymentType: 'Transfer', qr: '/payment/zelle-qr.png' },
-  { id: 'Cash App', label: 'Cash App', hint: 'QR code', paymentType: 'Transfer', qr: '/payment/cashapp-qr.png' },
+  {
+    id: 'Zelle', label: 'Zelle', hint: 'QR code', paymentType: 'Transfer', qr: '/payment/zelle-qr.png',
+    payee: { name: 'Fauwzziyyah Umar', handle: '667-437-7777', handleLabel: 'Zelle number' }
+  },
+  {
+    id: 'Cash App', label: 'Cash App', hint: 'QR code', paymentType: 'Transfer', qr: '/payment/cashapp-qr.png',
+    payee: { handle: '$FauwzyUmar', handleLabel: 'Cashtag' }
+  },
   { id: 'Square', label: 'Card', hint: 'Square, 3% fee', paymentType: 'Card' }
 ]
 

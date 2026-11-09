@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { PAYMENT_LABEL_ORDER } from '../../lib/posPayment'
 
 export type SalesTotals = {
   orders: number
@@ -31,7 +32,11 @@ export function MySalesCard({ sales, recent }: Props) {
   const [period, setPeriod] = useState<'today' | 'all'>('today')
   const [showRecent, setShowRecent] = useState(false)
   const t = sales[period]
-  const payments = (['Cash', 'Card', 'Transfer'] as const).filter((p) => (t.byPayment[p] ?? 0) > 0)
+  // Known methods first in a fixed order, then anything else recorded.
+  const payments = [
+    ...PAYMENT_LABEL_ORDER,
+    ...Object.keys(t.byPayment).filter((p) => !PAYMENT_LABEL_ORDER.includes(p))
+  ].filter((p) => (t.byPayment[p] ?? 0) > 0)
 
   return (
     <div className="panel-card rounded-3xl bg-white p-5 sm:p-6 shadow-xl border border-primary/10">

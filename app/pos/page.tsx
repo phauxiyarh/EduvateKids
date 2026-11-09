@@ -8,6 +8,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { collection, doc, getDocs, increment, writeBatch } from 'firebase/firestore'
 import { auth, db } from '../../lib/firebase'
 import { BarcodeScanner } from '../components/BarcodeScanner'
+import { PaymentMethodPicker, PaymentQrPanel } from '../components/PosPayment'
+import { paymentOption, paymentTypeFor, type PosPaymentMethod } from '../../lib/posPayment'
 import logo from '../../assets/logo.png'
 
 type InventoryCategory = 'Books' | 'Crafts' | 'Puzzles' | 'Gifts'
@@ -32,6 +34,8 @@ type Sale = {
   title: string
   quantity: number
   paymentType: 'Cash' | 'Card' | 'Transfer'
+  /** Zelle, Cash App, Cash or the Square card device. */
+  paymentMethod: PosPaymentMethod
   total: number
   timestamp: string
 }
@@ -62,7 +66,8 @@ export default function POSPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<'All' | InventoryCategory>('All')
   const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
+  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('Cash')
+  const paymentType: Sale['paymentType'] = paymentTypeFor(paymentMethod)
   const [showConfirmSale, setShowConfirmSale] = useState(false)
   const [isSubmittingSale, setIsSubmittingSale] = useState(false)
   const [message, setMessageText] = useState('')
@@ -303,6 +308,7 @@ export default function POSPage() {
         title: cartItem.title,
         quantity: cartItem.quantity,
         paymentType,
+        paymentMethod,
         total: itemTotal,
         timestamp
       }
@@ -683,42 +689,11 @@ export default function POSPage() {
 
                 {cartItems.length > 0 && (
                   <>
-                    {/* Payment Type */}
+                    {/* Payment Method */}
                     <div className="mb-4">
                       <p className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Payment Method</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['Cash', 'Card', 'Transfer'] as const).map((type) => (
-                          <button
-                            key={type}
-                            onClick={() => setPaymentType(type)}
-                            aria-label={`Pay by ${type}`}
-                            aria-pressed={paymentType === type}
-                            className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-xs font-bold transition-all focus-visible:ring-2 focus-visible:ring-primary/40 outline-none ${
-                              paymentType === type
-                                ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                                : 'bg-white border-2 border-primary/20 text-primaryDark hover:border-primary/40'
-                            }`}
-                            type="button"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                              {type === 'Cash' ? (
-                                <>
-                                  <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
-                                  <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
-                                </>
-                              ) : type === 'Card' ? (
-                                <>
-                                  <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 10h20" />
-                                </>
-                              ) : (
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4 4-4M3 12h11M17 8l4 4-4 4M21 12H10" />
-                              )}
-                            </svg>
-                            {type}
-                          </button>
-                        ))}
-                      </div>
+                      <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
+                      <PaymentQrPanel method={paymentMethod} amount={totalWithFee} />
                     </div>
 
                     {/* Discount */}
@@ -815,7 +790,7 @@ export default function POSPage() {
                           <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth={2} />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 10h20" />
                         </svg>
-                        Card payments include a 3% convenience fee.
+                        Card payments on the Square device include a 3% convenience fee.
                       </p>
                     )}
 
@@ -907,7 +882,7 @@ export default function POSPage() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Payment</span>
-                <span className="font-semibold">{paymentType}</span>
+                <span className="font-semibold">{paymentMethod === 'Square' ? 'Card (Square)' : paymentOption(paymentMethod).label}</span>
               </div>
               <div className="flex items-center justify-between text-lg font-bold pt-2 border-t border-primary/10">
                 <span className="gradient-text">Total</span>

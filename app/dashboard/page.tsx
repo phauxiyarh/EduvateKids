@@ -30,6 +30,8 @@ import { CashierSourcesPanel } from '../components/CashierSourcesPanel'
 import { MySalesCard, emptyTotals, type SellerSales } from '../components/MySalesCard'
 import { BookCreditModal } from '../components/BookCreditModal'
 import { computeBookCredit, DEFAULT_CREDIT_RATES, type CreditRates } from '../../lib/bookCredit'
+import { PaymentMethodPicker, PaymentQrPanel } from '../components/PosPayment'
+import { paymentChoiceOf, paymentLabel, paymentOption, paymentTypeFor, type PaymentChoice, type PosPaymentMethod } from '../../lib/posPayment'
 import { normalizeShelf, shelfSlug, sortShelves, type Shelf } from '../../lib/shelves'
 import {
   blogSlug,
@@ -140,6 +142,8 @@ type Sale = {
   title: string
   quantity: number
   paymentType: 'Cash' | 'Card' | 'Transfer'
+  /** Zelle, Cash App, Cash or the Square card device. Absent on older sales. */
+  paymentMethod?: PosPaymentMethod
   total: number
   timestamp: string
   rrp: number
@@ -163,6 +167,8 @@ type Order = {
   discountValue: number
   convenienceFee: number
   paymentType: 'Cash' | 'Card' | 'Transfer'
+  /** Zelle, Cash App, Cash or the Square card device. Absent on older orders. */
+  paymentMethod?: PosPaymentMethod
   total: number
   timestamp: string
   eventId: string
@@ -757,6 +763,7 @@ const normalizeSale = (data: Partial<Sale>): Sale | null => {
     title,
     quantity,
     paymentType,
+    ...(data.paymentMethod ? { paymentMethod: paymentChoiceOf(data) as PosPaymentMethod } : {}),
     total: Number.isFinite(total) ? total : 0,
     timestamp: String(data.timestamp ?? new Date().toISOString()),
     rrp: parseNumber((data as any).rrp),
@@ -1097,7 +1104,8 @@ export default function DashboardPage() {
   // quantity to add to its stock (rather than opening the full edit form).
   const [scanStockConfirm, setScanStockConfirm] = useState<InventoryItem | null>(null)
   const [scanStockQty, setScanStockQty] = useState(1)
-  const [paymentType, setPaymentType] = useState<Sale['paymentType']>('Cash')
+  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>('Cash')
+  const paymentType: Sale['paymentType'] = paymentTypeFor(paymentMethod)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   // Left sidebar: collapsed to an icon-only rail on desktop; slide-in on mobile.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -1126,7 +1134,8 @@ export default function DashboardPage() {
   const [moveDate, setMoveDate] = useState('')
   const [isMovingOrders, setIsMovingOrders] = useState(false)
   const [editOrderItems, setEditOrderItems] = useState<OrderItem[]>([])
-  const [editOrderPaymentType, setEditOrderPaymentType] = useState<Sale['paymentType']>('Cash')
+  const [editOrderMethod, setEditOrderMethod] = useState<PaymentChoice>('Cash')
+  const editOrderPaymentType: Sale['paymentType'] = paymentTypeFor(editOrderMethod)
   const [generalOrders, setGeneralOrders] = useState<Order[]>([])
 
   // Expense state
@@ -1857,7 +1866,7 @@ export default function DashboardPage() {
   const paymentBreakdown = useMemo(() => {
     const buckets: Record<string, number> = {}
     allSales.forEach((sale) => {
-      const type = sale.paymentType || 'Cash'
+      const type = paymentLabel(sale)
       buckets[type] = (buckets[type] ?? 0) + sale.total
     })
     return Object.entries(buckets).map(([name, value]) => ({ name, value }))
@@ -1914,7 +1923,8 @@ export default function DashboardPage() {
         bucket.orders += 1
         bucket.copies += copies
         bucket.total += o.total || 0
-        bucket.byPayment[o.paymentType] = (bucket.byPayment[o.paymentType] ?? 0) + (o.total || 0)
+        const label = paymentLabel(o)
+        bucket.byPayment[label] = (bucket.byPayment[label] ?? 0) + (o.total || 0)
       }
     }
     return out
@@ -2001,7 +2011,7 @@ export default function DashboardPage() {
       orders.forEach((order, idx) => {
         lines.push(`── Order #${orders.length - idx} ${'─'.repeat(40)}`)
         lines.push(`  Date/Time : ${new Date(order.timestamp).toLocaleString()}`)
-        lines.push(`  Payment   : ${order.paymentType}`)
+        lines.push(`  Payment   : ${paymentLabel(order)}`)
         lines.push(`  Items:`)
         order.items.forEach((item) => {
           lines.push(`    ${item.quantity}× ${item.title}  -  $${item.lineTotal.toFixed(2)}`)
@@ -4210,6 +4220,7 @@ export default function DashboardPage() {
         title: cartItem.title,
         quantity: cartItem.quantity,
         paymentType,
+        paymentMethod,
         total: itemTotal,
         timestamp,
         rrp: inventoryItem?.rrp ?? 0,
@@ -4234,6 +4245,7 @@ export default function DashboardPage() {
       discountValue: discount,
       convenienceFee: paymentType === 'Card' ? convenienceFee : 0,
       paymentType,
+      paymentMethod,
       total: totalWithFee,
       timestamp,
       eventId: selectedEventId,
@@ -4797,6 +4809,7 @@ export default function DashboardPage() {
       items: editOrderItems,
       subtotal: editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0),
       paymentType: editOrderPaymentType,
+      ...(editOrderMethod === 'Transfer' ? {} : { paymentMethod: editOrderMethod }),
       total: (() => {
         const sub = editOrderItems.reduce((sum, item) => sum + item.lineTotal, 0)
         const discAmt = editingOrder.discountType === 'percentage'
@@ -4855,7 +4868,7 @@ export default function DashboardPage() {
   const openEditOrder = (order: Order) => {
     setEditingOrder(order)
     setEditOrderItems(order.items.map((item) => ({ ...item })))
-    setEditOrderPaymentType(order.paymentType)
+    setEditOrderMethod(paymentChoiceOf(order))
   }
 
   const renderHome = () => (
@@ -7915,7 +7928,7 @@ export default function DashboardPage() {
                 timestamp: o.timestamp,
                 total: o.total || 0,
                 copies: (o.items ?? []).reduce((sum, i) => sum + (i.quantity || 0), 0),
-                paymentType: o.paymentType,
+                paymentType: paymentLabel(o),
                 group: o.eventId === 'general' ? 'General Sales' : events.find((e) => e.id === o.eventId)?.name ?? 'Event'
               }))}
           />
@@ -8090,51 +8103,9 @@ export default function DashboardPage() {
             <>
               {/* Payment Method */}
               <div className="mb-6">
-                <label className="block text-sm font-bold text-gray-700 mb-3">Payment Method</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setPaymentType('Cash')}
-                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
-                      paymentType === 'Cash'
-                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
-                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
-                    }`}
-                    type="button"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      Cash
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentType('Card')}
-                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
-                      paymentType === 'Card'
-                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
-                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
-                    }`}
-                    type="button"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></svg>
-                      Card
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentType('Transfer')}
-                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
-                      paymentType === 'Transfer'
-                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-md'
-                        : 'bg-white text-gray-700 border-primary/20 hover:border-primary/40'
-                    }`}
-                    type="button"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M4 10h16M5 6l7-3 7 3M5 10v11m4-11v11m6-11v11m4-11v11" /></svg>
-                      Transfer
-                    </span>
-                  </button>
-                </div>
+                <p className="block text-sm font-bold text-gray-700 mb-3">Payment Method</p>
+                <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
+                <PaymentQrPanel method={paymentMethod} amount={totalWithFee} />
               </div>
 
               {/* Discount */}
@@ -8872,7 +8843,7 @@ export default function DashboardPage() {
                     acc[key].totalQuantity += sale.quantity;
                     acc[key].totalAmount += sale.total;
                     acc[key].transactions += 1;
-                    acc[key].paymentTypes.add(sale.paymentType);
+                    acc[key].paymentTypes.add(paymentLabel(sale));
                     return acc;
                   }, {} as Record<string, {
                     itemId: string;
@@ -11849,7 +11820,7 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted">
                                 <span className="font-bold text-gray-700">#{h.orders.length - idx}</span>
                                 {' · '}{new Date(order.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                {' · '}{order.paymentType}
+                                {' · '}{paymentLabel(order)}
                                 {order.soldByName ? ` · ${order.soldByName}` : ''}
                               </p>
                               <p className={`text-sm text-gray-800 ${open ? '' : 'truncate'}`}>
@@ -11985,13 +11956,15 @@ export default function DashboardPage() {
             <div className="mb-4">
               <label className="text-xs font-bold uppercase tracking-wider text-muted mb-2 block">Payment Type</label>
               <select
-                value={editOrderPaymentType}
-                onChange={(e) => setEditOrderPaymentType(e.target.value as Sale['paymentType'])}
+                value={editOrderMethod}
+                onChange={(e) => setEditOrderMethod(e.target.value as PaymentChoice)}
                 className="w-full rounded-xl border-2 border-primary/20 px-4 py-3 text-sm hover:border-primary/40 transition-colors"
               >
                 <option value="Cash">💵 Cash</option>
-                <option value="Card">💳 Card</option>
-                <option value="Transfer">🏦 Transfer</option>
+                <option value="Zelle">Zelle</option>
+                <option value="Cash App">Cash App</option>
+                <option value="Square">💳 Card (Square, 3% fee)</option>
+                {editOrderMethod === 'Transfer' && <option value="Transfer">🏦 Transfer (app not recorded)</option>}
               </select>
             </div>
 
@@ -12643,7 +12616,7 @@ export default function DashboardPage() {
               )}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted">Payment</span>
-                <span className="font-semibold">{paymentType}</span>
+                <span className="font-semibold">{paymentMethod === 'Square' ? 'Card (Square)' : paymentOption(paymentMethod).label}</span>
               </div>
               {paymentType === 'Card' && (
                 <div className="flex items-center justify-between text-sm text-amber-600">
